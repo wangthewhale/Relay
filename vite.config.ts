@@ -17,5 +17,8 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
+    // Replit assigns a unique subdomain to every development preview. Keep
+    // Vite's host-header protection enabled while allowing only Replit hosts.
+    allowedHosts: [".replit.dev", ".replit.app"],
   },
 });

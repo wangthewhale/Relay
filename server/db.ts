@@ -2,7 +2,11 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-export const databaseUrl = process.env.DATABASE_URL;
+// Test runs must stay isolated from any Replit or developer database that may
+// be present in the shell environment. Production still fails closed without
+// a durable database URL below.
+const isTestRuntime = process.env.NODE_ENV === "test";
+export const databaseUrl = isTestRuntime ? undefined : process.env.DATABASE_URL;
 
 if (process.env.NODE_ENV === "production" && !databaseUrl) {
   throw new Error("DATABASE_URL is required in production. Relay will not start with ephemeral storage.");

@@ -1,3 +1,5 @@
+import { getCurrentLocale } from "./i18n";
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -17,7 +19,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function formatDate(value?: string, includeTime = false) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat(getCurrentLocale() === "zh-TW" ? "zh-TW" : "en", {
     month: "short",
     day: "numeric",
     ...(includeTime ? { hour: "2-digit", minute: "2-digit" } : {}),
@@ -26,5 +28,5 @@ export function formatDate(value?: string, includeTime = false) {
 
 export function formatMoney(value?: number) {
   if (value == null) return "—";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "TWD", maximumFractionDigits: 0 }).format(value);
+  return `NT$${new Intl.NumberFormat(getCurrentLocale() === "zh-TW" ? "zh-TW" : "en-US", { maximumFractionDigits: 0 }).format(value)}`;
 }

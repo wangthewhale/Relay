@@ -17,6 +17,7 @@
     "replit:start": "npm run db:migrate && npm run db:seed && npm start"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.2",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
     "pg": "^8.13.1",

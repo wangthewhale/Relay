@@ -37,6 +37,13 @@ export function createApp() {
     });
   });
 
+  app.get("/api/demo", async (_request, response, next) => {
+    try {
+      const missionId = await store.seedDemo();
+      response.json({ mission: await store.getMission(missionId), readOnly: true });
+    } catch (error) { next(error); }
+  });
+
   app.get("/api/missions", async (_request, response, next) => {
     try {
       response.json({ missions: await store.listMissions() });

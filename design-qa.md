@@ -10,7 +10,7 @@
 
 ## Full-view comparison
 
-The reference and implementation were reviewed together in one side-by-side image at effectively identical desktop dimensions. The implementation preserves the selected direction's five-stage causal hierarchy: intent sources → conflict/decision → accountable human → governed AI agents → verifiable outcome. It also preserves the minimal white canvas, low-contrast dot grid, colored semantic edges, live collaborator cursors, fixed correction command and evidence-led conflict inspector.
+The reference and implementation were reviewed together in one side-by-side image at effectively identical desktop dimensions. The implementation preserves the selected direction's five-stage causal hierarchy: intent sources → conflict/decision → accountable human → governed AI agents → verifiable outcome. It also preserves the minimal white canvas, low-contrast dot grid, colored semantic edges, fixed correction command and evidence-led conflict inspector.
 
 Intentional product adaptations:
 
@@ -22,7 +22,7 @@ Intentional product adaptations:
 
 ### Top bar
 
-- Mission identity, valid plan version, live presence, locale and refresh controls remain legible without creating a second application header.
+- Mission identity, valid plan version, contract actors, locale and refresh controls remain legible without creating a second application header.
 - No clipped title or overlapping controls at desktop width.
 
 ### Canvas and nodes
@@ -59,6 +59,19 @@ Intentional product adaptations:
 3. Split React Flow into a lazy-loaded chunk so the landing-page bundle remains unaffected.
 4. Fixed mobile navigation positioning and enabled scrolling from canvas to inspector.
 5. Memoized React Flow node types and confirmed a clean fresh-page console.
+6. Replaced simulated live-presence cues with truthful contract-role labels and removed cursor nodes that implied unimplemented realtime presence.
+7. Added a source-linked compiler receipt and a read-only interactive demo route so the canonical example cannot be changed from the public CTA.
+8. Replaced the 11-field default intake with a one-paste brief parser while preserving the structured-source mode.
+
+## YC investor-conversion pass — 2026-07-26
+
+- Narrowed the first customer to 5–50 person Growth, Agency and Operations teams running campaign and launch operations.
+- Rebuilt the first-value promise around one paste → first blocker → accountable owner → next safe action.
+- Added explicit “available now” versus “design partner rollout” states; external OAuth and tool execution are no longer implied to be complete.
+- Added the accumulating Source → Assertion → Conflict → Decision → Plan → Approval → Outcome chain to make the product moat visible inside the product.
+- Verified the one-paste parser with Chinese and English inputs, including source typing and minimum evidence fallback.
+- `tsc --noEmit`, 11 automated tests and the production build pass; `npm audit --omit=dev` reports zero vulnerabilities.
+- End-to-end one-paste validation produced 7 sources, 18 assertions and all five material conflict classes, including the deadline-versus-review hard conflict.
 
 ## Severity findings
 

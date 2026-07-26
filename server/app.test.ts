@@ -17,10 +17,12 @@ describe("Relay mission lifecycle API", () => {
   it("reports a real runtime mode and a source-backed demo mission", async () => {
     const health = await request(app).get("/api/health").expect(200);
     const dashboard = await request(app).get("/api/dashboard").expect(200);
+    const demo = await request(app).get("/api/demo").expect(200);
 
     expect(health.body).toMatchObject({ ok: true, service: "relay" });
     expect(health.body.database.mode).toBe("memory");
     expect(dashboard.body.metrics.blocked).toBeGreaterThanOrEqual(1);
+    expect(demo.body).toMatchObject({ readOnly: true, mission: { id: mission.id } });
     expect(mission.sources).toHaveLength(7);
     expect(mission.currentPlan?.status).toBe("draft");
   });

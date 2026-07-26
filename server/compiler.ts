@@ -19,7 +19,7 @@ const uid = () => randomUUID();
 function inferPrimaryType(content: string): IntentAssertion["type"] {
   const text = content.toLowerCase();
   if (/budget|預算|上限|不得超過/.test(text)) return "Budget";
-  if (/approve|approval|審核|核准|批准/.test(text)) return "Approval requirement";
+  if (/approve|approval|審核|審查|核准|批准/.test(text)) return "Approval requirement";
   if (/deadline|launch|推出|上線|以前|之前/.test(text)) return "Deadline";
   if (/exclude|不能向|排除|不得寄|既有會員/.test(text)) return "Exclusion";
   if (/target|目標|成功|付費|conversion|轉換/.test(text)) return "Success metric";
@@ -87,6 +87,39 @@ export function extractAssertions(input: CreateMissionInput, sources: StoredSour
   pushAssertion(assertions, undefined, input.objective, "Goal", { origin: "mission_intake" }, 0.99);
   pushAssertion(assertions, undefined, input.successMetric, "Success metric", { origin: "mission_intake" }, 0.99);
 
+  for (const value of parseBudgetValues(input.objective)) {
+    pushAssertion(assertions, undefined, `Budget limit stated as NT$${value.toLocaleString("en-US")}.`, "Budget", {
+      value,
+      currency: "TWD",
+      context: input.objective,
+      origin: "mission_intake",
+    }, 0.96);
+  }
+
+  for (const parsed of parseDates(input.objective)) {
+    const isApproval = /approve|approval|審核|審查|核准|批准|review/i.test(input.objective);
+    pushAssertion(
+      assertions,
+      undefined,
+      `${isApproval ? "Approval or review" : "Mission deadline"} is ${parsed.date}.`,
+      isApproval ? "Approval requirement" : "Deadline",
+      { date: parsed.date, context: input.objective, isApproval, origin: "mission_intake" },
+      0.94,
+    );
+  }
+
+  if (/existing members|既有會員|現有會員/i.test(input.objective)) {
+    const exclusion = /exclude|do not (?:promote|contact|include)|must not (?:promote|contact|include)|不能向|排除|不得.*(?:推廣|寄送)|不包含/i.test(input.objective);
+    pushAssertion(
+      assertions,
+      undefined,
+      exclusion ? "Existing members must be excluded from the campaign audience." : "The current audience contains existing members.",
+      exclusion ? "Exclusion" : "Constraint",
+      { subject: "existing_members", polarity: exclusion ? "exclude" : "include", context: input.objective, origin: "mission_intake" },
+      0.95,
+    );
+  }
+
   for (const source of sources) {
     const content = source.content;
     pushAssertion(assertions, source, content, inferPrimaryType(content), { sourceType: source.type }, 0.86);
@@ -100,7 +133,7 @@ export function extractAssertions(input: CreateMissionInput, sources: StoredSour
     }
 
     for (const parsed of parseDates(content)) {
-      const isApproval = /approve|approval|審核|核准|批准|review/i.test(content);
+      const isApproval = /approve|approval|審核|審查|核准|批准|review/i.test(content);
       pushAssertion(
         assertions,
         source,
@@ -135,7 +168,7 @@ export function extractAssertions(input: CreateMissionInput, sources: StoredSour
       );
     }
 
-    if (/(?:without|requires?|needs?).{0,35}(?:approval|review)|沒有批准|未核准|不能公開|不得公開|需.{0,25}(?:批准|核准|審核)/i.test(content)) {
+    if (/(?:without|requires?|needs?).{0,35}(?:approval|review)|沒有批准|未核准|未經.{0,18}(?:批准|核准|審核|審查).{0,20}(?:不得|不能)|不能公開|不得公開|(?:需|需要|必須).{0,25}(?:批准|核准|審核|審查)/i.test(content)) {
       pushAssertion(
         assertions,
         source,

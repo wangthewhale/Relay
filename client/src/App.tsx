@@ -327,6 +327,54 @@ function DashboardPage() {
 function StatusPill({ value }: { value: string }) { return <span className={`status-pill status-${value.replaceAll("_", "-")}`}><span />{localizeLabel(value)}</span>; }
 function Progress({ value, total }: { value: number; total: number }) { const percent = total ? Math.round((value / total) * 100) : 0; return <div className="progress-wrap"><div className="progress-track"><span style={{ width: `${percent}%` }} /></div><small>{value}/{total}</small></div>; }
 
+type CompileRunSummary = {
+  sources: number;
+  assertions: number;
+  conflicts: number;
+  blocking: number;
+  agentTasks: number;
+  blockedAgentTasks: number;
+  planVersion: number;
+};
+
+type CompileRunMomentState = {
+  open: boolean;
+  phase: number;
+  sourceCount: number;
+  summary?: CompileRunSummary;
+  error?: string;
+};
+
+const waitForMoment = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+
+function CompileRunMoment({ state, onClose }: { state: CompileRunMomentState; onClose: () => void }) {
+  if (!state.open) return null;
+  const steps = [
+    { name: tr("Evidence agent", "證據 Agent"), action: tr("Attaching every instruction to its source", "把每條原始指令綁回來源"), icon: FileCheck2 },
+    { name: tr("Intent agent", "意圖 Agent"), action: tr("Extracting goals, dates, budgets and policies", "拆解目標、期限、預算與政策"), icon: Braces },
+    { name: tr("Conflict agent", "衝突 Agent"), action: tr("Testing which conditions cannot coexist", "交叉比對無法同時成立的條件"), icon: MessageSquareWarning },
+    { name: tr("Control agent", "控制 Agent"), action: tr("Holding affected agent tasks before execution", "在執行前暫停受影響的 Agent 任務"), icon: CircleStop },
+    { name: tr("Plan agent", "計畫 Agent"), action: tr("Writing Plan v1 and its audit lineage", "寫入 Plan v1 與完整稽核鏈"), icon: GitBranch },
+  ];
+  const activeStep = Math.min(state.phase, steps.length - 1);
+  return <div className="compile-run-backdrop" role="dialog" aria-modal="true" aria-labelledby="compile-run-title">
+    <section className={"compile-run-moment" + (state.error ? " has-error" : "")} aria-live="polite">
+      <div className="compile-run-topline"><span><span className="compile-live-dot" /> {tr("LIVE RELAY RUN", "RELAY 即時執行")}</span><small>{tr("Real compiler · read-only analysis", "真實編譯器 · 唯讀分析")}</small></div>
+      <div className="compile-run-heading"><span className="compile-run-mark"><Sparkles /></span><div><p>MISSION → EXECUTION CONTRACT</p><h2 id="compile-run-title">{state.error ? tr("The run stopped safely.", "這次執行已安全停止。") : tr("Watch Relay agents turn disagreement into a safe plan.", "看 Relay Agents 把混亂指令變成安全計畫。")}</h2></div></div>
+      {!state.error ? <>
+        <div className="compile-run-canvas" aria-hidden="true">
+          <div className="compile-source-node"><Braces size={18} /><span><small>MISSION BRIEF</small><b>{state.sourceCount} {tr("sources", "個來源")}</b></span></div>
+          <div className="compile-signal"><span /><span /><span /></div>
+          <div className="compile-agent-orbit">{steps.map((step, index) => { const Icon = step.icon; const stateName = index < activeStep ? "done" : index === activeStep ? "running" : "waiting"; return <div className={"compile-agent-node " + stateName} key={step.name}><span><Icon size={16} /></span><small>{step.name}</small>{stateName === "done" ? <Check size={13} /> : stateName === "running" ? <span className="agent-pulse" /> : null}</div>; })}</div>
+        </div>
+        <div className="compile-current-step"><span>{String(activeStep + 1).padStart(2, "0")}</span><div><small>{steps[activeStep].name}</small><b>{steps[activeStep].action}</b></div><span className="loader small" /></div>
+        {state.summary ? <div className="compile-run-receipt"><span>{tr("LIVE RECEIPT", "即時憑據")}</span><div><b>{state.summary.sources}</b><small>{tr("sources", "來源")}</small></div><div><b>{state.summary.assertions}</b><small>{tr("assertions", "主張")}</small></div><div className="danger"><b>{state.summary.conflicts}</b><small>{tr("conflicts", "衝突")}</small></div><div><b>{state.summary.blockedAgentTasks}</b><small>{tr("agents held", "Agent 暫停")}</small></div></div> : <div className="compile-run-placeholder"><span /><span /><span /></div>}
+      </> : <div className="compile-run-error"><AlertOctagon size={25} /><div><b>{state.error}</b><p>{tr("Nothing was sent to an external system. Return to the brief and try again.", "沒有任何內容送往外部系統。請返回 Brief 後再試一次。")}</p></div><button className="button button-dark" type="button" onClick={onClose}>{tr("Back to brief", "返回 Brief")}</button></div>}
+      <p className="compile-run-truth"><ShieldCheck size={14} /> {tr("These are the real stages running now. Relay is creating evidence, conflicts and a versioned plan; it is not pretending that external connectors ran.", "畫面顯示的是此刻真正在執行的階段：建立證據、衝突與版本化計畫；不會假裝外部 Connector 已執行。")}</p>
+    </section>
+  </div>;
+}
+
 function MissionIntakePage() {
   const navigate = useNavigate();
   const quickExample = tr(
@@ -337,32 +385,69 @@ function MissionIntakePage() {
   const [rawBrief, setRawBrief] = useState(() => new URLSearchParams(window.location.search).get("sample") === "1" ? quickExample : "");
   const [form, setForm] = useState<CreateMissionInput>({ title: "", objective: "", successMetric: "", createdBy: "Jennifer", sources: [{ type: "Slack", title: "", author: "", content: "", authorityLevel: 3 }, { type: "Email", title: "", author: "", content: "", authorityLevel: 3 }] });
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [stage, setStage] = useState("");
+  const [runMoment, setRunMoment] = useState<CompileRunMomentState>({ open: false, phase: 0, sourceCount: 0 });
+  useEffect(() => {
+    if (!runMoment.open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [runMoment.open]);
   const updateSource = (index: number, patch: Partial<SourceInput>) => setForm((current) => ({ ...current, sources: current.sources.map((source, sourceIndex) => sourceIndex === index ? { ...source, ...patch } : source) }));
   const loadExample = () => { setMode("quick"); setRawBrief(quickExample); };
   const compileInput = async (input: CreateMissionInput) => {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setRunMoment({ open: true, phase: 0, sourceCount: input.sources.length });
     try {
       setStage(tr("Securing source evidence…", "正在保存來源證據…"));
-      const created = await api<{ mission: MissionDetail }>("/api/missions", { method: "POST", body: JSON.stringify(input) });
+      const [created] = await Promise.all([
+        api<{ mission: MissionDetail }>("/api/missions", { method: "POST", body: JSON.stringify(input) }),
+        waitForMoment(520),
+      ]);
+      setRunMoment((current) => ({ ...current, phase: 1 }));
       setStage(tr("Compiling intent and testing contradictions…", "正在編譯意圖並檢查矛盾…"));
-      await api(`/api/missions/${created.mission.id}/compile`, { method: "POST" });
-      navigate(`/missions/${created.mission.id}?view=conflicts&new=1`);
+      const compileRequest = api<{ mission: MissionDetail }>("/api/missions/" + created.mission.id + "/compile", { method: "POST" });
+      await waitForMoment(560);
+      setRunMoment((current) => ({ ...current, phase: 2 }));
+      const [compiled] = await Promise.all([compileRequest, waitForMoment(700)]);
+      const compiledMission = compiled.mission;
+      const agentTasks = compiledMission.currentPlan?.tasks.filter((task) => task.ownerType === "agent") ?? [];
+      const summary: CompileRunSummary = {
+        sources: compiledMission.sources.length,
+        assertions: compiledMission.assertions.length,
+        conflicts: compiledMission.conflicts.length,
+        blocking: compiledMission.conflicts.filter((conflict) => conflict.blocking && conflict.status === "open").length,
+        agentTasks: agentTasks.length,
+        blockedAgentTasks: agentTasks.filter((task) => task.status === "blocked").length,
+        planVersion: compiledMission.currentPlanVersion,
+      };
+      setRunMoment((current) => ({ ...current, phase: 3, summary }));
+      setStage(tr("Holding unsafe agent actions…", "正在暫停不安全的 Agent 行動…"));
+      await waitForMoment(650);
+      setRunMoment((current) => ({ ...current, phase: 4, summary }));
+      setStage(tr("Execution contract ready", "執行合約已完成"));
+      await waitForMoment(850);
+      navigate("/missions/" + created.mission.id + "?view=conflicts&new=1");
     } catch (err) {
-      setError((err as Error).message); setBusy(false); setStage("");
+      const message = (err as Error).message;
+      setError(message); setBusy(false); setStage("");
+      setRunMoment((current) => ({ ...current, error: message }));
     }
   };
-  const submitQuick = (event: FormEvent) => {
-    event.preventDefault();
+  const runQuick = () => {
     if (rawBrief.trim().length < 10) { setError(tr("Paste at least two instructions so Relay can compare them.", "請至少貼上兩項指令，Relay 才能進行比對。")); return; }
     try { void compileInput(parseQuickMission(rawBrief)); } catch (err) { setError((err as Error).message); }
   };
+  const submitQuick = (event: FormEvent) => { event.preventDefault(); runQuick(); };
   const submitStructured = (event: FormEvent) => { event.preventDefault(); void compileInput(form); };
-  const compileSidebar = <aside className="compile-sidebar"><div className="compile-card"><div className="compile-icon"><Network /></div><span>{tr("FIRST OUTPUT", "第一個產出")}</span><h3>{tr("A blocker you can act on", "一個能立刻處理的關鍵阻擋")}</h3><ul><li><Check /> {tr("Exact conflicting statements", "互相矛盾的原始指令")}</li><li><Check /> {tr("Source and decision owner", "來源與決策負責人")}</li><li><Check /> {tr("Impact if left unresolved", "不處理會造成的影響")}</li><li><Check /> {tr("Two or three resolution paths", "兩到三個解法")}</li><li><Check /> {tr("Versioned execution plan", "版本化執行計畫")}</li></ul><div className="compile-notice"><ShieldCheck size={17} /><p>{tr("Analysis only. Relay will not connect to or change an external system in this step.", "此步驟只做分析，不會連接或變更任何外部系統。")}</p></div><div className="public-mvp-note"><LockKeyhole size={15} /><p>{tr("Public MVP: use a redacted brief. Workspace identity and tenant isolation are still in design-partner rollout.", "公開 MVP：請先遮蔽機密與個資。Workspace 身分與租戶隔離仍在 Design Partner 導入中。")}</p></div>{error && <p className="form-error">{error}</p>}<button className="button button-primary button-full button-large" disabled={busy} type="submit">{busy ? <><span className="loader small" /> {stage}</> : <>{tr("Find the first blocker", "找出第一個關鍵阻擋")} <ArrowRight size={18} /></>}</button><small className="form-assurance">{tr("Your source text stays attached to the mission evidence chain.", "原始文字會保留在 Mission 的證據鏈中。")}</small></div></aside>;
+  const runButtonContent = busy ? <><span className="loader small" /> {stage}</> : <><Play size={18} /> {tr("Run Relay — find the first blocker", "Run Relay — 找出第一個關鍵阻擋")} <ArrowRight size={18} /></>;
+  const mobileRunDock = <div className="mobile-run-dock"><div><span>{tr("READY TO COMPILE", "已準備好編譯")}</span><small>{tr("Read-only: no external action", "唯讀分析，不會執行外部操作")}</small></div>{error && <p className="form-error">{error}</p>}<button className="button button-primary run-submit" disabled={busy} type="submit" form={mode === "quick" ? "quick-mission-form" : "structured-mission-form"}>{runButtonContent}</button></div>;
+  const compileSidebar = <aside className="compile-sidebar"><div className="compile-card"><div className="compile-icon"><Network /></div><span>{tr("FIRST OUTPUT", "第一個產出")}</span><h3>{tr("A blocker you can act on", "一個能立刻處理的關鍵阻擋")}</h3><ul><li><Check /> {tr("Exact conflicting statements", "互相矛盾的原始指令")}</li><li><Check /> {tr("Source and decision owner", "來源與決策負責人")}</li><li><Check /> {tr("Impact if left unresolved", "不處理會造成的影響")}</li><li><Check /> {tr("Two or three resolution paths", "兩到三個解法")}</li><li><Check /> {tr("Versioned execution plan", "版本化執行計畫")}</li></ul><div className="compile-notice"><ShieldCheck size={17} /><p>{tr("Analysis only. Relay will not connect to or change an external system in this step.", "此步驟只做分析，不會連接或變更任何外部系統。")}</p></div><div className="public-mvp-note"><LockKeyhole size={15} /><p>{tr("Public MVP: use a redacted brief. Workspace identity and tenant isolation are still in design-partner rollout.", "公開 MVP：請先遮蔽機密與個資。Workspace 身分與租戶隔離仍在 Design Partner 導入中。")}</p></div>{error && <p className="form-error">{error}</p>}<button className="button button-primary button-full button-large run-submit" disabled={busy} type="submit">{runButtonContent}</button><small className="form-assurance">{tr("Your source text stays attached to the mission evidence chain.", "原始文字會保留在 Mission 的證據鏈中。")}</small></div></aside>;
   return <AppShell><main className="page intake-page">
+    <CompileRunMoment state={runMoment} onClose={() => setRunMoment((current) => ({ ...current, open: false, error: undefined }))} />
+    {mobileRunDock}
     <div className="page-title intake-title"><div><Link to="/app" className="back-link">← {tr("Workspace", "工作區")}</Link><span className="page-kicker">MISSION {tr("INTAKE", "輸入")}</span><h1>{tr("Paste the launch your team is arguing about.", "貼上團隊正在爭論的 Launch。")}</h1><p>{tr("Keep the contradictions. Relay will show the first blocker, its evidence, who must decide and the next safe action.", "保留那些矛盾。Relay 會指出第一個關鍵阻擋、證據、該由誰決定，以及下一步安全行動。")}</p></div><button className="button button-ghost" onClick={loadExample}><Sparkles size={16} /> {tr("Try the Kaohsiung example", "試用高雄 Launch 範例")}</button></div>
     <div className="intake-mode-switch" role="tablist" aria-label={tr("Mission input mode", "Mission 輸入方式")}><button type="button" role="tab" aria-selected={mode === "quick"} className={mode === "quick" ? "active" : ""} onClick={() => setMode("quick")}><Sparkles size={15} /> {tr("Paste one brief", "貼上一份 Brief")}</button><button type="button" role="tab" aria-selected={mode === "structured"} className={mode === "structured" ? "active" : ""} onClick={() => setMode("structured")}><Braces size={15} /> {tr("Enter structured sources", "逐項輸入來源")}</button></div>
-    {mode === "quick" ? <form onSubmit={submitQuick} className="intake-layout quick-intake-layout"><div className="intake-main"><section className="quick-brief-card"><div className="quick-brief-head"><div><span>01 / {tr("PASTE", "貼上")}</span><h2>{tr("Messages, emails, meeting notes—together.", "Slack、Email、會議紀錄，全部一起貼。")}</h2><p>{tr("Use one line per source when possible: “Slack | Growth: launch July 29”. Relay separates the evidence for you.", "可以的話，每個來源一行，例如「Slack｜Growth：7 月 29 日發布」。Relay 會替你拆開證據。")}</p></div><span className="time-to-value"><Clock3 size={15} /> {tr("First result in one flow", "一個流程看見結果")}</span></div><label className="quick-brief-label"><span>{tr("Messy mission brief", "混亂的 Mission Brief")}</span><textarea className="quick-brief-textarea" value={rawBrief} onChange={(event) => setRawBrief(event.target.value)} rows={18} placeholder={tr("Paste Slack messages, client requirements, dates, budgets, exclusions and permissions here…", "把 Slack 訊息、客戶要求、日期、預算、排除條件與權限狀態貼在這裡……")} required /></label><div className="quick-hints"><span><MessageSquareWarning /> {tr("contradictions welcome", "不用先消除矛盾")}</span><span><FileCheck2 /> {tr("sources preserved", "來源會被保留")}</span><span><ShieldCheck /> {tr("analysis only", "只分析、不執行")}</span></div></section></div>{compileSidebar}</form>
-      : <form onSubmit={submitStructured} className="intake-layout"><div className="intake-main"><section className="form-section"><div className="form-section-title"><span>01</span><div><h2>{tr("Define the outcome", "定義成果")}</h2><p>{tr("What must be true when this mission succeeds?", "這個 Mission 成功時，哪些條件必須成立？")}</p></div></div><label>{tr("Mission name", "Mission 名稱")}<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={tr("Launch Kaohsiung campaign", "推出高雄活動行銷專案")} required minLength={3} /></label><label>{tr("Objective", "目標")}<textarea value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })} placeholder={tr("Launch by… within… while never…", "在……前完成；限制為……；且絕不能……")} required minLength={10} rows={4} /></label><label>{tr("Success contract", "成功合約")}<input value={form.successMetric} onChange={(event) => setForm({ ...form, successMetric: event.target.value })} placeholder={tr("24 paid registrations at CPA ≤ NT$1,250", "24 筆付費報名，CPA ≤ NT$1,250")} required /></label></section>
+    {mode === "quick" ? <form id="quick-mission-form" onSubmit={submitQuick} className="intake-layout quick-intake-layout"><div className="intake-main"><section className="quick-brief-card"><div className="quick-brief-head"><div><span>01 / {tr("PASTE", "貼上")}</span><h2>{tr("Messages, emails, meeting notes—together.", "Slack、Email、會議紀錄，全部一起貼。")}</h2><p>{tr("Use one line per source when possible: “Slack | Growth: launch July 29”. Relay separates the evidence for you.", "可以的話，每個來源一行，例如「Slack｜Growth：7 月 29 日發布」。Relay 會替你拆開證據。")}</p></div><span className="time-to-value"><Clock3 size={15} /> {tr("First result in one flow", "一個流程看見結果")}</span></div><label className="quick-brief-label"><span>{tr("Messy mission brief", "混亂的 Mission Brief")}</span><textarea className="quick-brief-textarea" value={rawBrief} onChange={(event) => setRawBrief(event.target.value)} rows={18} placeholder={tr("Paste Slack messages, client requirements, dates, budgets, exclusions and permissions here…", "把 Slack 訊息、客戶要求、日期、預算、排除條件與權限狀態貼在這裡……")} required /></label><div className="quick-hints"><span><MessageSquareWarning /> {tr("contradictions welcome", "不用先消除矛盾")}</span><span><FileCheck2 /> {tr("sources preserved", "來源會被保留")}</span><span><ShieldCheck /> {tr("analysis only", "只分析、不執行")}</span></div></section></div>{compileSidebar}</form>
+      : <form id="structured-mission-form" onSubmit={submitStructured} className="intake-layout"><div className="intake-main"><section className="form-section"><div className="form-section-title"><span>01</span><div><h2>{tr("Define the outcome", "定義成果")}</h2><p>{tr("What must be true when this mission succeeds?", "這個 Mission 成功時，哪些條件必須成立？")}</p></div></div><label>{tr("Mission name", "Mission 名稱")}<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={tr("Launch Kaohsiung campaign", "推出高雄活動行銷專案")} required minLength={3} /></label><label>{tr("Objective", "目標")}<textarea value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })} placeholder={tr("Launch by… within… while never…", "在……前完成；限制為……；且絕不能……")} required minLength={10} rows={4} /></label><label>{tr("Success contract", "成功合約")}<input value={form.successMetric} onChange={(event) => setForm({ ...form, successMetric: event.target.value })} placeholder={tr("24 paid registrations at CPA ≤ NT$1,250", "24 筆付費報名，CPA ≤ NT$1,250")} required /></label></section>
         <section className="form-section"><div className="form-section-title"><span>02</span><div><h2>{tr("Attach sources", "加入來源")}</h2><p>{tr("Add at least two messages, documents or system records.", "至少加入兩則訊息、文件或系統紀錄。")}</p></div></div><div className="source-editor-list">{form.sources.map((source, index) => <article className="source-editor" key={index}><div className="source-editor-head"><span className={`source-number ${sourceColors[source.type] ?? "lime"}`}>{index + 1}</span><select value={source.type} onChange={(event) => updateSource(index, { type: event.target.value as SourceInput["type"] })}>{["Slack", "Email", "Notion", "Google Drive", "Calendar", "CRM", "Ads", "Meeting note", "Manual"].map((type) => <option key={type} value={type}>{localizeLabel(type)}</option>)}</select>{form.sources.length > 2 && <button type="button" className="icon-button" aria-label={tr("Remove source", "移除來源")} onClick={() => setForm({ ...form, sources: form.sources.filter((_, itemIndex) => itemIndex !== index) })}><X size={17} /></button>}</div><div className="form-grid"><label>{tr("Source title", "來源標題")}<input value={source.title} onChange={(event) => updateSource(index, { title: event.target.value })} placeholder={tr("#launch or client thread", "#launch 或客戶對話串")} required /></label><label>{tr("Author / system", "作者／系統")}<input value={source.author} onChange={(event) => updateSource(index, { author: event.target.value })} placeholder={tr("Growth lead", "Growth 負責人")} required /></label></div><label>{tr("Exact content", "原始內容")}<textarea value={source.content} onChange={(event) => updateSource(index, { content: event.target.value })} placeholder={tr("Paste the original instruction—do not clean it up.", "貼上原始指令，不要先整理或改寫。")} rows={4} required /></label><div className="authority-row"><span>{tr("Authority", "權威等級")}</span><input aria-label={tr("Source authority level", "來源權威等級")} type="range" min="1" max="5" value={source.authorityLevel} onChange={(event) => updateSource(index, { authorityLevel: Number(event.target.value) })} /><b>{source.authorityLevel}/5</b></div></article>)}</div><button type="button" className="button button-ghost add-source" onClick={() => setForm({ ...form, sources: [...form.sources, { type: "Manual", title: "", author: "", content: "", authorityLevel: 3 }] })}><Plus size={17} /> {tr("Add another source", "再加入一個來源")}</button></section></div>{compileSidebar}</form>}
   </main></AppShell>;
 }
@@ -371,6 +456,27 @@ const missionTabs = [
   ["room", "Mission room", "Mission 控制室", Activity], ["conflicts", "Conflicts", "衝突", MessageSquareWarning], ["plan", "Plan", "計畫", RouteIcon], ["access", "Access", "存取權", KeyRound],
   ["approvals", "Approvals", "核准", ShieldCheck], ["evidence", "Evidence", "證據", FileCheck2], ["outcome", "Outcome", "成果", Target],
 ] as const;
+
+function MissionRunReceipt({ mission, onOpenRoom }: { mission: MissionDetail; onOpenRoom: () => void }) {
+  const tasks = mission.currentPlan?.tasks ?? [];
+  const agentTasks = tasks.filter((task) => task.ownerType === "agent");
+  const blockedAgentTasks = agentTasks.filter((task) => task.status === "blocked").length;
+  const blockers = mission.conflicts.filter((conflict) => conflict.blocking && conflict.status === "open").length;
+  return <section className="mission-run-reveal" aria-labelledby="mission-run-reveal-title">
+    <div className="mission-run-reveal-head"><span><span className="compile-live-dot" /> {tr("RELAY RUN COMPLETE", "RELAY 執行完成")}</span><small>{tr("Evidence-backed · Plan v", "有證據 · 計畫 v")}{mission.currentPlanVersion}</small></div>
+    <div className="mission-run-reveal-copy"><span className="mission-run-reveal-icon"><CircleStop /></span><div><p>{tr("BEFORE ANY AGENT ACTED", "在任何 AGENT 動手前")}</p><h2 id="mission-run-reveal-title">{tr("Relay found ", "Relay 抓到 ")}{blockers}{tr(" blockers and stopped the unsafe path.", " 個阻擋，並停止不安全的執行路徑。")}</h2><small>{tr("This is not a chat answer. Every result is linked to its source and saved in the mission audit trail.", "這不是一段聊天答案。每項結果都連回原始來源，並寫進 Mission 稽核紀錄。")}</small></div></div>
+    <div className="mission-run-agent-line" aria-label={tr("Relay agent work completed", "Relay Agent 協作結果")}>
+      <div><span><FileCheck2 /></span><small>{tr("Evidence agent", "證據 Agent")}</small><b>{mission.sources.length} {tr("sources attached", "個來源已綁定")}</b><Check /></div>
+      <span className="mission-run-link"><i /></span>
+      <div><span><Braces /></span><small>{tr("Intent agent", "意圖 Agent")}</small><b>{mission.assertions.length} {tr("assertions extracted", "項主張已拆解")}</b><Check /></div>
+      <span className="mission-run-link"><i /></span>
+      <div className="danger"><span><MessageSquareWarning /></span><small>{tr("Conflict agent", "衝突 Agent")}</small><b>{mission.conflicts.length} {tr("conflicts found", "項衝突已找到")}</b><Check /></div>
+      <span className="mission-run-link"><i /></span>
+      <div><span><ShieldCheck /></span><small>{tr("Control agent", "控制 Agent")}</small><b>{blockedAgentTasks} {tr("agent tasks held", "個 Agent 任務暫停")}</b><Check /></div>
+    </div>
+    <div className="mission-run-reveal-footer"><p><Fingerprint size={15} /><span><b>{tr("Execution lineage created", "已建立執行鏈")}</b>{tr("Source → assertion → conflict → Plan v", "來源 → 主張 → 衝突 → 計畫 v")}{mission.currentPlanVersion}</span></p><button className="button button-dark" type="button" onClick={onOpenRoom}><UsersRound size={17} /> {tr("See humans + AI co-work", "查看人類 + AI 協作")} <ArrowRight size={17} /></button></div>
+  </section>;
+}
 
 function MissionPage() {
   const { id = "" } = useParams(); const [params, setParams] = useSearchParams(); const view = params.get("view") || "room";
@@ -401,11 +507,11 @@ function MissionPage() {
   };
   if (error && !mission) return <AppShell><main className="page"><ErrorBlock error={error} retry={() => { void load(); }} /></main></AppShell>;
   if (!mission) return <AppShell><main className="page"><LoadingBlock label={tr("Loading mission contract…", "正在載入 Mission 合約…")} /></main></AppShell>;
-  const plan = mission.currentPlan; const isStale = plan?.status === "superseded";
+  const plan = mission.currentPlan; const isStale = plan?.status === "superseded"; const showRunReveal = params.get("new") === "1";
   const agentRoles = plan?.tasks.filter((task) => task.ownerType === "agent").slice(0, 3) ?? [];
   return <AppShell><main className={`mission-page view-${view}`}><header className="mission-header"><div className="mission-topbar"><Link to="/app" className="mission-brand" aria-label={tr("Back to workspace", "返回工作區")}><span>RL</span><b>Relay</b></Link><div className="mission-title-compact" title={localizeDomainText(mission.objective)}><small>MISSION</small><h1>{localizeDomainText(mission.title)}</h1></div><button className="mission-plan-control" onClick={() => setParams({ view: "plan" })}><span>{tr("Plan", "計畫")} v{mission.currentPlanVersion}</span><i className={isStale ? "stale" : ""} /> <small>{isStale ? localizeLabel("superseded") : tr("Active", "有效")}</small><ChevronDown size={14} /></button><div className="mission-header-spacer" /><div className="mission-live-presence" title={lastSyncedAt ? `${tr("Last synced", "上次同步")} ${formatDate(lastSyncedAt, true)}` : undefined}><span className="live-signal"><span />{tr("Shared room · sync 10s", "共用控制室 · 10 秒同步")}</span><div className="presence-avatars"><img src="/assets/relay-jennifer-256.png" alt="Jennifer" />{agentRoles.map((task) => <span key={task.id} title={localizeDomainText(task.ownerName)}>{task.ownerName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>)}</div><small>1 {tr("human", "位人類")} + {agentRoles.length} {tr("agent roles", "個 Agent 角色")}</small></div><LanguageSwitcher compact /><button className="button button-ghost button-small mission-share" onClick={() => { void copyRoomLink(); }}><Copy size={15} /><span>{tr("Copy room link", "複製控制室連結")}</span></button><button className="icon-button mission-refresh" onClick={() => { void load(); }} aria-label={tr("Refresh mission", "重新整理 Mission")}><RefreshCw size={17} /></button>{mission.status === "planning" && <button className="button button-primary button-small mission-compile" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: JSON.stringify({ actor: "Jennifer" }) }), tr("A new active contract was created. Previous approvals were invalidated.", "新的有效合約已建立，舊版核准已失效。"))}><GitBranch size={15} /> {tr("Compile", "編譯")} v{mission.currentPlanVersion + 1}</button>}</div><nav className="mission-tabs" aria-label={tr("Mission views", "Mission 檢視")}>{missionTabs.map(([key, label, labelZh, Icon]) => <button className={view === key ? "active" : ""} key={key} onClick={() => setParams({ view: key })} title={tr(label, labelZh)} aria-label={tr(label, labelZh)}><Icon size={18} /><span className="mission-tab-label">{tr(label, labelZh)}</span>{key === "conflicts" && mission.openConflicts > 0 && <em>{mission.openConflicts}</em>}{key === "approvals" && mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button>)}</nav></header>
     {(notice || error) && <div className={`toast-banner ${error ? "error" : ""}`}>{error ? <AlertOctagon size={17} /> : <BadgeCheck size={17} />}<span>{error || notice}</span><button className="icon-button" onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
-    <div className={`mission-content mission-content-${view}`}>{view === "room" && <MissionRoom mission={mission} action={action} busy={busy} setView={(next) => setParams({ view: next })} />}{view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy} />}{view === "plan" && <PlanView mission={mission} action={action} busy={busy} />}{view === "access" && <AccessView mission={mission} />}{view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale} />}{view === "evidence" && <EvidenceLedger mission={mission} />}{view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy} />}</div>
+    <div className={`mission-content mission-content-${view}`}>{showRunReveal && view === "conflicts" && <MissionRunReceipt mission={mission} onOpenRoom={() => setParams({ view: "room" })} />}{view === "room" && <MissionRoom mission={mission} action={action} busy={busy} setView={(next) => setParams({ view: next })} />}{view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy} />}{view === "plan" && <PlanView mission={mission} action={action} busy={busy} />}{view === "access" && <AccessView mission={mission} />}{view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale} />}{view === "evidence" && <EvidenceLedger mission={mission} />}{view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy} />}</div>
   </main></AppShell>;
 }
 

@@ -12,6 +12,7 @@ import {
 import { api, formatDate, formatMoney } from "./api";
 import { localizeDomainText, localizeLabel, localizePayloadKey, tr, useLocale } from "./i18n";
 import { parseQuickMission } from "./quickMission";
+import CoworkReplay from "./CoworkReplay";
 import type {
   ApprovalRequest, Conflict, CreateMissionInput, ExecutionTask, MissionDetail, MissionSummary, Outcome, PlanVersion, SourceInput,
 } from "@shared/domain";
@@ -204,7 +205,7 @@ function LandingPage() {
             </div>
             <div className="trust-line"><ShieldCheck size={17} /><span>{tr("Read first", "先讀、不直接動手")}</span><span>•</span><span>{tr("Every conclusion has a source", "每個結論都有來源")}</span><span>•</span><span>{tr("Conflict means stop", "有衝突就先停")}</span></div>
           </div>
-          <RelayPlainStory />
+          <CoworkReplay variant="hero" />
         </section>
 
         <section className="proof-strip"><span>{tr("RELAY IN ONE LINE", "一句話看懂")}</span><ArrowRight size={18} /><b>{tr("many instructions → one conflict → agents pause → the right human decides → one current plan", "很多指令 → 找到衝突 → Agent 暫停 → 正確的人決定 → 全隊照同一版繼續")}</b></section>
@@ -617,6 +618,7 @@ function OutcomeView({ mission, action, busy }: { mission: MissionDetail; action
 
 function DemoPage() {
   const navigate = useNavigate();
+  const { locale } = useLocale();
   const [mission, setMission] = useState<MissionDetail>();
   const [error, setError] = useState("");
   useEffect(() => {
@@ -629,7 +631,18 @@ function DemoPage() {
   const noAction: MissionAction = async () => undefined;
   if (error) return <main className="demo-loading"><Logo /><ErrorBlock error={error} retry={() => window.location.reload()} /><Link to="/missions/new?sample=1" className="button button-primary">{tr("Analyze my launch instead", "改為分析我的 Launch")}</Link></main>;
   if (!mission) return <main className="demo-loading"><Logo /><LoadingBlock label={tr("Opening the read-only execution example…", "正在開啟唯讀執行範例…")} /></main>;
-  return <main className="mission-page demo-page"><header className="mission-header"><div className="mission-topbar"><Logo compact /><span className="demo-badge"><FileCheck2 size={14} /> {tr("READ-ONLY SHARED MISSION EXAMPLE", "唯讀共用 MISSION 範例")}</span><div className="demo-actors"><UsersRound size={15} /><span>1 {tr("human", "位人類")} + 3 {tr("agent roles", "個 Agent 角色")}</span><small>{tr("recorded activity", "活動已保存")}</small></div><div className="mission-header-spacer" /><LanguageSwitcher compact /><Link to="/missions/new?sample=1" className="button button-primary button-small">{tr("Analyze my launch", "分析我的 Launch")} <ArrowRight size={15} /></Link></div></header><div className="mission-content mission-content-room"><MissionRoom mission={mission} action={noAction} busy="" readOnly setView={() => navigate("/missions/new?sample=1")} /></div></main>;
+  return <main className="mission-page demo-page">
+    <header className="mission-header"><div className="mission-topbar"><Logo compact /><span className="demo-badge"><FileCheck2 size={14} /> {tr("GUIDED MISSION REPLAY", "引導式 MISSION 重播")}</span><div className="demo-actors"><UsersRound size={15} /><span>3 {tr("humans", "位人類")} + 6 {tr("AI agents", "個 AI Agent")}</span><small>{tr("three mission scenarios", "三種 Mission 情境")}</small></div><div className="mission-header-spacer" /><LanguageSwitcher compact /><Link to="/missions/new?sample=1" className="button button-primary button-small">{tr("Analyze my launch", "分析我的 Launch")} <ArrowRight size={15} /></Link></div></header>
+    <section className="demo-replay-section">
+      <div className="demo-replay-heading"><span className="page-kicker">01 / {tr("HUMANS + AI IN ACTION", "人類 + AI 實際協作")}</span><h1>{locale === "zh-TW" ? <><span>3 位人類 + 6 個 AI Agent</span><span>找衝突、問對的人，</span><span>按同一份安全計畫執行。</span></> : <><span>Watch 3 humans + 6 AI agents</span><span>find the conflict, ask the right person,</span><span>then resume from one safe plan.</span></>}</h1><p>{tr("Switch between a launch, a customer crisis and a hiring decision. Every message changes who can act next.", "切換 Launch、客訴危機與招募決策；每一段溝通都會改變下一步誰能動手。")}</p></div>
+      <CoworkReplay variant="demo" />
+      <a className="demo-contract-jump" href="#execution-contract"><span>{tr("See the real source-backed execution contract below", "往下看真實、有來源依據的 Execution Contract")}</span><ArrowRight size={17} /></a>
+    </section>
+    <section className="demo-contract-section" id="execution-contract">
+      <div className="demo-contract-heading"><span className="page-kicker">02 / {tr("UNDER THE REPLAY", "動畫背後的真實資料")}</span><h2>{tr("Inspect the saved sources, blockers and execution gates.", "檢查已保存的來源、阻擋項目與執行關卡。")}</h2><p>{tr("The replay explains the workflow. This read-only mission below shows the actual persisted demo state and never pretends an external provider is connected.", "上方重播負責說明流程；下方唯讀 Mission 顯示真實保存的示範狀態，也不會假裝外部服務已連線。")}</p></div>
+      <div className="mission-content mission-content-room demo-contract-room"><MissionRoom mission={mission} action={noAction} busy="" readOnly setView={() => navigate("/missions/new?sample=1")} /></div>
+    </section>
+  </main>;
 }
 
 function NotFound() { return <div className="not-found"><Logo /><h1>{tr("That contract doesn’t exist.", "找不到這份合約。")}</h1><p>{tr("Return to the Relay control center.", "返回 Relay 控制中心。")}</p><Link className="button button-primary" to="/app">{tr("Open workspace", "開啟工作區")}</Link></div>; }

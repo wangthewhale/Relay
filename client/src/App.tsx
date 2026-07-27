@@ -61,10 +61,10 @@ function PublicHeader() {
     <header className="public-header">
       <Logo />
       <nav className={open ? "public-nav open" : "public-nav"}>
-        <a href="#wedge">{tr("Who it is for", "適合誰")}</a><a href="#multiplayer">{tr("Multiplayer mission", "多人 Mission")}</a><a href="#proof">{tr("What is real", "目前可用")}</a>
+        <a href="#pain">{tr("The pain", "你遇到的問題")}</a><a href="#plain-tech">{tr("How Relay works", "Relay 怎麼做")}</a><a href="#use-cases">{tr("Use cases", "什麼時候用")}</a><a href="#proof">{tr("What is real", "目前可用")}</a>
         <LanguageSwitcher compact />
         <Link to="/demo" className="text-link">{tr("Interactive demo", "可操作範例")}</Link>
-        <Link to="/missions/new" className="button button-small button-dark">{tr("Analyze a launch", "分析 Launch")} <ArrowRight size={15} /></Link>
+        <Link to="/missions/new" className="button button-small button-dark">{tr("Paste a mission", "貼上任務")} <ArrowRight size={15} /></Link>
       </nav>
       <button className="icon-button mobile-menu" onClick={() => setOpen((value) => !value)} aria-label={tr("Toggle menu", "開關選單")}><Menu size={20} /></button>
     </header>
@@ -119,6 +119,72 @@ function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: () => 
   </div>;
 }
 
+function RelayPlainStory() {
+  return <div className="relay-story" aria-label={tr("A simple Relay example", "一張圖看懂 Relay") }>
+    <div className="relay-story-head"><span><Blocks size={15} /> {tr("ONE MISSION", "同一個 MISSION")}</span><span>{tr("BEFORE AI ACTS", "AI 動手之前")}</span></div>
+    <div className="relay-story-prompt"><span>01</span><div><small>{tr("THE TEAM SAYS THREE THINGS", "團隊同時說了三件事")}</small><b>{tr("All three sound reasonable—until you put them together.", "每一句單獨看都合理，放在一起就撞車。")}</b></div></div>
+    <div className="relay-story-messages">
+      <article><MessageSquareWarning size={18} /><div><small>Slack · Growth</small><b>{tr("“We must launch July 29.”", "「7 月 29 日一定要上線。」")}</b></div></article>
+      <article><Mail size={18} /><div><small>Email · Client</small><b>{tr("“Nothing publishes before approval.”", "「品牌核准前不能發布。」")}</b></div></article>
+      <article><CalendarDays size={18} /><div><small>Calendar · Ops</small><b>{tr("“Brand review: July 30.”", "「品牌審查：7 月 30 日。」")}</b></div></article>
+    </div>
+    <div className="relay-story-collision"><span /><AlertOctagon size={18} /><b>{tr("Relay finds the collision", "Relay 找到撞車的地方")}</b><span /></div>
+    <div className="relay-story-stop"><span><CircleStop size={22} /></span><div><small>{tr("CANNOT BOTH BE TRUE", "兩件事不能同時成立")}</small><h3>{tr("Launch July 29, but approve July 30?", "7 月 29 日發布，卻要 7 月 30 日才核准？")}</h3><p>{tr("Email, Ads and CRM agents pause before they touch customers, money or data.", "Email、Ads、CRM Agent 先暫停，不碰客戶、不花錢、不改資料。")}</p></div></div>
+    <div className="relay-story-human"><UserRound size={19} /><div><small>{tr("ASK THE RIGHT HUMAN", "交給真正能決定的人")}</small><b>{tr("Jennifer chooses: move review to July 28.", "Jennifer 決定：把審查提前到 7 月 28 日。")}</b></div><span>{tr("WAITING", "等待決定")}</span></div>
+    <div className="relay-story-safe"><ShieldCheck size={20} /><div><small>{tr("SAFE PLAN v2", "安全計畫 v2")}</small><b>{tr("Approve first. Then let the agents continue from one shared version.", "先核准，再讓所有 Agent 按同一個版本繼續。")}</b></div><ArrowRight size={18} /></div>
+  </div>;
+}
+
+function LandingPainSection() {
+  const pains = [
+    [MessageSquareWarning, tr("Everyone tells AI something different", "每個人都叫 AI 做不同的事"), tr("Slack says launch. Email says wait. Calendar says the review is tomorrow.", "Slack 說今天上線，Email 說先等等，行事曆卻把審查排在明天。"), tr("Relay labels who said what, which source has authority, and which two rules cannot both be true.", "Relay 標出誰說了什麼、誰有權決定，以及哪兩條規則不能同時成立。"), "Intent Graph + Conflict Compiler"],
+    [GitBranch, tr("The plan changed, but an agent still has yesterday's version", "計畫改了，Agent 卻還拿著昨天的版本"), tr("The budget changed from NT$20,000 to NT$30,000 after work had already started.", "預算從 NT$20,000 改成 NT$30,000，但 Agent 已經照舊計畫開始工作。"), tr("Relay creates a new immutable plan, marks the old one stale, and pauses every affected task.", "Relay 建立新版本、讓舊版本失效，並暫停所有受影響的任務。"), "Versioned Execution Contract"],
+    [Fingerprint, tr("“Approved” gets reused for something nobody approved", "一句「批准」被拿去批准另一個內容"), tr("The audience, creative or budget changes after a manager clicked approve.", "主管核准後，受眾、素材或預算又被換掉了。"), tr("Relay binds approval to the exact payload, version, budget and expiry. Change one important field and approval disappears.", "Relay 把核准綁在精確內容、版本、預算與期限上；重要欄位一改，核准立刻失效。"), "Exact Approval + Payload Hash"],
+    [KeyRound, tr("An agent can access a tool, so it assumes it may use it", "Agent 有工具權限，就以為這次也可以用"), tr("A connected ads or CRM account becomes permission to spend or edit the wrong record.", "能登入廣告或 CRM，不代表這次可以花錢或修改那筆客戶資料。"), tr("Relay checks this mission, this task, this resource and this risk level before every action.", "Relay 每次動手前，都檢查這個 Mission、這個任務、這筆資源與這個風險等級。"), "Capability Gate + Preflight"],
+  ] as const;
+  return <section className="section pain-section" id="pain">
+    <div className="section-heading"><span className="section-index">02 / {tr("THE REAL PAIN", "真正的問題")}</span><h2>{tr("AI is smart. Your company is the messy part.", "AI 很聰明。真正混亂的是公司給它的指令。")}</h2><p>{tr("These are not rare model failures. They are everyday organizational failures that become dangerous when software can send, spend, publish or edit data on its own.", "這些不是少見的模型失誤，而是團隊每天都會發生的溝通錯誤；當 AI 能寄信、花錢、發布或改資料時，它們就會變得危險。")}</p></div>
+    <div className="pain-grid">{pains.map(([Icon, title, problem, answer, tech]) => <article key={title}>
+      <div className="pain-title"><span><Icon size={20} /></span><h3>{title}</h3></div>
+      <div className="pain-before"><small>{tr("WITHOUT RELAY", "沒有 RELAY")}</small><p>{problem}</p></div>
+      <div className="pain-after"><small>{tr("RELAY STOPS IT", "RELAY 怎麼擋")}</small><p>{answer}</p></div>
+      <span className="pain-tech">{tech}</span>
+    </article>)}</div>
+  </section>;
+}
+
+function PlainTechnicalSection() {
+  const steps = [
+    [FileText, tr("Collect every note", "收齊每張便條紙"), tr("Turn each sentence into a sourced statement.", "把每句人話變成一條有來源的主張。"), "Source → Intent Assertion"],
+    [Scale, tr("Circle the fighting rules", "圈出互相打架的兩句"), tr("Find deadlines, budgets, policies and dependencies that cannot coexist.", "找出不能同時成立的日期、預算、政策與前置條件。"), "Conflict Graph"],
+    [UserRound, tr("Ask the person who can decide", "找真正能決定的人"), tr("Route the conflict to the owner with authority—not the loudest person.", "把衝突交給有權責的人，不是聲音最大的人。"), "Authority Model"],
+    [GitBranch, tr("Lock the answer as the current version", "把答案鎖成最新版"), tr("Keep old versions, but never let them quietly keep running.", "保留舊版本，但不讓它偷偷繼續執行。"), "Versioned Contract"],
+    [ShieldCheck, tr("Check the traffic light before action", "動手前先看紅綠燈"), tr("Verify version, permission, approval, budget and rollback before a tool call.", "每次呼叫工具前，檢查版本、權限、核准、預算與回滾。"), "Preflight + Capability Gate"],
+    [History, tr("Leave a receipt after every move", "每一步都留一張收據"), tr("Explain what happened, why, who approved it and whether it worked.", "記下做了什麼、為什麼、誰核准，以及最後有沒有成功。"), "Audit Lineage → Outcome"],
+  ] as const;
+  return <section className="section plain-tech-section" id="plain-tech">
+    <div className="section-heading"><span className="section-index">03 / {tr("UNDER THE HOOD", "技術上怎麼做到")}</span><h2>{tr("Think of Relay as the teacher standing at the AI classroom door.", "把 Relay 想成站在 AI 教室門口的老師。")}</h2><p>{tr("It collects every note, finds the ones that disagree, asks the right adult, locks the chosen answer, checks permission, then keeps a receipt.", "它先收齊每張便條紙，找出哪兩張打架，請正確的人選答案，把答案鎖好，確認可以動手，最後留下收據。")}</p></div>
+    <div className="plain-tech-grid">{steps.map(([Icon, title, copy, tech], index) => <article key={title}><span className="plain-tech-number">{String(index + 1).padStart(2, "0")}</span><Icon size={23} /><h3>{title}</h3><p>{copy}</p><small>{tech}</small></article>)}</div>
+  </section>;
+}
+
+function LandingUseCases() {
+  const cases = [
+    [Radar, tr("Campaign or product launch", "行銷活動或產品 Launch"), tr("BEST FIRST MISSION", "最適合第一個使用"), tr("A deadline lives in Slack, approval in email, budget in Notion, audience in CRM and the real review date in Calendar.", "截止日在 Slack、核准在 Email、預算在 Notion、受眾在 CRM，真正的審查日期又在 Calendar。"), [tr("Which instruction is current?", "哪一條指令才是現在有效的？"), tr("Who must decide before launch?", "上線前一定要誰做決定？"), tr("Which agents must stop right now?", "哪些 Agent 現在必須停？")], tr("A versioned launch plan with owners, approvals and stop conditions.", "一份有負責人、核准與停止條件的版本化 Launch 計畫。")],
+    [UsersRound, tr("Agency client delivery", "Agency 的客戶交付"), tr("CLIENT-FACING RISK", "會直接影響客戶"), tr("The client changes scope by email while your team updates the brief in chat and AI keeps producing work from the old promise.", "客戶在 Email 改需求、團隊在聊天室改規格，AI 卻還照舊承諾產出。"), [tr("Which client request superseded the old one?", "哪一個客戶要求已取代舊版本？"), tr("Which exact creative was approved?", "被核准的到底是哪一版素材？"), tr("What must be redone after a correction?", "需求改變後哪些工作要重做？")], tr("One client-visible contract and a complete reason for every change.", "一份客戶看得懂的有效合約，以及每次變更的完整原因。")],
+    [RouteIcon, tr("Multi-location operations", "多據點與多城市營運"), tr("MANY PEOPLE · MANY SYSTEMS", "很多人、很多系統"), tr("Dates, venues, local owners, budgets and customer lists differ by city while one central team coordinates the launch.", "每個城市的日期、場地、負責人、預算與客戶名單都不同，中央團隊卻要一起協調。"), [tr("Which rule applies to this location?", "這個據點到底適用哪一條規則？"), tr("Who may approve this spend?", "這筆支出可以由誰核准？"), tr("What changes if one city slips?", "其中一個城市延誤會影響什麼？")], tr("A per-location plan with scoped ownership, access and blockers.", "每個據點都有自己的計畫、權責、存取範圍與阻擋條件。")],
+  ] as const;
+  return <section className="section use-cases-section" id="use-cases">
+    <div className="section-heading"><span className="section-index">04 / {tr("WHEN TO USE RELAY", "什麼情況要用")}</span><h2>{tr("Do not use Relay for every AI task. Use it when a wrong next step can hurt customers, money or data.", "不是每個 AI 任務都要開 Relay。只有下一步可能傷到客戶、錢或資料時才需要。")}</h2></div>
+    <div className="use-case-grid">{cases.map(([Icon, title, label, scenario, questions, result]) => <article key={title}>
+      <div className="use-case-head"><span><Icon size={21} /></span><small>{label}</small></div><h3>{title}</h3><p>{scenario}</p>
+      <div className="use-case-questions">{questions.map((question) => <span key={question}><Check size={14} /> {question}</span>)}</div>
+      <div className="use-case-result"><ShieldCheck size={16} /><div><small>{tr("RELAY OUTPUT", "RELAY 最後交付")}</small><b>{result}</b></div></div>
+    </article>)}</div>
+    <p className="use-case-truth"><ShieldCheck size={15} /> {tr("The public MVP fully demonstrates the first workflow through pasted sources and versioned mission state. Verified external OAuth execution is still rolling out provider by provider.", "公開 MVP 已完整示範第一個流程：貼上來源、偵測衝突、建立版本化 Mission；外部 OAuth 與真實工具執行仍在逐一導入。")}</p>
+  </section>;
+}
+
 function LandingPage() {
   const navigate = useNavigate();
   const { locale } = useLocale();
@@ -128,55 +194,43 @@ function LandingPage() {
       <main>
         <section className="hero">
           <div className="hero-copy">
-            <div className="eyebrow"><span className="pulse-dot" /> {tr("THE EXECUTION CONTROL PLANE FOR AI-NATIVE TEAMS", "給 AI 原生團隊的執行控制層")}</div>
-            <h1>{locale === "zh-TW" ? <><span className="hero-line">團隊給 AI 七個版本。</span><span className="hero-line">Relay 只讓它執行</span><span className="hero-line hero-accent-line">安全的那一個。</span></> : <><span className="hero-line">Your team gave AI seven versions.</span><span className="hero-line hero-accent-line">Relay executes only the safe one.</span></>}</h1>
-            <h2>{locale === "zh-TW" ? <>貼上混亂的 Launch Brief。Relay 在 AI 寄信、花錢或發布前，<b>抓出衝突並停止錯誤行動。</b></> : <>Paste a messy launch brief. Before AI sends, spends or publishes, Relay <b>finds the conflict and stops the wrong action.</b></>}</h2>
-            <p>{tr("For 5–50 person Growth, Agency and Operations teams coordinating launches across Slack, email, docs, calendars and CRM.", "給同時使用 Slack、Email、文件、行事曆與 CRM 的 5–50 人 Growth、Agency 與營運團隊。")}</p>
+            <div className="eyebrow"><span className="pulse-dot" /> {tr("BEFORE AI ACTS, MAKE SURE THE TEAM AGREES", "AI 動手前，先確認全隊說的是同一件事")}</div>
+            <h1>{locale === "zh-TW" ? <><span className="hero-line">AI 不笨。</span><span className="hero-line">它只是收到團隊</span><span className="hero-line hero-accent-line">互相打架的指令。</span></> : <><span className="hero-line">AI is not dumb.</span><span className="hero-line">Your team just gave it</span><span className="hero-line hero-accent-line">conflicting instructions.</span></>}</h1>
+            <h2>{locale === "zh-TW" ? <>把散在 Slack、Email、文件與行事曆的指令貼進來。Relay 先找出<b>哪兩句不能同時成立、誰能決定、哪些 Agent 必須停。</b></> : <>Paste the instructions scattered across Slack, email, docs and calendars. Relay finds <b>which rules collide, who can decide, and which agents must stop.</b></>}</h2>
+            <p>{tr("For 5–50 person teams already using AI to send email, prepare launches, update CRM or coordinate client work.", "給已經讓 AI 寄信、準備 Launch、更新 CRM 或協調客戶工作的 5–50 人團隊。")}</p>
             <div className="hero-actions">
-              <button className="button button-primary button-large" onClick={() => navigate("/missions/new")}>{tr("Find my first blocker", "找出我的第一個阻擋")} <ArrowRight size={18} /></button>
-              <button className="button button-ghost button-large" onClick={() => document.getElementById("magic")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Play size={17} fill="currentColor" /> {tr("See the magic moment", "看 Magic Moment")}</button>
+              <button className="button button-primary button-large" onClick={() => navigate("/missions/new")}>{tr("Paste my messy mission", "貼上我的混亂任務")} <ArrowRight size={18} /></button>
+              <button className="button button-ghost button-large" onClick={() => document.getElementById("magic")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Play size={17} fill="currentColor" /> {tr("Run the real example", "看真實編譯")}</button>
             </div>
-            <div className="trust-line"><ShieldCheck size={17} /><span>{tr("Real compiler", "真實編譯器")}</span><span>•</span><span>{tr("Source-backed", "來源可追")}</span><span>•</span><span>{tr("Unsafe actions stopped", "錯誤行動會被停止")}</span></div>
+            <div className="trust-line"><ShieldCheck size={17} /><span>{tr("Read first", "先讀、不直接動手")}</span><span>•</span><span>{tr("Every conclusion has a source", "每個結論都有來源")}</span><span>•</span><span>{tr("Conflict means stop", "有衝突就先停")}</span></div>
           </div>
+          <RelayPlainStory />
+        </section>
+
+        <section className="proof-strip"><span>{tr("RELAY IN ONE LINE", "一句話看懂")}</span><ArrowRight size={18} /><b>{tr("many instructions → one conflict → agents pause → the right human decides → one current plan", "很多指令 → 找到衝突 → Agent 暫停 → 正確的人決定 → 全隊照同一版繼續")}</b></section>
+
+        <section className="section live-proof-section">
+          <div className="live-proof-copy"><span className="section-index">01 / {tr("REAL MAGIC MOMENT", "真實 MAGIC MOMENT")}</span><h2>{tr("This is not a video. Relay is really comparing seven sources.", "這不是動畫。Relay 真的正在把 7 個來源互相比對。")}</h2><p>{tr("The compiler below extracts statements, detects a rule collision, pauses affected work and proposes one safe next step. Edit the evidence and run it again.", "下方編譯器會拆出每項主張、找出規則衝突、暫停受影響的工作，再提出一個安全下一步。你可以直接修改來源再跑一次。")}</p><div className="live-proof-legend"><span><FileCheck2 size={15} /> {tr("Input: pasted source text", "輸入：貼上的原始文字")}</span><span><CircleStop size={15} /> {tr("Output: a source-backed blocker", "輸出：有來源的阻擋原因")}</span><span><ShieldCheck size={15} /> {tr("Preview is not stored", "預覽內容不保存")}</span></div></div>
           <LandingMagicCompiler onOpenFullMission={() => navigate("/missions/new?sample=1")} />
         </section>
 
-        <section className="proof-strip"><span>{tr("FIRST VALUE", "首次價值")}</span><ArrowRight size={18} /><b>{tr("one paste → first blocker → next safe action", "貼上一次 → 第一個阻擋 → 下一步安全行動")}</b><div className="proof-items"><span><UsersRound size={15} /> {tr("Shared mission room", "共用 Mission Room")}</span><span><FileCheck2 size={15} /> {tr("Evidence linked", "證據可追")}</span><span><GitBranch size={15} /> {tr("Corrections versioned", "修正自動版本化")}</span></div></section>
-
-        <section className="section wedge-section" id="wedge">
-          <div className="section-heading"><span className="section-index">00 / {tr("THE WEDGE", "首個切入場景")}</span><h2>{tr("Start with the launch that cannot afford one wrong instruction.", "先解決那種一條錯誤指令就會造成返工的 Launch。")}</h2><p>{tr("Relay is initially for cross-functional campaign and launch operations—where deadlines, budgets, audiences, approvals and tool permissions change faster than the plan.", "Relay 第一階段專注跨部門活動與 Launch 營運：截止日、預算、受眾、核准與工具權限比計畫變得更快的工作。")}</p></div>
-          <div className="wedge-grid">
-            <article><UsersRound /><span>{tr("WHO", "給誰")}</span><h3>{tr("5–50 person Growth, Agency and Ops teams", "5–50 人 Growth、Agency 與 Ops 團隊")}</h3><p>{tr("Teams already using AI plus several SaaS tools to deliver client or company launches.", "已用 AI 與多個 SaaS 工具交付客戶或公司 Launch 的團隊。")}</p></article>
-            <article><MessageSquareWarning /><span>{tr("WHEN", "什麼時候")}</span><h3>{tr("Before an agent sends, spends or publishes", "Agent 要寄出、花錢或公開發布之前")}</h3><p>{tr("When one stale brief, missing approval or wrong audience could create customer-facing damage.", "當過期規格、漏掉核准或錯誤受眾會直接造成對客錯誤時。")}</p></article>
-            <article><Target /><span>{tr("WHY RETURN", "為什麼會重複使用")}</span><h3>{tr("Every launch changes; every contract must stay current", "每次 Launch 都會改變，執行合約必須跟著更新")}</h3><p>{tr("A correction creates impact analysis, a new version, invalidated approvals and a durable decision trail.", "一次修正會產生影響分析、新版本、失效核准與可追決策紀錄。")}</p></article>
-          </div>
-        </section>
+        <LandingPainSection />
+        <PlainTechnicalSection />
+        <LandingUseCases />
 
         <section className="section multiplayer-section" id="multiplayer">
-          <div className="multiplayer-copy"><span className="section-index">01 / {tr("MULTIPLAYER BY DEFAULT", "預設多人協作")}</span><h2>{tr("One mission. One shared state. Humans and agents working from the same truth.", "一個 Mission、一份共同狀態，讓人與 Agent 按同一版真相工作。")}</h2><p>{tr("A correction is not another chat message. Relay records who changed the instruction, updates the shared room, blocks affected agents and preserves the event in the execution lineage.", "人工修正不再只是另一則聊天訊息。Relay 會記錄誰改了指令、同步到共同控制室、阻擋受影響的 Agent，並把事件保留在執行脈絡中。")}</p><Link to="/demo" className="button button-dark">{tr("Open the shared mission example", "打開共用 Mission 範例")} <ArrowRight size={16} /></Link></div>
+          <div className="multiplayer-copy"><span className="section-index">05 / {tr("ONE SHARED VERSION", "全隊共用一個版本")}</span><h2>{tr("When one human changes a sentence, every working agent must know.", "有人改了一句話，正在工作的 Agent 也要立刻知道。")}</h2><p>{tr("Jennifer changes the budget. Relay does not leave that correction in chat. It records who changed it, makes the old contract and approvals stale, pauses affected agents, and creates the next plan version.", "Jennifer 修改預算後，Relay 不會把修正留在聊天室裡。它會記下誰改了內容、讓舊合約與舊核准失效、停住受影響的 Agent，再建立下一個計畫版本。")}</p><Link to="/demo" className="button button-dark">{tr("Watch this exact mission", "打開這個真實 Mission")} <ArrowRight size={16} /></Link></div>
           <div className="multiplayer-proof" aria-label={tr("Shared mission proof", "共用 Mission 證明") }>
             <div className="multiplayer-proof-head"><span><UsersRound size={16} /> {tr("SHARED MISSION URL", "共用 MISSION URL")}</span><span className="sync-chip"><span /> {tr("SYNC EVERY 10S", "每 10 秒同步")}</span></div>
             <div className="multiplayer-path">
-              <article><span>01</span><UserRound size={19} /><b>{tr("Human corrects intent", "人類修正意圖")}</b><small>{tr("Named, source-backed", "具名、保留來源")}</small></article>
+              <article><span>01</span><UserRound size={19} /><b>{tr("Jennifer changes the budget", "Jennifer 修改預算")}</b><small>{tr("Named and sourced", "記名並保留來源")}</small></article>
               <ArrowRight size={17} />
-              <article><span>02</span><GitBranch size={19} /><b>{tr("Contract becomes stale", "舊合約立即失效")}</b><small>{tr("Approvals invalidated", "舊核准不沿用")}</small></article>
+              <article><span>02</span><GitBranch size={19} /><b>{tr("Plan v3 becomes stale", "計畫 v3 立即失效")}</b><small>{tr("Old approval cannot follow", "舊核准不能沿用")}</small></article>
               <ArrowRight size={17} />
-              <article><span>03</span><Bot size={19} /><b>{tr("Affected agents stop", "受影響 Agent 停止")}</b><small>{tr("Clear next action", "顯示下一步")}</small></article>
+              <article><span>03</span><Bot size={19} /><b>{tr("Agents pause for Plan v4", "Agent 等待計畫 v4")}</b><small>{tr("One explicit next action", "只有一個明確下一步")}</small></article>
             </div>
             <div className="multiplayer-event"><Activity size={17} /><div><span>{tr("RECORDED ACTIVITY", "已記錄活動")}</span><b>{tr("Jennifer changed the budget limit; Plan v4 requires replanning.", "Jennifer 修改預算上限；Plan v4 需要重新規劃。")}</b></div><small>{tr("persisted", "已保存")}</small></div>
             <p className="multiplayer-truth"><ShieldCheck size={15} /> {tr("Current public MVP uses persisted events and 10-second refresh—not simulated cursor presence or fake online agents.", "目前公開 MVP 使用已保存事件與 10 秒同步，不模擬游標共編，也不假裝 Agent 正在線上。")}</p>
-          </div>
-        </section>
-
-        <section className="section how" id="how-it-works">
-          <div className="section-heading"><span className="section-index">02 / {tr("INTENT COMPILER", "意圖編譯器")}</span><h2>{tr("Before agents execute,", "在 Agent 執行前，")}<br />{tr("make the mission executable.", "先讓 Mission 真正可執行。")}</h2><p>{tr("Relay turns scattered goals, limits and decisions into an evidence-backed contract every person and agent can inspect.", "Relay 把散落各處的目標、限制與決策，整理成每個人與 Agent 都能檢查、且有來源證據的執行合約。")}</p></div>
-          <div className="steps-grid">
-            {[
-              [Network, tr("Collect intent", "收集意圖"), tr("Attach messages, documents, records and human corrections. Every assertion keeps its source, author, timestamp and authority.", "加入訊息、文件、系統紀錄與人工修正；每項主張都保留來源、作者、時間與權威等級。")],
-              [Scale, tr("Resolve conflict", "解決衝突"), tr("Find hard, policy, resource, authority, version and dependency conflicts before they become expensive mistakes.", "在錯誤造成昂貴代價前，找出硬性、政策、資源、權責、版本與依賴衝突。")],
-              [Braces, tr("Compile the contract", "編譯合約"), tr("Produce tasks with owners, dependencies, capabilities, risk, budget, approvals, stop conditions and rollback.", "產生含負責人、依賴、能力、風險、預算、核准、停止與回滾條件的任務。")],
-              [Activity, tr("Execute with control", "受控執行"), tr("Run preflight checks, stop unsafe actions, invalidate stale approvals and retain evidence through the outcome.", "執行前檢查每個條件，停止不安全操作、使過期核准失效，並保留直到成果的完整證據。")],
-            ].map(([Icon, title, copy], index) => <article className="step-card" key={String(title)}><span className="step-number">0{index + 1}</span><Icon size={25} /><h3>{String(title)}</h3><p>{String(copy)}</p></article>)}
           </div>
         </section>
 
@@ -190,18 +244,18 @@ function LandingPage() {
             <div className="contract-row"><span>{tr("STOP", "停止")}</span><p>{tr("Pause if CPA > NT$1,250 after 10 conversions", "10 次轉換後若 CPA > NT$1,250 就暫停")}</p><CircleStop size={18} /></div>
             <div className="contract-hash"><Fingerprint size={16} /> sha256:8b1f…c04d <span>{tr("payload locked", "內容已鎖定")}</span></div>
           </div>
-          <div className="contract-copy"><span className="section-index">03 / {tr("CONTROL PLANE", "執行控制層")}</span><h2>{tr("Approval is not a button.", "核准不是一顆按鈕，")}<br />{tr("It’s a precise contract.", "而是一份精確合約。")}</h2><p>{tr("Every high-impact action is bound to one plan version, exact audience, payload, budget, approver, expiration and rollback strategy. Change the payload and the approval disappears.", "每項高影響操作都綁定一個計畫版本、精確受眾、內容、預算、核准人、到期時間與回滾策略。只要重要內容改變，核准就自動失效。")}</p><ul className="feature-list"><li><Check /> {tr("Version-aware execution", "版本感知執行")}</li><li><Check /> {tr("Task-level capability grants", "任務層級能力授權")}</li><li><Check /> {tr("Exact, expiring approvals", "精確且會到期的核准")}</li><li><Check /> {tr("End-to-end evidence lineage", "端到端證據脈絡")}</li></ul></div>
+          <div className="contract-copy"><span className="section-index">06 / {tr("EXACT APPROVAL", "到底批准了什麼")}</span><h2>{tr("“I approve” is not enough.", "只說「我批准」還不夠。")}<br />{tr("Relay locks the exact version.", "Relay 會鎖住你批准的那一版。")}</h2><p>{tr("The approval says: this audience, this creative, this budget, this plan version, approved by this person, until this time. If any important field changes, the agent must ask again.", "核准內容會清楚寫出：這個受眾、這份素材、這筆預算、這個計畫版本、由誰核准、何時到期。重要欄位一改，Agent 就必須重新詢問。")}</p><ul className="feature-list"><li><Check /> {tr("Knows the current plan", "知道目前有效版本")}</li><li><Check /> {tr("Limits each task's access", "限制每個任務的權限")}</li><li><Check /> {tr("Approval expires and cannot drift", "核准會到期、不能偷換內容")}</li><li><Check /> {tr("Every decision has a receipt", "每個決定都有收據")}</li></ul></div>
         </section>
 
-        <section className="section security-section" id="security"><div><span className="section-index">04 / {tr("TRUST BY DESIGN", "以信任為核心設計")}</span><h2>{tr("Agents request capabilities.", "Agent 只能提出能力請求，")}<br />{tr("They never hold credentials.", "永遠不會持有憑證。")}</h2></div><div className="security-grid">{[
-          [KeyRound, tr("Mission-scoped access", "Mission 範圍授權"), tr("Only the providers, resources and actions required by the active plan.", "只允許有效計畫真正需要的服務、資源與操作。")],
-          [LockKeyhole, tr("Credential isolation", "憑證隔離"), tr("OAuth tokens stay in the gateway—never in model or agent context.", "OAuth Token 留在 Gateway，永不進入模型或 Agent 上下文。")],
-          [History, tr("Immutable lineage", "不可變執行脈絡"), tr("Every assertion, decision, action, version and outcome remains explainable.", "每項主張、決策、操作、版本與成果都能完整說明。")],
-          [ShieldCheck, tr("Fail-closed execution", "預設拒絕的不安全執行"), tr("Missing permission, stale versions and payload changes stop execution with a clear next action.", "缺少權限、版本過期或內容改變時立即停止，並提供明確下一步。")],
+        <section className="section security-section" id="security"><div><span className="section-index">07 / {tr("SAFE TOOL USE", "怎麼安全使用工具")}</span><h2>{tr("The agent may knock.", "Agent 可以敲門，")}<br />{tr("It never gets the whole keyring.", "但拿不到整串鑰匙。")}</h2><p className="security-intro">{tr("Relay sits between an agent and every tool. The agent asks for one action; Relay checks whether this exact mission allows it.", "Relay 站在 Agent 與工具中間。Agent 每次只能要求一個操作，Relay 再檢查這個 Mission 是否真的允許。")}</p></div><div className="security-grid">{[
+          [KeyRound, tr("Only this mission", "只限這個 Mission"), tr("Grant only the services, folders, records and actions the current plan requires.", "只開放目前計畫需要的服務、資料夾、紀錄與操作。")],
+          [LockKeyhole, tr("The model never sees the key", "模型永遠看不到鑰匙"), tr("OAuth tokens stay inside the tool gateway—not in model prompts or agent memory.", "OAuth Token 只留在 Tool Gateway，不進模型 Prompt 或 Agent 記憶。")],
+          [History, tr("Every tool call has a receipt", "每次工具呼叫都有收據"), tr("Record the source, plan, approval, payload, result and person responsible.", "記錄來源、計畫、核准、內容、結果與責任人。")],
+          [ShieldCheck, tr("No green light means stop", "沒有綠燈就先停"), tr("Missing permission, an old version or changed content produces a blocker and one clear next step.", "缺少權限、版本過期或內容改變時，立即阻擋並告訴你下一步。")],
         ].map(([Icon, title, copy]) => <article key={String(title)}><Icon size={22} /><h3>{String(title)}</h3><p>{String(copy)}</p></article>)}</div></section>
 
         <section className="section reality-section" id="proof">
-          <div className="reality-copy"><span className="section-index">05 / {tr("PRODUCT TRUTH", "產品真實狀態")}</span><h2>{tr("Know exactly what works today—and what does not yet.", "清楚知道今天能做什麼，以及哪些還沒有。")}</h2><p>{tr("Relay will not call a connector verified, an agent online, or an action completed unless the corresponding check actually passed.", "Relay 不會在沒有通過對應驗證時，把連接器稱為已連線、把 Agent 稱為在線，或把操作稱為已完成。")}</p></div>
+          <div className="reality-copy"><span className="section-index">08 / {tr("WHAT WORKS TODAY", "今天真的能用什麼")}</span><h2>{tr("No fake agents. No fake connections. Here is the honest line.", "不假裝 Agent 在線，也不假裝工具已連線。界線寫清楚。")}</h2><p>{tr("Today Relay can take pasted source text, find conflicts, resolve decisions, version a mission, invalidate stale approvals and preserve the record. External tool execution comes only after each real connection is verified.", "今天 Relay 可以接收貼上的原始文字、找衝突、解決決策、建立 Mission 版本、讓舊核准失效並保存紀錄。外部工具只有在真實連線逐一驗證後才會執行。")}</p></div>
           <div className="reality-board">
             <article className="available"><span>{tr("AVAILABLE NOW", "目前可用")}</span><h3>{tr("Shared intent conflict compiler", "共用意圖衝突編譯器")}</h3><ul><li><Check />{tr("One-paste mission intake", "一次貼上 Mission")}</li><li><Check />{tr("Shared Mission URL with persisted 10-second sync", "共用 Mission URL 與已保存的 10 秒同步")}</li><li><Check />{tr("Named corrections, versioned plans and approval invalidation", "具名修正、版本化計畫與核准失效")}</li><li><Check />{tr("Preflight, audit ledger and outcome record", "執行前檢查、稽核與成果紀錄")}</li></ul></article>
             <article className="rollout"><span>{tr("DESIGN PARTNER ROLLOUT", "DESIGN PARTNER 導入中")}</span><h3>{tr("Verified external execution", "已驗證的外部執行")}</h3><ul><li><Clock3 />{tr("Slack, Gmail, Notion, Drive and Calendar OAuth", "Slack、Gmail、Notion、Drive 與 Calendar OAuth")}</li><li><Clock3 />{tr("Credential vault and resource verification", "憑證保管庫與資源驗證")}</li><li><Clock3 />{tr("Tool gateway execution and rollback receipts", "Tool Gateway 執行與回滾憑據")}</li><li><Ban />{tr("No simulated connected state", "不模擬已連線狀態")}</li></ul></article>
@@ -209,7 +263,7 @@ function LandingPage() {
           </div>
         </section>
 
-        <section className="final-cta"><span>{tr("ONE PASTE. ONE BLOCKER. ONE SAFE NEXT STEP.", "貼上一次，找出一個關鍵阻擋，得到一個安全下一步。")}</span><h2>{tr("Test Relay on the launch", "就用你手上那個")}<br />{tr("your team is running now.", "正在執行的 Launch 測試 Relay。")}</h2><Link to="/missions/new" className="button button-primary button-large">{tr("Analyze a launch brief", "分析一份 Launch Brief")} <ArrowRight /></Link></section>
+        <section className="final-cta"><span>{tr("PASTE THE MESS. SEE THE CONFLICT. STOP THE WRONG ACTION.", "把混亂貼進來，看到衝突，停住錯誤行動。")}</span><h2>{tr("Use the mission your team", "就拿團隊現在最亂、")}<br />{tr("is most afraid to get wrong.", "也最怕做錯的任務來測。")}</h2><Link to="/missions/new" className="button button-primary button-large">{tr("Paste my real mission", "貼上我的真實任務")} <ArrowRight /></Link></section>
       </main>
       <footer><Logo /><p>{tr("Git for organizational intent—and the control plane for AI execution.", "組織意圖的 Git，也是 AI 執行的控制層。")}</p><span>© 2026 Relay</span></footer>
     </div>

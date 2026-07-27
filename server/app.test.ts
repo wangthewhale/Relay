@@ -27,6 +27,31 @@ describe("Relay mission lifecycle API", () => {
     expect(mission.currentPlan?.status).toBe("draft");
   });
 
+  it("runs the landing-page compiler against the submitted brief without saving it", async () => {
+    const response = await request(app)
+      .post("/api/preview-compile")
+      .send({
+        title: "Launch Kaohsiung campaign",
+        objective: "Launch by July 29, exclude existing members and stay below NT$30,000.",
+        successMetric: "24 paid registrations at CPA no higher than NT$1,250",
+        createdBy: "Jennifer",
+        sources: [
+          { type: "Slack", title: "Launch channel", author: "Growth lead", content: "Launch on July 29 and do not promote to existing members.", authorityLevel: 4 },
+          { type: "Email", title: "Client review", author: "Client", content: "Every public creative requires brand approval.", authorityLevel: 5 },
+          { type: "Calendar", title: "Brand review", author: "Operations", content: "Brand approval review is scheduled for July 30.", authorityLevel: 4 },
+          { type: "Notion", title: "Campaign brief", author: "Marketing", content: "Budget limit is NT$20,000.", authorityLevel: 2 },
+          { type: "Manual", title: "Executive update", author: "Mission owner", content: "Approved budget is NT$30,000 and nothing can publish without my approval.", authorityLevel: 5 },
+        ],
+      })
+      .expect(200);
+
+    expect(response.body.saved).toBe(false);
+    expect(response.body.receipt).toMatchObject({ sources: 5, blocking: 3 });
+    expect(response.body.conflict.type).toBe("Hard conflict");
+    expect(response.body.evidence).toHaveLength(2);
+    expect(response.body.execution.blockedAgents).toBeGreaterThanOrEqual(3);
+  });
+
   it("records decisions, activates a new version and invalidates it on correction", async () => {
     for (const conflict of mission.conflicts.filter((item) => item.status === "open")) {
       const response = await request(app)

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import {
   approvalDecisionSchema,
@@ -7,6 +8,7 @@ import {
   resolveConflictSchema,
 } from "../shared/domain";
 import { databaseHealth } from "./db";
+import { compilePlan, detectConflicts, extractAssertions } from "./compiler";
 import { ConflictError, NotFoundError, store } from "./store";
 
 export function createApp() {
@@ -41,6 +43,51 @@ export function createApp() {
     try {
       const missionId = await store.seedDemo();
       response.json({ mission: await store.getMission(missionId), readOnly: true });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/preview-compile", (request, response, next) => {
+    try {
+      const input = createMissionSchema.parse(request.body);
+      const createdAt = new Date().toISOString();
+      const sources = input.sources.map((source) => ({ ...source, id: source.id ?? randomUUID(), createdAt }));
+      const assertions = extractAssertions(input, sources);
+      const conflicts = detectConflicts(assertions);
+      const plan = compilePlan({ input, sources, conflicts, version: 1 });
+      const primaryConflict = conflicts.find((conflict) => conflict.type === "Hard conflict")
+        ?? conflicts.find((conflict) => conflict.blocking)
+        ?? conflicts[0];
+      const sourceById = new Map(sources.map((source) => [source.id, source]));
+      const assertionById = new Map(assertions.map((assertion) => [assertion.id, assertion]));
+      const evidence = (primaryConflict?.sourceAssertionIds ?? []).map((assertionId) => {
+        const assertion = assertionById.get(assertionId);
+        const source = assertion?.sourceId ? sourceById.get(assertion.sourceId) : undefined;
+        return {
+          id: assertionId,
+          statement: assertion?.statement ?? "",
+          assertionType: assertion?.type ?? "Constraint",
+          sourceType: source?.type ?? "Mission",
+          sourceTitle: source?.title ?? input.title,
+          author: source?.author ?? input.createdBy,
+        };
+      });
+      response.json({
+        receipt: {
+          sources: sources.length,
+          assertions: assertions.length,
+          conflicts: conflicts.length,
+          blocking: conflicts.filter((conflict) => conflict.blocking).length,
+        },
+        conflict: primaryConflict ?? null,
+        evidence,
+        execution: {
+          tasks: plan.tasks.length,
+          agentTasks: plan.tasks.filter((task) => task.ownerType === "agent").length,
+          blockedAgents: plan.tasks.filter((task) => task.ownerType === "agent" && task.status === "blocked").length,
+          requiredProviders: plan.accessBlueprint.length,
+        },
+        saved: false,
+      });
     } catch (error) { next(error); }
   });
 

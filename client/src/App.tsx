@@ -1,9 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "./router";
 import type { Edge, MarkerType } from "@xyflow/react";
 import type { MissionFlowNode } from "./ExecutionFlowCanvas";
 import {
-  Activity, AlertOctagon, ArrowRight, BadgeCheck, Ban, Blocks, Bot, Braces, CalendarDays, Check, ChevronDown, CircleDollarSign,
+  Activity, AlertOctagon, ArrowRight, BadgeCheck, Ban, Blocks, Bot, Braces, CalendarDays, Check, ChevronDown, CircleDollarSign, Copy,
   CircleStop, Clock3, Database, ExternalLink, FileCheck2, FileText, Fingerprint, GitBranch, History, KeyRound, LayoutDashboard,
   Link2, LockKeyhole, Mail, Maximize2, Menu, MessageSquareWarning, Network, PanelRightClose, PanelRightOpen,
   Play, Plus, Radar, RefreshCw, Route as RouteIcon, Scale, Search, Send, ShieldCheck, Sparkles, Target, TimerReset,
@@ -53,7 +53,7 @@ function PublicHeader() {
     <header className="public-header">
       <Logo />
       <nav className={open ? "public-nav open" : "public-nav"}>
-        <a href="#wedge">{tr("Who it is for", "適合誰")}</a><a href="#how-it-works">{tr("How it works", "運作方式")}</a><a href="#proof">{tr("What is real", "目前可用")}</a>
+        <a href="#wedge">{tr("Who it is for", "適合誰")}</a><a href="#multiplayer">{tr("Multiplayer mission", "多人 Mission")}</a><a href="#proof">{tr("What is real", "目前可用")}</a>
         <LanguageSwitcher compact />
         <Link to="/demo" className="text-link">{tr("Interactive demo", "可操作範例")}</Link>
         <Link to="/missions/new" className="button button-small button-dark">{tr("Analyze a launch", "分析 Launch")} <ArrowRight size={15} /></Link>
@@ -72,7 +72,7 @@ function LandingPage() {
       <main>
         <section className="hero">
           <div className="hero-copy">
-            <div className="eyebrow"><span className="pulse-dot" /> {tr("For campaign, launch and client operations", "為 Growth、Agency 與營運團隊打造")}</div>
+            <div className="eyebrow"><span className="pulse-dot" /> {tr("Multiplayer AI mission room for launch teams", "給 Launch 團隊的多人 AI Mission Room")}</div>
             <h1>{locale === "zh-TW" ? <><span className="hero-line">在 AI 寄信、花錢或發布前，</span><span className="hero-line">先抓出那條會讓它</span><span className="hero-line">做錯事的指令。</span></> : "Before AI sends, spends or publishes, catch the instruction that would make it wrong."}</h1>
             <h2>{locale === "zh-TW" ? <><span className="hero-line">貼上一份混亂的 Launch Brief。</span><span className="hero-line">Relay 告訴你哪裡矛盾、誰該決定，</span><span className="hero-line">以及下一步安全行動。</span></> : "Paste one messy launch brief. Relay shows the contradiction, who must decide, and the next safe action."}</h2>
             <p>{tr("Built for 5–50 person Growth, Agency and Operations teams running launches across Slack, email, docs, calendars and CRM. Relay compiles those instructions into source-backed conflicts and a versioned execution contract.", "給同時使用 Slack、Email、文件、行事曆與 CRM 的 5–50 人 Growth、Agency 與營運團隊。Relay 把分散指令編譯成有來源的衝突與版本化執行合約。")}</p>
@@ -101,7 +101,7 @@ function LandingPage() {
           </div>
         </section>
 
-        <section className="proof-strip"><span>{tr("FIRST VALUE", "首次價值")}</span><ArrowRight size={18} /><b>{tr("one paste → first blocker → next safe action", "貼上一次 → 第一個阻擋 → 下一步安全行動")}</b><div className="proof-items"><span><Scale size={15} /> {tr("5 material conflict classes", "5 種關鍵衝突")}</span><span><FileCheck2 size={15} /> {tr("Evidence linked", "證據可追")}</span><span><GitBranch size={15} /> {tr("Plan versioned", "計畫有版本")}</span></div></section>
+        <section className="proof-strip"><span>{tr("FIRST VALUE", "首次價值")}</span><ArrowRight size={18} /><b>{tr("one paste → first blocker → next safe action", "貼上一次 → 第一個阻擋 → 下一步安全行動")}</b><div className="proof-items"><span><UsersRound size={15} /> {tr("Shared mission room", "共用 Mission Room")}</span><span><FileCheck2 size={15} /> {tr("Evidence linked", "證據可追")}</span><span><GitBranch size={15} /> {tr("Corrections versioned", "修正自動版本化")}</span></div></section>
 
         <section className="section wedge-section" id="wedge">
           <div className="section-heading"><span className="section-index">00 / {tr("THE WEDGE", "首個切入場景")}</span><h2>{tr("Start with the launch that cannot afford one wrong instruction.", "先解決那種一條錯誤指令就會造成返工的 Launch。")}</h2><p>{tr("Relay is initially for cross-functional campaign and launch operations—where deadlines, budgets, audiences, approvals and tool permissions change faster than the plan.", "Relay 第一階段專注跨部門活動與 Launch 營運：截止日、預算、受眾、核准與工具權限比計畫變得更快的工作。")}</p></div>
@@ -112,8 +112,24 @@ function LandingPage() {
           </div>
         </section>
 
+        <section className="section multiplayer-section" id="multiplayer">
+          <div className="multiplayer-copy"><span className="section-index">01 / {tr("MULTIPLAYER BY DEFAULT", "預設多人協作")}</span><h2>{tr("One mission. One shared state. Humans and agents working from the same truth.", "一個 Mission、一份共同狀態，讓人與 Agent 按同一版真相工作。")}</h2><p>{tr("A correction is not another chat message. Relay records who changed the instruction, updates the shared room, blocks affected agents and preserves the event in the execution lineage.", "人工修正不再只是另一則聊天訊息。Relay 會記錄誰改了指令、同步到共同控制室、阻擋受影響的 Agent，並把事件保留在執行脈絡中。")}</p><Link to="/demo" className="button button-dark">{tr("Open the shared mission example", "打開共用 Mission 範例")} <ArrowRight size={16} /></Link></div>
+          <div className="multiplayer-proof" aria-label={tr("Shared mission proof", "共用 Mission 證明") }>
+            <div className="multiplayer-proof-head"><span><UsersRound size={16} /> {tr("SHARED MISSION URL", "共用 MISSION URL")}</span><span className="sync-chip"><span /> {tr("SYNC EVERY 10S", "每 10 秒同步")}</span></div>
+            <div className="multiplayer-path">
+              <article><span>01</span><UserRound size={19} /><b>{tr("Human corrects intent", "人類修正意圖")}</b><small>{tr("Named, source-backed", "具名、保留來源")}</small></article>
+              <ArrowRight size={17} />
+              <article><span>02</span><GitBranch size={19} /><b>{tr("Contract becomes stale", "舊合約立即失效")}</b><small>{tr("Approvals invalidated", "舊核准不沿用")}</small></article>
+              <ArrowRight size={17} />
+              <article><span>03</span><Bot size={19} /><b>{tr("Affected agents stop", "受影響 Agent 停止")}</b><small>{tr("Clear next action", "顯示下一步")}</small></article>
+            </div>
+            <div className="multiplayer-event"><Activity size={17} /><div><span>{tr("RECORDED ACTIVITY", "已記錄活動")}</span><b>{tr("Jennifer changed the budget limit; Plan v4 requires replanning.", "Jennifer 修改預算上限；Plan v4 需要重新規劃。")}</b></div><small>{tr("persisted", "已保存")}</small></div>
+            <p className="multiplayer-truth"><ShieldCheck size={15} /> {tr("Current public MVP uses persisted events and 10-second refresh—not simulated cursor presence or fake online agents.", "目前公開 MVP 使用已保存事件與 10 秒同步，不模擬游標共編，也不假裝 Agent 正在線上。")}</p>
+          </div>
+        </section>
+
         <section className="section how" id="how-it-works">
-          <div className="section-heading"><span className="section-index">01 / {tr("INTENT COMPILER", "意圖編譯器")}</span><h2>{tr("Before agents execute,", "在 Agent 執行前，")}<br />{tr("make the mission executable.", "先讓 Mission 真正可執行。")}</h2><p>{tr("Relay turns scattered goals, limits and decisions into an evidence-backed contract every person and agent can inspect.", "Relay 把散落各處的目標、限制與決策，整理成每個人與 Agent 都能檢查、且有來源證據的執行合約。")}</p></div>
+          <div className="section-heading"><span className="section-index">02 / {tr("INTENT COMPILER", "意圖編譯器")}</span><h2>{tr("Before agents execute,", "在 Agent 執行前，")}<br />{tr("make the mission executable.", "先讓 Mission 真正可執行。")}</h2><p>{tr("Relay turns scattered goals, limits and decisions into an evidence-backed contract every person and agent can inspect.", "Relay 把散落各處的目標、限制與決策，整理成每個人與 Agent 都能檢查、且有來源證據的執行合約。")}</p></div>
           <div className="steps-grid">
             {[
               [Network, tr("Collect intent", "收集意圖"), tr("Attach messages, documents, records and human corrections. Every assertion keeps its source, author, timestamp and authority.", "加入訊息、文件、系統紀錄與人工修正；每項主張都保留來源、作者、時間與權威等級。")],
@@ -134,10 +150,10 @@ function LandingPage() {
             <div className="contract-row"><span>{tr("STOP", "停止")}</span><p>{tr("Pause if CPA > NT$1,250 after 10 conversions", "10 次轉換後若 CPA > NT$1,250 就暫停")}</p><CircleStop size={18} /></div>
             <div className="contract-hash"><Fingerprint size={16} /> sha256:8b1f…c04d <span>{tr("payload locked", "內容已鎖定")}</span></div>
           </div>
-          <div className="contract-copy"><span className="section-index">02 / {tr("CONTROL PLANE", "執行控制層")}</span><h2>{tr("Approval is not a button.", "核准不是一顆按鈕，")}<br />{tr("It’s a precise contract.", "而是一份精確合約。")}</h2><p>{tr("Every high-impact action is bound to one plan version, exact audience, payload, budget, approver, expiration and rollback strategy. Change the payload and the approval disappears.", "每項高影響操作都綁定一個計畫版本、精確受眾、內容、預算、核准人、到期時間與回滾策略。只要重要內容改變，核准就自動失效。")}</p><ul className="feature-list"><li><Check /> {tr("Version-aware execution", "版本感知執行")}</li><li><Check /> {tr("Task-level capability grants", "任務層級能力授權")}</li><li><Check /> {tr("Exact, expiring approvals", "精確且會到期的核准")}</li><li><Check /> {tr("End-to-end evidence lineage", "端到端證據脈絡")}</li></ul></div>
+          <div className="contract-copy"><span className="section-index">03 / {tr("CONTROL PLANE", "執行控制層")}</span><h2>{tr("Approval is not a button.", "核准不是一顆按鈕，")}<br />{tr("It’s a precise contract.", "而是一份精確合約。")}</h2><p>{tr("Every high-impact action is bound to one plan version, exact audience, payload, budget, approver, expiration and rollback strategy. Change the payload and the approval disappears.", "每項高影響操作都綁定一個計畫版本、精確受眾、內容、預算、核准人、到期時間與回滾策略。只要重要內容改變，核准就自動失效。")}</p><ul className="feature-list"><li><Check /> {tr("Version-aware execution", "版本感知執行")}</li><li><Check /> {tr("Task-level capability grants", "任務層級能力授權")}</li><li><Check /> {tr("Exact, expiring approvals", "精確且會到期的核准")}</li><li><Check /> {tr("End-to-end evidence lineage", "端到端證據脈絡")}</li></ul></div>
         </section>
 
-        <section className="section security-section" id="security"><div><span className="section-index">03 / {tr("TRUST BY DESIGN", "以信任為核心設計")}</span><h2>{tr("Agents request capabilities.", "Agent 只能提出能力請求，")}<br />{tr("They never hold credentials.", "永遠不會持有憑證。")}</h2></div><div className="security-grid">{[
+        <section className="section security-section" id="security"><div><span className="section-index">04 / {tr("TRUST BY DESIGN", "以信任為核心設計")}</span><h2>{tr("Agents request capabilities.", "Agent 只能提出能力請求，")}<br />{tr("They never hold credentials.", "永遠不會持有憑證。")}</h2></div><div className="security-grid">{[
           [KeyRound, tr("Mission-scoped access", "Mission 範圍授權"), tr("Only the providers, resources and actions required by the active plan.", "只允許有效計畫真正需要的服務、資源與操作。")],
           [LockKeyhole, tr("Credential isolation", "憑證隔離"), tr("OAuth tokens stay in the gateway—never in model or agent context.", "OAuth Token 留在 Gateway，永不進入模型或 Agent 上下文。")],
           [History, tr("Immutable lineage", "不可變執行脈絡"), tr("Every assertion, decision, action, version and outcome remains explainable.", "每項主張、決策、操作、版本與成果都能完整說明。")],
@@ -145,9 +161,9 @@ function LandingPage() {
         ].map(([Icon, title, copy]) => <article key={String(title)}><Icon size={22} /><h3>{String(title)}</h3><p>{String(copy)}</p></article>)}</div></section>
 
         <section className="section reality-section" id="proof">
-          <div className="reality-copy"><span className="section-index">04 / {tr("PRODUCT TRUTH", "產品真實狀態")}</span><h2>{tr("Know exactly what works today—and what does not yet.", "清楚知道今天能做什麼，以及哪些還沒有。")}</h2><p>{tr("Relay will not call a connector verified, an agent online, or an action completed unless the corresponding check actually passed.", "Relay 不會在沒有通過對應驗證時，把連接器稱為已連線、把 Agent 稱為在線，或把操作稱為已完成。")}</p></div>
+          <div className="reality-copy"><span className="section-index">05 / {tr("PRODUCT TRUTH", "產品真實狀態")}</span><h2>{tr("Know exactly what works today—and what does not yet.", "清楚知道今天能做什麼，以及哪些還沒有。")}</h2><p>{tr("Relay will not call a connector verified, an agent online, or an action completed unless the corresponding check actually passed.", "Relay 不會在沒有通過對應驗證時，把連接器稱為已連線、把 Agent 稱為在線，或把操作稱為已完成。")}</p></div>
           <div className="reality-board">
-            <article className="available"><span>{tr("AVAILABLE NOW", "目前可用")}</span><h3>{tr("Intent conflict compiler", "意圖衝突編譯器")}</h3><ul><li><Check />{tr("One-paste mission intake", "一次貼上 Mission")}</li><li><Check />{tr("Source-linked assertions and five material conflict classes", "來源主張與五種關鍵衝突")}</li><li><Check />{tr("Versioned plans and approval invalidation", "版本化計畫與核准失效")}</li><li><Check />{tr("Preflight, audit ledger and outcome record", "執行前檢查、稽核與成果紀錄")}</li></ul></article>
+            <article className="available"><span>{tr("AVAILABLE NOW", "目前可用")}</span><h3>{tr("Shared intent conflict compiler", "共用意圖衝突編譯器")}</h3><ul><li><Check />{tr("One-paste mission intake", "一次貼上 Mission")}</li><li><Check />{tr("Shared Mission URL with persisted 10-second sync", "共用 Mission URL 與已保存的 10 秒同步")}</li><li><Check />{tr("Named corrections, versioned plans and approval invalidation", "具名修正、版本化計畫與核准失效")}</li><li><Check />{tr("Preflight, audit ledger and outcome record", "執行前檢查、稽核與成果紀錄")}</li></ul></article>
             <article className="rollout"><span>{tr("DESIGN PARTNER ROLLOUT", "DESIGN PARTNER 導入中")}</span><h3>{tr("Verified external execution", "已驗證的外部執行")}</h3><ul><li><Clock3 />{tr("Slack, Gmail, Notion, Drive and Calendar OAuth", "Slack、Gmail、Notion、Drive 與 Calendar OAuth")}</li><li><Clock3 />{tr("Credential vault and resource verification", "憑證保管庫與資源驗證")}</li><li><Clock3 />{tr("Tool gateway execution and rollback receipts", "Tool Gateway 執行與回滾憑據")}</li><li><Ban />{tr("No simulated connected state", "不模擬已連線狀態")}</li></ul></article>
             <div className="data-flywheel"><Network /><div><span>{tr("THE COMPOUNDING ASSET", "持續複利的資產")}</span><h3>Source → Assertion → Conflict → Decision → Plan → Approval → Outcome</h3><p>{tr("Each completed mission adds a structured intent-to-outcome chain—not another chat transcript.", "每個完成的 Mission 會增加一條結構化的意圖到成果關係，而不只是另一份對話紀錄。")}</p></div></div>
           </div>
@@ -263,15 +279,36 @@ const missionTabs = [
 
 function MissionPage() {
   const { id = "" } = useParams(); const [params, setParams] = useSearchParams(); const view = params.get("view") || "room";
-  const [mission, setMission] = useState<MissionDetail>(); const [error, setError] = useState(""); const [busy, setBusy] = useState(""); const [notice, setNotice] = useState("");
-  const load = () => { setError(""); api<{ mission: MissionDetail }>(`/api/missions/${id}`).then((response) => setMission(response.mission)).catch((err) => setError(err.message)); };
-  useEffect(load, [id]);
+  const [mission, setMission] = useState<MissionDetail>(); const [error, setError] = useState(""); const [busy, setBusy] = useState(""); const [notice, setNotice] = useState(""); const [lastSyncedAt, setLastSyncedAt] = useState("");
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setError("");
+    try {
+      const response = await api<{ mission: MissionDetail }>(`/api/missions/${id}`);
+      setMission(response.mission);
+      setLastSyncedAt(new Date().toISOString());
+    } catch (err) {
+      if (!silent) setError((err as Error).message);
+    }
+  }, [id]);
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => { void load(true); }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [load]);
   const action: MissionAction = async (key, request, message) => { setBusy(key); setNotice(""); setError(""); try { const response = await request as { mission: MissionDetail }; setMission(response.mission); if (message) setNotice(message); return response; } catch (err) { setError((err as Error).message); } finally { setBusy(""); } };
-  if (error && !mission) return <AppShell><main className="page"><ErrorBlock error={error} retry={load} /></main></AppShell>;
+  const copyRoomLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setNotice(tr("Shared Mission link copied. Anyone with access to this public MVP URL can open the same saved state.", "共用 Mission 連結已複製；目前公開 MVP 中，取得網址的人可開啟同一份已保存狀態。"));
+    } catch {
+      setError(tr("Relay could not copy this link. Copy it from the address bar instead.", "Relay 無法自動複製連結，請改從瀏覽器網址列複製。"));
+    }
+  };
+  if (error && !mission) return <AppShell><main className="page"><ErrorBlock error={error} retry={() => { void load(); }} /></main></AppShell>;
   if (!mission) return <AppShell><main className="page"><LoadingBlock label={tr("Loading mission contract…", "正在載入 Mission 合約…")} /></main></AppShell>;
   const plan = mission.currentPlan; const isStale = plan?.status === "superseded";
   const agentRoles = plan?.tasks.filter((task) => task.ownerType === "agent").slice(0, 3) ?? [];
-  return <AppShell><main className={`mission-page view-${view}`}><header className="mission-header"><div className="mission-topbar"><Link to="/app" className="mission-brand" aria-label={tr("Back to workspace", "返回工作區")}><span>RL</span><b>Relay</b></Link><div className="mission-title-compact" title={localizeDomainText(mission.objective)}><small>MISSION</small><h1>{localizeDomainText(mission.title)}</h1></div><button className="mission-plan-control" onClick={() => setParams({ view: "plan" })}><span>{tr("Plan", "計畫")} v{mission.currentPlanVersion}</span><i className={isStale ? "stale" : ""} /> <small>{isStale ? localizeLabel("superseded") : tr("Active", "有效")}</small><ChevronDown size={14} /></button><div className="mission-header-spacer" /><div className="mission-live-presence"><span className="live-signal"><span />{tr("Contract actors", "合約角色")}</span><div className="presence-avatars"><img src="/assets/relay-jennifer-256.png" alt="Jennifer" />{agentRoles.map((task) => <span key={task.id} title={localizeDomainText(task.ownerName)}>{task.ownerName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>)}</div><small>1 {tr("human", "位人類")} + {agentRoles.length} {tr("agent roles", "個 Agent 角色")}</small></div><LanguageSwitcher compact /><button className="icon-button mission-refresh" onClick={load} aria-label={tr("Refresh mission", "重新整理 Mission")}><RefreshCw size={17} /></button>{mission.status === "planning" && <button className="button button-primary button-small mission-compile" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: JSON.stringify({ actor: "Jennifer" }) }), tr("A new active contract was created. Previous approvals were invalidated.", "新的有效合約已建立，舊版核准已失效。"))}><GitBranch size={15} /> {tr("Compile", "編譯")} v{mission.currentPlanVersion + 1}</button>}</div><nav className="mission-tabs" aria-label={tr("Mission views", "Mission 檢視")}>{missionTabs.map(([key, label, labelZh, Icon]) => <button className={view === key ? "active" : ""} key={key} onClick={() => setParams({ view: key })} title={tr(label, labelZh)} aria-label={tr(label, labelZh)}><Icon size={18} /><span className="mission-tab-label">{tr(label, labelZh)}</span>{key === "conflicts" && mission.openConflicts > 0 && <em>{mission.openConflicts}</em>}{key === "approvals" && mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button>)}</nav></header>
+  return <AppShell><main className={`mission-page view-${view}`}><header className="mission-header"><div className="mission-topbar"><Link to="/app" className="mission-brand" aria-label={tr("Back to workspace", "返回工作區")}><span>RL</span><b>Relay</b></Link><div className="mission-title-compact" title={localizeDomainText(mission.objective)}><small>MISSION</small><h1>{localizeDomainText(mission.title)}</h1></div><button className="mission-plan-control" onClick={() => setParams({ view: "plan" })}><span>{tr("Plan", "計畫")} v{mission.currentPlanVersion}</span><i className={isStale ? "stale" : ""} /> <small>{isStale ? localizeLabel("superseded") : tr("Active", "有效")}</small><ChevronDown size={14} /></button><div className="mission-header-spacer" /><div className="mission-live-presence" title={lastSyncedAt ? `${tr("Last synced", "上次同步")} ${formatDate(lastSyncedAt, true)}` : undefined}><span className="live-signal"><span />{tr("Shared room · sync 10s", "共用控制室 · 10 秒同步")}</span><div className="presence-avatars"><img src="/assets/relay-jennifer-256.png" alt="Jennifer" />{agentRoles.map((task) => <span key={task.id} title={localizeDomainText(task.ownerName)}>{task.ownerName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>)}</div><small>1 {tr("human", "位人類")} + {agentRoles.length} {tr("agent roles", "個 Agent 角色")}</small></div><LanguageSwitcher compact /><button className="button button-ghost button-small mission-share" onClick={() => { void copyRoomLink(); }}><Copy size={15} /><span>{tr("Copy room link", "複製控制室連結")}</span></button><button className="icon-button mission-refresh" onClick={() => { void load(); }} aria-label={tr("Refresh mission", "重新整理 Mission")}><RefreshCw size={17} /></button>{mission.status === "planning" && <button className="button button-primary button-small mission-compile" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: JSON.stringify({ actor: "Jennifer" }) }), tr("A new active contract was created. Previous approvals were invalidated.", "新的有效合約已建立，舊版核准已失效。"))}><GitBranch size={15} /> {tr("Compile", "編譯")} v{mission.currentPlanVersion + 1}</button>}</div><nav className="mission-tabs" aria-label={tr("Mission views", "Mission 檢視")}>{missionTabs.map(([key, label, labelZh, Icon]) => <button className={view === key ? "active" : ""} key={key} onClick={() => setParams({ view: key })} title={tr(label, labelZh)} aria-label={tr(label, labelZh)}><Icon size={18} /><span className="mission-tab-label">{tr(label, labelZh)}</span>{key === "conflicts" && mission.openConflicts > 0 && <em>{mission.openConflicts}</em>}{key === "approvals" && mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button>)}</nav></header>
     {(notice || error) && <div className={`toast-banner ${error ? "error" : ""}`}>{error ? <AlertOctagon size={17} /> : <BadgeCheck size={17} />}<span>{error || notice}</span><button className="icon-button" onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
     <div className={`mission-content mission-content-${view}`}>{view === "room" && <MissionRoom mission={mission} action={action} busy={busy} setView={(next) => setParams({ view: next })} />}{view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy} />}{view === "plan" && <PlanView mission={mission} action={action} busy={busy} />}{view === "access" && <AccessView mission={mission} />}{view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale} />}{view === "evidence" && <EvidenceLedger mission={mission} />}{view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy} />}</div>
   </main></AppShell>;
@@ -293,6 +330,7 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   const primaryConflict = openConflicts.find((conflict) => conflict.blocking) ?? openConflicts[0];
   const [selectedConflictId, setSelectedConflictId] = useState(primaryConflict?.id ?? "");
   const [correction, setCorrection] = useState("");
+  const [correctionAuthor, setCorrectionAuthor] = useState(mission.createdBy);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const plan = mission.currentPlan;
   const selectedConflict = openConflicts.find((conflict) => conflict.id === selectedConflictId) ?? primaryConflict;
@@ -368,18 +406,19 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   const submitCorrection = (event: FormEvent) => {
     event.preventDefault();
     if (readOnly || correction.trim().length < 5) return;
-    action("correction", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/corrections`, { method: "POST", body: JSON.stringify({ statement: correction.trim(), assertionType: "Constraint", author: "Jennifer" }) }), tr("Correction recorded. The active contract and prior approvals were invalidated.", "修正已記錄；目前合約與舊有核准已失效。" )).then((result) => { if (result) setCorrection(""); });
+    action("correction", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/corrections`, { method: "POST", body: JSON.stringify({ statement: correction.trim(), assertionType: "Constraint", author: correctionAuthor.trim() || mission.createdBy }) }), tr("Named correction recorded. The shared room, active contract and prior approvals were updated.", "具名修正已記錄；共同控制室、目前合約與舊有核准已更新。" )).then((result) => { if (result) setCorrection(""); });
   };
 
   return <div className={`flow-canvas-layout ${inspectorOpen ? "" : "inspector-collapsed"}`}>
     <section className="flow-canvas" aria-label={tr("Mission execution canvas", "Mission 執行 Canvas")}>
       <div className="flow-stage-labels" aria-hidden="true"><span>{tr("Intent sources", "意圖來源")}<small>{tr("Evidence-backed inputs", "輸入與依據")}</small></span><span>{tr("Conflict / Decision", "衝突／決策")}<small>{tr("What blocks execution", "阻擋執行的關鍵")}</small></span><span>{tr("Human approval", "人工核准")}<small>{tr("Accountable judgment", "具權責的判斷")}</small></span><span>{tr("AI execution", "AI 執行")}<small>{tr("Governed agent work", "受治理的 Agent 任務")}</small></span><span>{tr("Outcome", "成果")}<small>{tr("Verifiable result", "可驗收成果")}</small></span></div>
       <Suspense fallback={<div className="flow-loading"><span className="loader" /><p>{tr("Opening execution canvas…", "正在開啟執行 Canvas…")}</p></div>}><ExecutionFlowCanvas nodes={flowNodes} edges={flowEdges} onConflictSelect={setSelectedConflictId} /></Suspense>
-      <form className="flow-command" onSubmit={submitCorrection}><Zap size={17} /><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} disabled={readOnly} onChange={(event) => setCorrection(event.target.value)} placeholder={readOnly ? tr("Read-only example · create a mission to add corrections", "唯讀範例 · 建立自己的 Mission 後即可修正") : tr("Add an instruction or correction, for example: Set the budget to NT$20,000", "輸入指令或修正，例如：將預算統一為 NT$20,000")} /><kbd>⌘ ↵</kbd><button type="submit" disabled={readOnly || correction.trim().length < 5 || busy === "correction"} aria-label={tr("Submit correction and replan", "送出修正並重新規劃")}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></form>
+      <form className="flow-command" onSubmit={submitCorrection}><label className="flow-command-author"><UserRound size={14} /><input aria-label={tr("Correction author", "修正者姓名")} value={correctionAuthor} disabled={readOnly} onChange={(event) => setCorrectionAuthor(event.target.value)} /></label><Zap size={17} /><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} disabled={readOnly} onChange={(event) => setCorrection(event.target.value)} placeholder={readOnly ? tr("Read-only example · create a mission to add corrections", "唯讀範例 · 建立自己的 Mission 後即可修正") : tr("Add an instruction or correction, for example: Set the budget to NT$20,000", "輸入指令或修正，例如：將預算統一為 NT$20,000")} /><kbd>⌘ ↵</kbd><button type="submit" disabled={readOnly || correction.trim().length < 5 || correctionAuthor.trim().length < 1 || busy === "correction"} aria-label={tr("Submit correction and replan", "送出修正並重新規劃")}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></form>
       {!inspectorOpen && <button className="flow-inspector-open" onClick={() => setInspectorOpen(true)} aria-label={tr("Open conflict inspector", "開啟衝突檢視")}><PanelRightOpen size={18} /><span>{mission.blockingConflicts}</span></button>}
     </section>
     {inspectorOpen && <aside className="flow-inspector"><div className="flow-inspector-head"><div><span>{selectedConflict ? tr("SELECTED CONFLICT", "已選取衝突") : tr("CONTRACT STATE", "合約狀態")}</span><h2>{selectedConflict ? tr(`${mission.blockingConflicts} blocking conflicts`, `${mission.blockingConflicts} 項阻擋衝突`) : tr("Execution can proceed", "執行可以繼續")}</h2></div><button className="icon-button" onClick={() => setInspectorOpen(false)} aria-label={tr("Close inspector", "關閉檢視")}><PanelRightClose size={18} /></button></div>
       <div className="compiler-receipt"><span>{tr("COMPILER RECEIPT", "編譯器憑據")}</span><div><b>{mission.sources.length}</b><small>{tr("sources", "個來源")}</small></div><div><b>{mission.assertions.length}</b><small>{tr("assertions", "項主張")}</small></div><div><b>{mission.conflicts.length}</b><small>{tr("conflicts", "項衝突")}</small></div><div><b>{mission.auditEvents.length}</b><small>{tr("audit events", "筆稽核事件")}</small></div><p><FileCheck2 size={13} /> {tr("MVP ruleset · every result links to stored source text", "MVP 規則集 · 每個結果都連回已保存的來源文字")}</p></div>
+      <section className="flow-activity-feed"><div className="flow-activity-title"><span>{tr("SHARED ACTIVITY", "共用活動")}</span><small><span /> {tr("persists · sync 10s", "已保存 · 10 秒同步")}</small></div>{mission.auditEvents.slice(-3).reverse().map((event) => <div className="flow-activity-event" key={event.id}><span className={`activity-actor ${event.actorType}`}>{event.actorType === "human" ? <UserRound size={13} /> : event.actorType === "agent" ? <Bot size={13} /> : <Blocks size={13} />}</span><div><b>{localizeDomainText(event.actorName)}</b><p>{localizeDomainText(event.summary)}</p></div><time>{formatDate(event.createdAt, true)}</time></div>)}{!mission.auditEvents.length && <p className="flow-activity-empty">{tr("The first human or agent event will appear here.", "第一筆人類或 Agent 活動會顯示在這裡。")}</p>}</section>
       {selectedConflict ? <>
         <div className="flow-conflict-switch">{openConflicts.map((conflict, index) => <button className={conflict.id === selectedConflict.id ? "active" : ""} key={conflict.id} onClick={() => setSelectedConflictId(conflict.id)} aria-label={`${tr("Conflict", "衝突")} ${index + 1}`}>{String(index + 1).padStart(2, "0")}</button>)}</div>
         <div className="flow-inspector-summary"><span className={`severity-tag ${selectedConflict.severity}`}>{localizeLabel(selectedConflict.severity)}</span><h3>{localizeDomainText(selectedConflict.title)}</h3><p>{localizeDomainText(selectedConflict.summary)}</p></div>
@@ -466,7 +505,7 @@ function DemoPage() {
   const noAction: MissionAction = async () => undefined;
   if (error) return <main className="demo-loading"><Logo /><ErrorBlock error={error} retry={() => window.location.reload()} /><Link to="/missions/new?sample=1" className="button button-primary">{tr("Analyze my launch instead", "改為分析我的 Launch")}</Link></main>;
   if (!mission) return <main className="demo-loading"><Logo /><LoadingBlock label={tr("Opening the read-only execution example…", "正在開啟唯讀執行範例…")} /></main>;
-  return <main className="mission-page demo-page"><header className="mission-header"><div className="mission-topbar"><Logo compact /><span className="demo-badge"><FileCheck2 size={14} /> {tr("READ-ONLY INTERACTIVE EXAMPLE", "唯讀可操作範例")}</span><div className="mission-header-spacer" /><LanguageSwitcher compact /><Link to="/missions/new?sample=1" className="button button-primary button-small">{tr("Analyze my launch", "分析我的 Launch")} <ArrowRight size={15} /></Link></div></header><div className="mission-content mission-content-room"><MissionRoom mission={mission} action={noAction} busy="" readOnly setView={() => navigate("/missions/new?sample=1")} /></div></main>;
+  return <main className="mission-page demo-page"><header className="mission-header"><div className="mission-topbar"><Logo compact /><span className="demo-badge"><FileCheck2 size={14} /> {tr("READ-ONLY SHARED MISSION EXAMPLE", "唯讀共用 MISSION 範例")}</span><div className="demo-actors"><UsersRound size={15} /><span>1 {tr("human", "位人類")} + 3 {tr("agent roles", "個 Agent 角色")}</span><small>{tr("recorded activity", "活動已保存")}</small></div><div className="mission-header-spacer" /><LanguageSwitcher compact /><Link to="/missions/new?sample=1" className="button button-primary button-small">{tr("Analyze my launch", "分析我的 Launch")} <ArrowRight size={15} /></Link></div></header><div className="mission-content mission-content-room"><MissionRoom mission={mission} action={noAction} busy="" readOnly setView={() => navigate("/missions/new?sample=1")} /></div></main>;
 }
 
 function NotFound() { return <div className="not-found"><Logo /><h1>{tr("That contract doesn’t exist.", "找不到這份合約。")}</h1><p>{tr("Return to the Relay control center.", "返回 Relay 控制中心。")}</p><Link className="button button-primary" to="/app">{tr("Open workspace", "開啟工作區")}</Link></div>; }

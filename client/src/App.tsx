@@ -21,6 +21,14 @@ type DashboardResponse = {
   metrics: { active: number; blocked: number; awaitingDecisions: number; awaitingApprovals: number; successfulThisWeek: number };
 };
 
+type CompilerPreview = {
+  receipt: { sources: number; assertions: number; conflicts: number; blocking: number };
+  conflict: Conflict | null;
+  evidence: Array<{ id: string; statement: string; assertionType: string; sourceType: string; sourceTitle: string; author: string }>;
+  execution: { tasks: number; agentTasks: number; blockedAgents: number; requiredProviders: number };
+  saved: false;
+};
+
 const navigation = [
   { label: "Overview", labelZh: "總覽", href: "/app", icon: LayoutDashboard },
   { label: "Missions", labelZh: "任務", href: "/app", icon: Radar },
@@ -63,6 +71,54 @@ function PublicHeader() {
   );
 }
 
+function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: () => void }) {
+  const { locale } = useLocale();
+  const sampleBrief = locale === "zh-TW"
+    ? `Mission：推出高雄活動行銷專案\n目標：7 月 29 日前上線，取得 24 筆付費報名\nSlack｜Growth 負責人：不得向既有會員推廣\nEmail｜客戶：所有公開素材都必須先通過品牌核准\nCalendar｜營運：品牌審查排在 7 月 30 日\nNotion｜行銷：預算上限是 NT$20,000\nManual｜Mission owner：核准預算上限是 NT$30,000，未經我核准不得發布\nCRM｜CRM system：目前受眾同時包含既有會員與新名單\nAds｜Meta Ads：缺少付款方式，目前無法發布\n成功指標：24 筆付費報名，CPA 不高於 NT$1,250`
+    : `Mission: Launch the Kaohsiung campaign\nGoal: Launch by July 29 and acquire 24 paid registrations\nSlack | Growth lead: Do not promote to existing members\nEmail | Client: Every public creative requires brand approval\nCalendar | Operations: Brand review is scheduled for July 30\nNotion | Marketing: Budget limit is NT$20,000\nManual | Mission owner: Approved budget is NT$30,000 and nothing can publish without my approval\nCRM | CRM system: Current audience includes existing members and new leads\nAds | Meta Ads: Payment method is missing, so publishing is unavailable\nSuccess: 24 paid registrations at CPA no higher than NT$1,250`;
+  const [brief, setBrief] = useState(sampleBrief);
+  const [preview, setPreview] = useState<CompilerPreview>();
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const compilePreview = useCallback(async (rawBrief: string) => {
+    setBusy(true); setError("");
+    try {
+      const result = await api<CompilerPreview>("/api/preview-compile", { method: "POST", body: JSON.stringify(parseQuickMission(rawBrief)) });
+      setPreview(result); setEditing(false);
+    } catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
+  }, []);
+
+  useEffect(() => {
+    setBrief(sampleBrief);
+    void compilePreview(sampleBrief);
+  }, [locale]);
+
+  const result = preview?.conflict;
+  const recommended = result?.options.find((option) => option.recommended);
+  const attachedSourceCount = brief.split("\n").filter((line) => /^(Slack|Email|Calendar|Notion|Manual|CRM|Ads)[｜|]/i.test(line)).length;
+  const sourceLines = brief.split("\n").filter((line) => /^(Slack|Email|Calendar|Notion|Manual|CRM|Ads)[｜|]/i.test(line)).slice(0, 3);
+
+  return <div className="magic-compiler" id="magic" aria-live="polite">
+    <div className="magic-topbar"><span><Braces size={14} /> {tr("LIVE INTENT COMPILER", "真實意圖編譯器")}</span><span className="magic-runtime"><span /> {tr("RUNNING REAL RULES", "執行真實規則")}</span></div>
+    <div className="magic-input">
+      <div className="magic-input-head"><div><span>01 / {tr("MESSY BRIEF", "混亂 BRIEF")}</span><b>{tr("7 sources disagree", "7 個來源互相矛盾")}</b></div><button type="button" onClick={() => setEditing((value) => !value)}>{editing ? tr("Close editor", "收起編輯") : tr("Edit the evidence", "編輯來源")}</button></div>
+      {editing ? <div className="magic-editor"><textarea aria-label={tr("Mission brief to compile", "要編譯的 Mission Brief")} value={brief} onChange={(event) => setBrief(event.target.value)} rows={10} /><button className="button button-primary button-full" type="button" disabled={busy || brief.trim().length < 10} onClick={() => { void compilePreview(brief); }}>{busy ? <><span className="loader small" /> {tr("Compiling…", "編譯中…")}</> : <><Zap size={16} /> {tr("Run the real compiler", "執行真實編譯")}</>}</button></div>
+        : <div className="magic-source-list">{sourceLines.map((line) => { const [provider, ...parts] = line.split(/[：:]/); return <div key={line}><span>{provider.split(/[｜|]/)[0]}</span><p>{parts.join(":")}</p><FileCheck2 size={13} /></div>; })}<small>+{Math.max(0, attachedSourceCount - sourceLines.length)} {tr("more attached sources", "個已附來源")}</small></div>}
+    </div>
+    <div className="magic-compile-rail"><span /><Zap size={17} /><b>{busy ? tr("COMPILING", "編譯中") : tr("CONTRACT CHECKED", "合約已檢查")}</b><span /></div>
+    {busy && !preview ? <div className="magic-loading"><span className="loader" /><p>{tr("Extracting assertions and testing execution gates…", "正在拆解主張並檢查執行關卡…")}</p></div> : error ? <div className="magic-error"><AlertOctagon /><p>{error}</p><button onClick={() => { void compilePreview(brief); }}>{tr("Try again", "再試一次")}</button></div> : result && preview ? <div className="magic-result">
+      <div className="magic-receipt"><span>{tr("COMPILER RECEIPT", "編譯器憑據")}</span><div><b>{preview.receipt.sources}</b><small>{tr("sources", "來源")}</small></div><div><b>{preview.receipt.assertions}</b><small>{tr("assertions", "主張")}</small></div><div><b>{preview.receipt.conflicts}</b><small>{tr("conflicts", "衝突")}</small></div></div>
+      <div className="magic-stop"><span className="magic-stop-icon"><CircleStop size={22} /></span><div><span>{tr("RELAY STOPPED EXECUTION", "RELAY 已停止執行")}</span><h3>{localizeDomainText(result.title)}</h3><p>{localizeDomainText(result.summary)}</p></div><span className="severity-pill">{localizeLabel(result.severity)}</span></div>
+      <div className="magic-evidence"><span>{tr("WHY", "為什麼")}</span>{preview.evidence.slice(0, 2).map((item) => <div key={item.id}><FlowSourceIcon type={item.sourceType} /><p><b>{localizeDomainText(item.statement)}</b><small>{localizeLabel(item.sourceType)} · {localizeDomainText(item.author)}</small></p></div>)}</div>
+      <div className="magic-control"><div><span><Bot size={14} /> {preview.execution.blockedAgents} {tr("agent tasks paused", "個 Agent 任務已暫停")}</span><span><LockKeyhole size={14} /> {preview.execution.requiredProviders} {tr("scoped providers", "個權限範圍")}</span></div><p><Sparkles size={15} /><span><b>{tr("NEXT SAFE ACTION", "下一步安全行動")}</b>{localizeDomainText(recommended?.description ?? result.consequences)}</span></p><button className="button button-primary button-full" type="button" onClick={onOpenFullMission}>{tr("Turn this into an execution contract", "把它變成可執行合約")} <ArrowRight size={17} /></button></div>
+      <small className="magic-truth"><ShieldCheck size={13} /> {tr("This result came from the live Relay compiler. Preview text is not stored.", "這是 Relay 真實編譯器的即時結果；預覽文字不會被保存。")}</small>
+    </div> : null}
+  </div>;
+}
+
 function LandingPage() {
   const navigate = useNavigate();
   const { locale } = useLocale();
@@ -72,33 +128,17 @@ function LandingPage() {
       <main>
         <section className="hero">
           <div className="hero-copy">
-            <div className="eyebrow"><span className="pulse-dot" /> {tr("Multiplayer AI mission room for launch teams", "給 Launch 團隊的多人 AI Mission Room")}</div>
-            <h1>{locale === "zh-TW" ? <><span className="hero-line">在 AI 寄信、花錢或發布前，</span><span className="hero-line">先抓出那條會讓它</span><span className="hero-line">做錯事的指令。</span></> : "Before AI sends, spends or publishes, catch the instruction that would make it wrong."}</h1>
-            <h2>{locale === "zh-TW" ? <><span className="hero-line">貼上一份混亂的 Launch Brief。</span><span className="hero-line">Relay 告訴你哪裡矛盾、誰該決定，</span><span className="hero-line">以及下一步安全行動。</span></> : "Paste one messy launch brief. Relay shows the contradiction, who must decide, and the next safe action."}</h2>
-            <p>{tr("Built for 5–50 person Growth, Agency and Operations teams running launches across Slack, email, docs, calendars and CRM. Relay compiles those instructions into source-backed conflicts and a versioned execution contract.", "給同時使用 Slack、Email、文件、行事曆與 CRM 的 5–50 人 Growth、Agency 與營運團隊。Relay 把分散指令編譯成有來源的衝突與版本化執行合約。")}</p>
+            <div className="eyebrow"><span className="pulse-dot" /> {tr("THE EXECUTION CONTROL PLANE FOR AI-NATIVE TEAMS", "給 AI 原生團隊的執行控制層")}</div>
+            <h1>{locale === "zh-TW" ? <><span className="hero-line">團隊給 AI 七個版本。</span><span className="hero-line">Relay 只讓它執行</span><span className="hero-line hero-accent-line">安全的那一個。</span></> : <><span className="hero-line">Your team gave AI seven versions.</span><span className="hero-line hero-accent-line">Relay executes only the safe one.</span></>}</h1>
+            <h2>{locale === "zh-TW" ? <>貼上混亂的 Launch Brief。Relay 在 AI 寄信、花錢或發布前，<b>抓出衝突並停止錯誤行動。</b></> : <>Paste a messy launch brief. Before AI sends, spends or publishes, Relay <b>finds the conflict and stops the wrong action.</b></>}</h2>
+            <p>{tr("For 5–50 person Growth, Agency and Operations teams coordinating launches across Slack, email, docs, calendars and CRM.", "給同時使用 Slack、Email、文件、行事曆與 CRM 的 5–50 人 Growth、Agency 與營運團隊。")}</p>
             <div className="hero-actions">
-              <button className="button button-primary button-large" onClick={() => navigate("/missions/new")}>{tr("Analyze one launch brief", "分析一份 Launch Brief")} <ArrowRight size={18} /></button>
-              <button className="button button-ghost button-large" onClick={() => navigate("/demo")}><Play size={17} fill="currentColor" /> {tr("Open the interactive example", "開啟可操作範例")}</button>
+              <button className="button button-primary button-large" onClick={() => navigate("/missions/new")}>{tr("Find my first blocker", "找出我的第一個阻擋")} <ArrowRight size={18} /></button>
+              <button className="button button-ghost button-large" onClick={() => document.getElementById("magic")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Play size={17} fill="currentColor" /> {tr("See the magic moment", "看 Magic Moment")}</button>
             </div>
-            <div className="trust-line"><ShieldCheck size={17} /><span>{tr("Source-backed", "有來源依據")}</span><span>•</span><span>{tr("No simulated OAuth", "不假裝已連線")}</span><span>•</span><span>{tr("Versioned decisions", "決策有版本")}</span></div>
+            <div className="trust-line"><ShieldCheck size={17} /><span>{tr("Real compiler", "真實編譯器")}</span><span>•</span><span>{tr("Source-backed", "來源可追")}</span><span>•</span><span>{tr("Unsafe actions stopped", "錯誤行動會被停止")}</span></div>
           </div>
-          <div className="compiler-visual" id="demo">
-            <div className="compiler-topbar"><span>{tr("Mission compiler", "Mission 編譯器")}</span><span className="live-label"><span /> {tr("OUTPUT PREVIEW", "產出預覽")}</span></div>
-            <div className="source-stack">
-              <div className="source-chip violet"><MessageSquareWarning size={15} /><span><b>Slack</b> {tr("Launch Jul 29", "7 月 29 日發布")}</span></div>
-              <div className="source-chip coral"><Send size={15} /><span><b>Email</b> {tr("Brand approval required", "需要品牌核准")}</span></div>
-              <div className="source-chip amber"><CalendarDays size={15} /><span><b>{tr("Calendar", "行事曆")}</b> {tr("Review Jul 30", "7 月 30 日審查")}</span></div>
-              <div className="source-chip stone"><FileText size={15} /><span><b>Notion</b> {tr("Budget NT$20k", "預算 NT$20,000")}</span></div>
-              <div className="source-chip teal"><UsersRound size={15} /><span><b>CRM</b> {tr("Existing members included", "包含既有會員")}</span></div>
-            </div>
-            <div className="compiler-line"><span /><Zap size={18} /><span /></div>
-            <div className="conflict-output">
-              <div className="output-head"><AlertOctagon size={20} /><div><span>{tr("BLOCKING CONFLICT", "阻擋性衝突")}</span><b>{tr("Launch is scheduled before approval", "發布日期早於核准日期")}</b></div><span className="severity-pill">{tr("Critical", "嚴重")}</span></div>
-              <p>{tr("Jul 29 launch cannot satisfy a Jul 30 mandatory review. The current approval is invalid for this plan.", "7 月 29 日發布無法滿足 7 月 30 日的必要審查；目前核准不適用於這份計畫。")}</p>
-              <div className="impact-grid"><div><TimerReset size={15} /><span>{tr("Deadline at risk", "期限有風險")}</span></div><div><LockKeyhole size={15} /><span>{tr("Approval missing", "缺少核准")}</span></div><div><CircleDollarSign size={15} /><span>{tr("2 budget versions", "2 個預算版本")}</span></div></div>
-              <button className="resolution-preview" onClick={() => navigate("/demo")}><Check size={16} /> {tr("Move review before launch and bind approval to exact payload", "將審查提前，並把核准綁定至精確內容")} <ArrowRight size={16} /></button>
-            </div>
-          </div>
+          <LandingMagicCompiler onOpenFullMission={() => navigate("/missions/new?sample=1")} />
         </section>
 
         <section className="proof-strip"><span>{tr("FIRST VALUE", "首次價值")}</span><ArrowRight size={18} /><b>{tr("one paste → first blocker → next safe action", "貼上一次 → 第一個阻擋 → 下一步安全行動")}</b><div className="proof-items"><span><UsersRound size={15} /> {tr("Shared mission room", "共用 Mission Room")}</span><span><FileCheck2 size={15} /> {tr("Evidence linked", "證據可追")}</span><span><GitBranch size={15} /> {tr("Corrections versioned", "修正自動版本化")}</span></div></section>
@@ -327,7 +367,7 @@ function FlowSourceIcon({ type }: { type?: string }) {
 
 function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mission: MissionDetail; action: MissionAction; busy: string; setView: (view: string) => void; readOnly?: boolean }) {
   const openConflicts = mission.conflicts.filter((conflict) => conflict.status === "open");
-  const primaryConflict = openConflicts.find((conflict) => conflict.blocking) ?? openConflicts[0];
+  const primaryConflict = openConflicts.find((conflict) => conflict.type === "Hard conflict") ?? openConflicts.find((conflict) => conflict.blocking) ?? openConflicts[0];
   const [selectedConflictId, setSelectedConflictId] = useState(primaryConflict?.id ?? "");
   const [correction, setCorrection] = useState("");
   const [correctionAuthor, setCorrectionAuthor] = useState(mission.createdBy);
@@ -409,7 +449,37 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
     action("correction", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/corrections`, { method: "POST", body: JSON.stringify({ statement: correction.trim(), assertionType: "Constraint", author: correctionAuthor.trim() || mission.createdBy }) }), tr("Named correction recorded. The shared room, active contract and prior approvals were updated.", "具名修正已記錄；共同控制室、目前合約與舊有核准已更新。" )).then((result) => { if (result) setCorrection(""); });
   };
 
+  const recommendedResolution = selectedConflict?.options.find((option) => option.recommended);
+
   return <div className={`flow-canvas-layout ${inspectorOpen ? "" : "inspector-collapsed"}`}>
+    <section className="mobile-mission-journey" aria-label={tr("Mobile mission execution story", "手機版 Mission 執行流程")}>
+      <div className="mobile-room-hero">
+        <div><span className="mobile-live"><span /> {tr("LIVE CONTRACT", "即時合約")}</span><small>{tr(`Plan v${mission.currentPlanVersion} · source-backed`, `Plan v${mission.currentPlanVersion} · 來源可追`)}</small></div>
+        <h1>{selectedConflict ? tr("Relay stopped the wrong launch before it happened.", "Relay 在錯誤發布發生前，先停住了它。") : tr("This mission is ready for governed execution.", "這個 Mission 已可安全執行。")}</h1>
+        <p>{selectedConflict ? tr(`${agents.length} agent roles are paused until one accountable human resolves the conflicting instructions below.`, `${agents.length} 個 Agent 角色已暫停，直到具權責的人解決下方矛盾。`) : tr("Every downstream agent is working from the same active contract.", "所有下游 Agent 都依同一份有效合約工作。")}</p>
+        <div className="mobile-receipt"><div><b>{mission.sources.length}</b><span>{tr("sources", "來源")}</span></div><div><b>{mission.assertions.length}</b><span>{tr("assertions", "主張")}</span></div><div><b>{mission.blockingConflicts}</b><span>{tr("blockers", "阻擋")}</span></div></div>
+      </div>
+
+      {selectedConflict ? <div className="mobile-journey-stack">
+        <div className="mobile-step-label"><span>01</span><p>{tr("The evidence disagrees", "來源證據互相矛盾")}</p></div>
+        <div className="mobile-evidence-stack">{sourceEvidence.slice(0, 3).map((assertion) => { const source = assertion.sourceId ? sourceById.get(assertion.sourceId) : undefined; return <article key={assertion.id}><span className={`mobile-source-icon ${sourceColors[source?.type ?? ""] ?? "lime"}`}><FlowSourceIcon type={source?.type ?? assertion.type} /></span><div><small>{source ? `${localizeLabel(source.type)} · ${localizeDomainText(source.author)}` : localizeLabel(assertion.type)}</small><b>{localizeDomainText(assertion.statement)}</b></div><FileCheck2 size={15} /></article>; })}</div>
+        <div className="mobile-flow-link danger"><span /><AlertOctagon size={18} /><span /></div>
+
+        <div className="mobile-step-label"><span>02</span><p>{tr("Relay blocks execution", "Relay 阻擋錯誤執行")}</p></div>
+        <article className="mobile-conflict-card">
+          <div className="mobile-conflict-top"><span className={`severity-tag ${selectedConflict.severity}`}>{localizeLabel(selectedConflict.severity)}</span><span><CircleStop size={14} /> {tr("EXECUTION BLOCKED", "執行已阻擋")}</span></div>
+          <h2>{localizeDomainText(selectedConflict.title)}</h2><p>{localizeDomainText(selectedConflict.summary)}</p>
+          <div className="mobile-conflict-switch">{openConflicts.map((conflict, index) => <button className={conflict.id === selectedConflict.id ? "active" : ""} key={conflict.id} onClick={() => setSelectedConflictId(conflict.id)}>{String(index + 1).padStart(2, "0")}</button>)}</div>
+        </article>
+        <div className="mobile-agent-pause"><span>{tr("PAUSED DOWNSTREAM", "已暫停下游任務")}</span>{agents.map((agent) => <div key={agent.id}><span><Bot size={15} /></span><p><b>{agent.name}</b><small>{agent.title}</small></p><em>{tr("PAUSED", "暫停")}</em></div>)}</div>
+        <div className="mobile-flow-link"><span /><UserRound size={18} /><span /></div>
+
+        <div className="mobile-step-label"><span>03</span><p>{tr("One human decision unlocks the plan", "一個人工決策解鎖計畫")}</p></div>
+        <article className="mobile-decision-card"><img src="/assets/relay-jennifer-256.png" alt="Jennifer" /><div><span>{tr("DECISION OWNER", "決策負責人")}</span><b>{localizeDomainText(selectedConflict.decisionOwner)}</b><small>{tr("Approval cannot be delegated to an agent", "核准不能交給 Agent 自行決定")}</small></div><span>{tr("Waiting", "等待中")}</span></article>
+        <article className="mobile-safe-action"><span><Sparkles size={14} /> {tr("RELAY RECOMMENDS", "RELAY 建議")}</span><h2>{tr("Next safe action", "下一步安全行動")}</h2><p>{localizeDomainText(recommendedResolution?.description ?? selectedConflict.consequences)}</p>{readOnly ? <button className="button button-primary button-full" onClick={() => setView("new")}>{tr("Run this on my real launch", "分析我真正的 Launch")} <ArrowRight size={17} /></button> : <button className="button button-primary button-full" onClick={() => setView("conflicts")}><ShieldCheck size={17} /> {tr(`Resolve ${mission.blockingConflicts} conflicts`, `解決 ${mission.blockingConflicts} 項衝突`)}</button>}</article>
+        {!readOnly && <form className="mobile-correction" onSubmit={submitCorrection}><label><UserRound size={14} /><input aria-label={tr("Correction author", "修正者姓名")} value={correctionAuthor} onChange={(event) => setCorrectionAuthor(event.target.value)} /></label><div><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={tr("Add a correction…", "輸入新的限制或修正…")} /><button type="submit" disabled={correction.trim().length < 5 || busy === "correction"}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></div></form>}
+      </div> : <div className="mobile-clear-contract"><BadgeCheck size={32} /><h2>{tr("No incompatible instruction remains.", "目前沒有互不相容的指令。")}</h2><p>{tr("Open the execution plan to review preflight checks and continue.", "開啟執行計畫，檢查執行前條件並繼續任務。")}</p><button className="button button-primary button-full" onClick={() => setView("plan")}>{tr("Open execution plan", "開啟執行計畫")} <ArrowRight size={17} /></button></div>}
+    </section>
     <section className="flow-canvas" aria-label={tr("Mission execution canvas", "Mission 執行 Canvas")}>
       <div className="flow-stage-labels" aria-hidden="true"><span>{tr("Intent sources", "意圖來源")}<small>{tr("Evidence-backed inputs", "輸入與依據")}</small></span><span>{tr("Conflict / Decision", "衝突／決策")}<small>{tr("What blocks execution", "阻擋執行的關鍵")}</small></span><span>{tr("Human approval", "人工核准")}<small>{tr("Accountable judgment", "具權責的判斷")}</small></span><span>{tr("AI execution", "AI 執行")}<small>{tr("Governed agent work", "受治理的 Agent 任務")}</small></span><span>{tr("Outcome", "成果")}<small>{tr("Verifiable result", "可驗收成果")}</small></span></div>
       <Suspense fallback={<div className="flow-loading"><span className="loader" /><p>{tr("Opening execution canvas…", "正在開啟執行 Canvas…")}</p></div>}><ExecutionFlowCanvas nodes={flowNodes} edges={flowEdges} onConflictSelect={setSelectedConflictId} /></Suspense>

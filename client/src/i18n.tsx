@@ -336,6 +336,7 @@ const domainText: Record<string, string> = {
   Cost: "成本",
   "Read mission-scoped analytics": "讀取限定於此 Mission 的分析資料",
   "Mission created with source evidence.": "已使用來源證據建立 Mission。",
+  "Correction added; active plan and approvals invalidated.": "已加入具名修正；目前計畫與既有核准已失效。",
   "Current plan version": "目前計畫版本",
   "Blocking conflicts": "阻擋性衝突",
   Dependencies: "依賴條件",

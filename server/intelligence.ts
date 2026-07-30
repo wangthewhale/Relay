@@ -426,8 +426,22 @@ function buildReceipt(args: {
     checks: [
       { id: "source_lineage", label: "Source lineage", status: evidenceCoverage === 100 ? "passed" : "warning", detail: `${evidenceCoverage}% of accepted assertions retain source lineage.` },
       { id: "semantic_model", label: "Semantic proposal", status: args.modelUsed ? "passed" : "fallback", detail: args.modelUsed ? `${args.modelName} proposed meaning; it did not receive execution authority.` : "Deterministic safety rules ran without a semantic model." },
-      { id: "evidence_validation", label: "Evidence validation", status: args.rejectedCandidates ? "warning" : "passed", detail: `${args.rejectedCandidates} unsupported or low-confidence model candidates were rejected.` },
-      { id: "policy_gate", label: "Deterministic policy gate", status: "passed", detail: "Blocking, authority and approval rules were computed in code after model output." },
+      {
+        id: "evidence_validation",
+        label: "Evidence validation",
+        status: args.rejectedCandidates ? "warning" : "passed",
+        detail: args.modelUsed
+          ? `${args.rejectedCandidates} unsupported or low-confidence model candidates were rejected.`
+          : "Deterministic assertions were linked to source evidence; no model candidates were evaluated.",
+      },
+      {
+        id: "policy_gate",
+        label: "Deterministic policy gate",
+        status: "passed",
+        detail: args.modelUsed
+          ? "Blocking, authority and approval rules were recomputed in code after model output."
+          : "Blocking, authority and approval rules were computed directly by deterministic code.",
+      },
       { id: "execution_boundary", label: "Execution boundary", status: "passed", detail: "This compilation made zero external writes and granted zero tool credentials." },
     ],
     warnings,

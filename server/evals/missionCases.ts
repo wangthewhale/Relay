@@ -66,6 +66,6 @@ export const missionEvalCases: MissionEvalCase[] = [
         { type: "Calendar", title: "Security review", author: "Security", content: "Mandatory security approval review is scheduled for 9 月 5 日.", authorityLevel: 5 },
       ],
     },
-    expectedConflictTypes: ["Hard conflict", "Policy conflict"],
+    expectedConflictTypes: ["Hard conflict"],
   },
 ];

@@ -3,19 +3,24 @@ import type { PoolClient } from "pg";
 import { compilePlan, demoMissionInput } from "./compiler";
 import { compileIntent, fallbackCompilerReceipt } from "./intelligence";
 import { pool } from "./db";
+import { executeBuiltIn, verifiedExecutorFor } from "./execution";
+import { assertMissionAccess, systemScope, type StoreScope } from "./security";
 import type {
   ApprovalRequest,
+  Artifact,
   AuditEvent,
   CompilerReceipt,
   Conflict,
   CreateMissionInput,
   ExecutionTask,
+  ExecutionReceipt,
   IntentAssertion,
   MissionDetail,
   MissionSummary,
   Outcome,
   PlanVersion,
   PreflightResult,
+  PublicMissionReport,
   SourceInput,
 } from "../shared/domain";
 
@@ -23,8 +28,8 @@ type StoredSource = SourceInput & { id: string; createdAt: string };
 type DbRunner = Pick<PoolClient, "query">;
 type Row = Record<string, any>;
 
-const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
-const USER_ID = "00000000-0000-4000-8000-000000000002";
+const DEMO_WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
+const DEMO_USER_ID = "00000000-0000-4000-8000-000000000002";
 const now = () => new Date().toISOString();
 const uid = () => randomUUID();
 
@@ -42,21 +47,25 @@ class ConflictError extends Error {
 }
 
 export interface RelayStore {
-  listMissions(): Promise<MissionSummary[]>;
-  getMission(id: string): Promise<MissionDetail>;
-  createMission(input: CreateMissionInput): Promise<MissionDetail>;
-  compileMission(id: string): Promise<MissionDetail>;
-  resolveConflict(conflictId: string, input: { optionId: string; reason: string; decidedBy: string }): Promise<MissionDetail>;
-  recompilePlan(missionId: string, actor: string): Promise<MissionDetail>;
-  decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decidedBy: string; reason: string }): Promise<MissionDetail>;
-  runTask(taskId: string, actor: string): Promise<{ mission: MissionDetail; preflight: PreflightResult }>;
-  addCorrection(missionId: string, input: { statement: string; assertionType: IntentAssertion["type"]; author: string }): Promise<MissionDetail>;
-  updateOutcome(missionId: string, outcome: Omit<Outcome, "id" | "blockers" | "updatedAt">): Promise<MissionDetail>;
+  listMissions(scope: StoreScope): Promise<MissionSummary[]>;
+  getMission(id: string, scope: StoreScope): Promise<MissionDetail>;
+  createMission(input: CreateMissionInput, scope: StoreScope): Promise<MissionDetail>;
+  compileMission(id: string, scope: StoreScope): Promise<MissionDetail>;
+  resolveConflict(conflictId: string, input: { optionId: string; reason: string; decidedBy: string }, scope: StoreScope): Promise<MissionDetail>;
+  recompilePlan(missionId: string, actor: string, scope: StoreScope): Promise<MissionDetail>;
+  decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decidedBy: string; reason: string }, scope: StoreScope): Promise<MissionDetail>;
+  runTask(taskId: string, actor: string, scope: StoreScope): Promise<{ mission: MissionDetail; preflight: PreflightResult; receipt: ExecutionReceipt }>;
+  addCorrection(missionId: string, input: { statement: string; assertionType: IntentAssertion["type"]; author: string }, scope: StoreScope): Promise<MissionDetail>;
+  updateOutcome(missionId: string, outcome: Omit<Outcome, "id" | "blockers" | "updatedAt">, scope: StoreScope): Promise<MissionDetail>;
+  createPublicReport(missionId: string, scope: StoreScope): Promise<PublicMissionReport>;
+  getPublicReport(slug: string): Promise<PublicMissionReport>;
   seedDemo(): Promise<string>;
 }
 
 interface InternalMission {
   id: string;
+  workspaceId: string;
+  workspaceName: string;
   title: string;
   objective: string;
   successMetric: string;
@@ -68,10 +77,17 @@ interface InternalMission {
   conflicts: Conflict[];
   planVersions: PlanVersion[];
   auditEvents: AuditEvent[];
+  artifacts: Artifact[];
+  executionReceipts: ExecutionReceipt[];
   outcome?: Outcome;
   compilerReceipt?: CompilerReceipt;
   createdAt: string;
   updatedAt: string;
+}
+
+interface InternalPublicReport {
+  report: PublicMissionReport;
+  missionId: string;
 }
 
 function summaryFromMission(mission: InternalMission): MissionSummary {
@@ -99,7 +115,7 @@ function detailFromMission(mission: InternalMission): MissionDetail {
     : undefined);
   return {
     ...summary,
-    workspaceName: "Relay Labs",
+    workspaceName: mission.workspaceName,
     createdBy: mission.createdBy,
     successMetric: mission.successMetric,
     sources: mission.sources,
@@ -108,6 +124,8 @@ function detailFromMission(mission: InternalMission): MissionDetail {
     planVersions: mission.planVersions,
     currentPlan: mission.planVersions.find((plan) => plan.version === mission.currentPlanVersion),
     auditEvents: [...mission.auditEvents].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    artifacts: [...mission.artifacts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    executionReceipts: [...mission.executionReceipts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     compilerReceipt,
     outcome: mission.outcome,
     createdAt: mission.createdAt,
@@ -161,6 +179,20 @@ function preflightFor(mission: MissionDetail, task: ExecutionTask): PreflightRes
       nextAction: mission.sources.length === 0 ? "Attach at least one evidence source." : undefined,
     },
     {
+      name: "Verified executor",
+      passed: task.ownerType === "agent" && Boolean(verifiedExecutorFor(task)),
+      detail: task.ownerType !== "agent"
+        ? "This task belongs to a human and cannot be completed by an agent run button."
+        : verifiedExecutorFor(task)
+          ? `${verifiedExecutorFor(task)!.name} is registered to produce a verifiable artifact.`
+          : "No built-in or provider-backed executor is registered for this task.",
+      nextAction: task.ownerType !== "agent"
+        ? "Complete this decision through its dedicated human workflow."
+        : !verifiedExecutorFor(task)
+          ? "Connect and verify the required provider executor before running this task."
+          : undefined,
+    },
+    {
       name: "Capability grants",
       passed: missingProviders.length === 0 || allowSnapshotRead,
       detail: missingProviders.length === 0
@@ -192,25 +224,69 @@ function preflightFor(mission: MissionDetail, task: ExecutionTask): PreflightRes
   return { canRun: checks.every((check) => check.passed), checkedAt: now(), checks };
 }
 
+function publicReportFromMission(mission: MissionDetail, slug: string, generatedAt = now(), expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000).toISOString()): PublicMissionReport {
+  const stoppedTasks = mission.currentPlan?.tasks.filter((task) => task.ownerType === "agent" && task.status === "blocked" && task.riskLevel > 0) ?? [];
+  const proof = mission.executionReceipts.find((receipt) => receipt.status === "succeeded" && receipt.artifactHash);
+  return {
+    slug,
+    missionTitle: mission.title,
+    planVersion: mission.currentPlanVersion,
+    generatedAt,
+    expiresAt,
+    sourcesAnalyzed: mission.sources.length,
+    assertionsCompiled: mission.assertions.length,
+    conflictsFound: mission.conflicts.length,
+    riskyActionsStopped: stoppedTasks.length,
+    evidenceCoverage: mission.compilerReceipt?.evidenceCoverage ?? 0,
+    sourceTypes: [...new Set(mission.sources.map((source) => source.type))],
+    primaryConflicts: mission.conflicts.slice(0, 3).map((conflict) => ({
+      type: conflict.type,
+      title: conflict.title,
+      severity: conflict.severity,
+      decisionOwner: conflict.decisionOwner,
+      nextSafeAction: conflict.options.find((option) => option.recommended)?.description ?? conflict.consequences,
+    })),
+    executionProof: proof?.artifactHash ? { taskKey: proof.taskKey, executor: proof.executor, artifactHash: proof.artifactHash } : undefined,
+  };
+}
+
 class MemoryRelayStore implements RelayStore {
   private missions = new Map<string, InternalMission>();
+  private publicReports = new Map<string, InternalPublicReport>();
 
-  async listMissions() {
-    return [...this.missions.values()].map(summaryFromMission).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }
-
-  async getMission(id: string) {
+  private missionFor(id: string, scope: StoreScope) {
     const mission = this.missions.get(id);
     if (!mission) throw new NotFoundError("Mission not found.");
-    return detailFromMission(mission);
+    assertMissionAccess(scope, mission.id, mission.workspaceId);
+    return mission;
   }
 
-  async createMission(input: CreateMissionInput) {
+  private missionByChild(scope: StoreScope, predicate: (mission: InternalMission) => boolean, message: string) {
+    const mission = [...this.missions.values()].find(predicate);
+    if (!mission) throw new NotFoundError(message);
+    assertMissionAccess(scope, mission.id, mission.workspaceId);
+    return mission;
+  }
+
+  async listMissions(scope: StoreScope) {
+    const missions = [...this.missions.values()].filter((mission) => scope.kind === "system"
+      || (scope.kind === "session" && mission.workspaceId === scope.workspaceId)
+      || (scope.kind === "share" && mission.id === scope.missionId));
+    return missions.map(summaryFromMission).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async getMission(id: string, scope: StoreScope) {
+    return detailFromMission(this.missionFor(id, scope));
+  }
+
+  async createMission(input: CreateMissionInput, scope: StoreScope) {
+    if (scope.kind === "share") throw new ConflictError("A shared mission link cannot create workspace missions.");
     const createdAt = now();
     const mission: InternalMission = {
-      id: uid(), title: input.title, objective: input.objective, successMetric: input.successMetric, status: "intake", currentPlanVersion: 0,
+      id: uid(), workspaceId: scope.kind === "session" ? scope.workspaceId : DEMO_WORKSPACE_ID, workspaceName: scope.kind === "session" ? "Private launch workspace" : "Relay Demo",
+      title: input.title, objective: input.objective, successMetric: input.successMetric, status: "intake", currentPlanVersion: 0,
       createdBy: input.createdBy, sources: input.sources.map((source) => ({ ...source, id: source.id ?? uid(), createdAt })), assertions: [], conflicts: [],
-      planVersions: [], auditEvents: [], outcome: { id: uid(), metricName: input.successMetric, targetValue: input.successMetric, actualValue: "", status: "not_started", cost: 0, durationMinutes: 0, humanInterventions: 0, blockers: [], recommendation: "", updatedAt: createdAt },
+      planVersions: [], auditEvents: [], artifacts: [], executionReceipts: [], outcome: { id: uid(), metricName: input.successMetric, targetValue: input.successMetric, actualValue: "", status: "not_started", cost: 0, durationMinutes: 0, humanInterventions: 0, blockers: [], recommendation: "", updatedAt: createdAt },
       createdAt, updatedAt: createdAt,
     };
     audit(mission, { actorType: "human", actorName: input.createdBy, eventType: "mission.created", entityType: "mission", entityId: mission.id, summary: "Mission created with source evidence.", data: { sourceCount: mission.sources.length } });
@@ -218,9 +294,8 @@ class MemoryRelayStore implements RelayStore {
     return detailFromMission(mission);
   }
 
-  async compileMission(id: string) {
-    const mission = this.missions.get(id);
-    if (!mission) throw new NotFoundError("Mission not found.");
+  async compileMission(id: string, scope: StoreScope) {
+    const mission = this.missionFor(id, scope);
     if (mission.assertions.length > 0) return detailFromMission(mission);
     const compilation = await compileIntent({ title: mission.title, objective: mission.objective, successMetric: mission.successMetric, createdBy: mission.createdBy, sources: mission.sources }, mission.sources);
     mission.assertions = compilation.assertions;
@@ -231,12 +306,13 @@ class MemoryRelayStore implements RelayStore {
     mission.currentPlanVersion = 1;
     mission.status = "conflicts";
     audit(mission, { actorType: "system", actorName: "Relay Compiler", eventType: "mission.compiled", entityType: "plan_version", entityId: plan.id, planVersion: 1, summary: `${mission.assertions.length} assertions compiled into ${mission.conflicts.length} conflicts and Plan v1.`, data: { assertionCount: mission.assertions.length, conflictCount: mission.conflicts.length, compilerReceipt: compilation.receipt } });
+    const evidenceTask = plan.tasks.find((task) => task.key === "T-01");
+    if (evidenceTask) await this.runTask(evidenceTask.id, "Relay Evidence Worker", scope);
     return detailFromMission(mission);
   }
 
-  async resolveConflict(conflictId: string, input: { optionId: string; reason: string; decidedBy: string }) {
-    const mission = [...this.missions.values()].find((item) => item.conflicts.some((conflict) => conflict.id === conflictId));
-    if (!mission) throw new NotFoundError("Conflict not found.");
+  async resolveConflict(conflictId: string, input: { optionId: string; reason: string; decidedBy: string }, scope: StoreScope) {
+    const mission = this.missionByChild(scope, (item) => item.conflicts.some((conflict) => conflict.id === conflictId), "Conflict not found.");
     const conflict = mission.conflicts.find((item) => item.id === conflictId)!;
     const option = conflict.options.find((item) => item.id === input.optionId);
     if (!option) throw new ConflictError("Resolution option is not valid for this conflict.");
@@ -247,9 +323,8 @@ class MemoryRelayStore implements RelayStore {
     return detailFromMission(mission);
   }
 
-  async recompilePlan(missionId: string, actor: string) {
-    const mission = this.missions.get(missionId);
-    if (!mission) throw new NotFoundError("Mission not found.");
+  async recompilePlan(missionId: string, actor: string, scope: StoreScope) {
+    const mission = this.missionFor(missionId, scope);
     const openBlocking = mission.conflicts.filter((conflict) => conflict.blocking && conflict.status === "open");
     if (openBlocking.length) throw new ConflictError("Blocking conflicts must be resolved before a new plan can be activated.", { openBlocking: openBlocking.length });
     const previous = mission.planVersions.find((plan) => plan.version === mission.currentPlanVersion);
@@ -263,12 +338,13 @@ class MemoryRelayStore implements RelayStore {
     mission.currentPlanVersion = nextVersion;
     mission.status = "active";
     audit(mission, { actorType: "system", actorName: "Relay Compiler", eventType: "plan.activated", entityType: "plan_version", entityId: plan.id, planVersion: nextVersion, summary: `Plan v${nextVersion} activated; previous approvals invalidated.`, data: { previousVersion: previous?.version } });
+    const evidenceTask = plan.tasks.find((task) => task.key === "T-01");
+    if (evidenceTask) await this.runTask(evidenceTask.id, "Relay Evidence Worker", scope);
     return detailFromMission(mission);
   }
 
-  async decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decidedBy: string; reason: string }) {
-    const mission = [...this.missions.values()].find((item) => item.planVersions.some((plan) => plan.approvals.some((approval) => approval.id === approvalId)));
-    if (!mission) throw new NotFoundError("Approval not found.");
+  async decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decidedBy: string; reason: string }, scope: StoreScope) {
+    const mission = this.missionByChild(scope, (item) => item.planVersions.some((plan) => plan.approvals.some((approval) => approval.id === approvalId)), "Approval not found.");
     const plan = mission.planVersions.find((item) => item.approvals.some((approval) => approval.id === approvalId))!;
     const approval = plan.approvals.find((item) => item.id === approvalId)!;
     if (plan.version !== mission.currentPlanVersion || plan.status !== "active") throw new ConflictError("Approval belongs to a stale plan version.");
@@ -283,27 +359,35 @@ class MemoryRelayStore implements RelayStore {
     return detailFromMission(mission);
   }
 
-  async runTask(taskId: string, actor: string) {
-    const mission = [...this.missions.values()].find((item) => item.planVersions.some((plan) => plan.tasks.some((task) => task.id === taskId)));
-    if (!mission) throw new NotFoundError("Task not found.");
+  async runTask(taskId: string, actor: string, scope: StoreScope) {
+    const mission = this.missionByChild(scope, (item) => item.planVersions.some((plan) => plan.tasks.some((task) => task.id === taskId)), "Task not found.");
     const detail = detailFromMission(mission);
     const task = detail.currentPlan?.tasks.find((item) => item.id === taskId);
     if (!task) throw new ConflictError("Task is not part of the current plan version.");
+    const baseIdempotencyKey = `${mission.id}:v${detail.currentPlanVersion}:${task.key}`;
+    const existingReceipt = mission.executionReceipts.find((receipt) => receipt.idempotencyKey === baseIdempotencyKey && receipt.status === "succeeded");
+    if (existingReceipt) return { mission: detail, preflight: existingReceipt.preflight, receipt: existingReceipt };
     const result = preflightFor(detail, task);
     task.preflight = result;
+    let receipt: ExecutionReceipt;
     if (!result.canRun) {
       task.status = "blocked";
+      receipt = { id: uid(), taskId: task.id, taskKey: task.key, planVersion: detail.currentPlanVersion, idempotencyKey: `${baseIdempotencyKey}:blocked:${uid()}`, executor: "Relay Preflight", status: "blocked", preflight: result, summary: `${task.key} was stopped before execution; no artifact or external side effect was produced.`, createdAt: now() };
+      mission.executionReceipts.push(receipt);
       audit(mission, { actorType: "system", actorName: "Relay Preflight", eventType: "task.blocked", entityType: "task", entityId: task.id, planVersion: detail.currentPlanVersion, summary: `${task.key} blocked by preflight.`, data: { checks: result.checks } });
     } else {
+      const artifact = executeBuiltIn(detail, task, actor);
+      mission.artifacts.push(artifact);
       task.status = "completed";
-      audit(mission, { actorType: task.ownerType, actorName: actor, eventType: "task.completed", entityType: "task", entityId: task.id, planVersion: detail.currentPlanVersion, summary: `${task.key} ${task.title} completed under a passing preflight.`, data: { idempotencyKey: `${mission.id}:v${detail.currentPlanVersion}:${task.key}`, checks: result.checks } });
+      receipt = { id: uid(), taskId: task.id, taskKey: task.key, planVersion: detail.currentPlanVersion, idempotencyKey: baseIdempotencyKey, executor: verifiedExecutorFor(task)!.name, status: "succeeded", preflight: result, artifactId: artifact.id, artifactHash: artifact.contentHash, summary: `${task.key} produced ${artifact.title}; completion is backed by an immutable artifact hash.`, createdAt: now() };
+      mission.executionReceipts.push(receipt);
+      audit(mission, { actorType: task.ownerType, actorName: actor, eventType: "task.completed", entityType: "task", entityId: task.id, planVersion: detail.currentPlanVersion, summary: receipt.summary, data: { idempotencyKey: baseIdempotencyKey, artifactId: artifact.id, artifactHash: artifact.contentHash, checks: result.checks } });
     }
-    return { mission: detailFromMission(mission), preflight: result };
+    return { mission: detailFromMission(mission), preflight: result, receipt };
   }
 
-  async addCorrection(missionId: string, input: { statement: string; assertionType: IntentAssertion["type"]; author: string }) {
-    const mission = this.missions.get(missionId);
-    if (!mission) throw new NotFoundError("Mission not found.");
+  async addCorrection(missionId: string, input: { statement: string; assertionType: IntentAssertion["type"]; author: string }, scope: StoreScope) {
+    const mission = this.missionFor(missionId, scope);
     const assertion: IntentAssertion = { id: uid(), statement: input.statement, type: input.assertionType, authorityLevel: 5, confidence: 1, scope: "mission", metadata: { origin: "human_correction" }, createdAt: now() };
     mission.assertions.push(assertion);
     const conflict: Conflict = { id: uid(), type: "Version conflict", title: "New correction changes the active execution contract", summary: input.statement, severity: "high", status: "open", blocking: true, sourceAssertionIds: [assertion.id], decisionOwner: input.author, consequences: "Running tasks and prior approvals may no longer match the team's current intent.", options: [
@@ -323,20 +407,33 @@ class MemoryRelayStore implements RelayStore {
     return detailFromMission(mission);
   }
 
-  async updateOutcome(missionId: string, input: Omit<Outcome, "id" | "blockers" | "updatedAt">) {
-    const mission = this.missions.get(missionId);
-    if (!mission) throw new NotFoundError("Mission not found.");
+  async updateOutcome(missionId: string, input: Omit<Outcome, "id" | "blockers" | "updatedAt">, scope: StoreScope) {
+    const mission = this.missionFor(missionId, scope);
     mission.outcome = { id: mission.outcome?.id ?? uid(), ...input, blockers: mission.conflicts.filter((conflict) => conflict.status === "open").map((conflict) => conflict.title), updatedAt: now() };
     if (["achieved", "missed"].includes(input.status)) mission.status = "completed";
     audit(mission, { actorType: "human", actorName: mission.createdBy, eventType: "outcome.updated", entityType: "outcome", entityId: mission.outcome.id, planVersion: mission.currentPlanVersion, summary: `Outcome marked ${input.status}.`, data: { actualValue: input.actualValue, cost: input.cost } });
     return detailFromMission(mission);
   }
 
+  async createPublicReport(missionId: string, scope: StoreScope) {
+    const mission = detailFromMission(this.missionFor(missionId, scope));
+    const slug = uid().replaceAll("-", "").slice(0, 16);
+    const report = publicReportFromMission(mission, slug);
+    this.publicReports.set(slug, { report, missionId });
+    return report;
+  }
+
+  async getPublicReport(slug: string) {
+    const stored = this.publicReports.get(slug);
+    if (!stored || new Date(stored.report.expiresAt).getTime() <= Date.now()) throw new NotFoundError("Public report not found.");
+    return stored.report;
+  }
+
   async seedDemo() {
     const existing = [...this.missions.values()].find((mission) => mission.title === demoMissionInput.title);
     if (existing) return existing.id;
-    const created = await this.createMission(demoMissionInput);
-    await this.compileMission(created.id);
+    const created = await this.createMission(demoMissionInput, systemScope);
+    await this.compileMission(created.id, systemScope);
     return created.id;
   }
 }
@@ -372,14 +469,47 @@ function mapApproval(row: Row): ApprovalRequest {
   };
 }
 
+function mapArtifact(row: Row, planVersion: number): Artifact {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    planVersion,
+    type: row.artifact_type,
+    title: row.title,
+    content: row.content ?? {},
+    contentHash: row.content_hash,
+    createdBy: row.created_by,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+function mapExecutionReceipt(row: Row, taskKey: string, planVersion: number): ExecutionReceipt {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    taskKey,
+    planVersion,
+    idempotencyKey: row.idempotency_key,
+    executor: row.executor,
+    status: row.status,
+    preflight: row.preflight,
+    artifactId: row.artifact_id ?? undefined,
+    artifactHash: row.artifact_hash ?? undefined,
+    summary: row.summary,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
 class PostgresRelayStore implements RelayStore {
   private async ensureIdentity(runner: DbRunner) {
-    await runner.query("INSERT INTO workspaces (id, name) VALUES ($1, 'Relay Labs') ON CONFLICT (id) DO NOTHING", [WORKSPACE_ID]);
-    await runner.query("INSERT INTO users (id, name, email) VALUES ($1, 'Jennifer', 'jennifer@relay.local') ON CONFLICT (id) DO NOTHING", [USER_ID]);
-    await runner.query("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner') ON CONFLICT DO NOTHING", [WORKSPACE_ID, USER_ID]);
+    await runner.query("INSERT INTO workspaces (id, name) VALUES ($1, 'Relay Demo') ON CONFLICT (id) DO NOTHING", [DEMO_WORKSPACE_ID]);
+    await runner.query("INSERT INTO users (id, name, email) VALUES ($1, 'Demo owner', 'demo@relay.local') ON CONFLICT (id) DO NOTHING", [DEMO_USER_ID]);
+    await runner.query("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner') ON CONFLICT DO NOTHING", [DEMO_WORKSPACE_ID, DEMO_USER_ID]);
   }
 
-  async listMissions() {
+  async listMissions(scope: StoreScope) {
+    const where = scope.kind === "session" ? "WHERE m.workspace_id = $1" : scope.kind === "share" ? "WHERE m.id = $1" : "";
+    const values = scope.kind === "session" ? [scope.workspaceId] : scope.kind === "share" ? [scope.missionId] : [];
     const result = await pool!.query(`
       SELECT m.*,
         COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'open')::int AS open_conflicts,
@@ -392,8 +522,9 @@ class PostgresRelayStore implements RelayStore {
       LEFT JOIN plan_versions pv ON pv.mission_id = m.id
       LEFT JOIN tasks t ON t.plan_version_id = pv.id
       LEFT JOIN approvals a ON a.plan_version_id = pv.id
+      ${where}
       GROUP BY m.id ORDER BY m.updated_at DESC
-    `);
+    `, values);
     return result.rows.map((row: Row) => ({
       id: row.id, title: row.title, objective: row.objective, status: row.status, currentPlanVersion: row.current_plan_version,
       openConflicts: row.open_conflicts, blockingConflicts: row.blocking_conflicts, pendingApprovals: row.pending_approvals,
@@ -401,11 +532,12 @@ class PostgresRelayStore implements RelayStore {
     }));
   }
 
-  async getMission(id: string) {
+  async getMission(id: string, scope: StoreScope) {
     const missionResult = await pool!.query("SELECT m.*, w.name AS workspace_name FROM missions m JOIN workspaces w ON w.id = m.workspace_id WHERE m.id = $1", [id]);
     if (!missionResult.rowCount) throw new NotFoundError("Mission not found.");
     const m: Row = missionResult.rows[0];
-    const [sourceResult, assertionResult, conflictResult, resolutionResult, planResult, taskResult, accessResult, approvalResult, auditResult, outcomeResult] = await Promise.all([
+    assertMissionAccess(scope, m.id, m.workspace_id);
+    const [sourceResult, assertionResult, conflictResult, resolutionResult, planResult, taskResult, accessResult, approvalResult, auditResult, outcomeResult, artifactResult, receiptResult] = await Promise.all([
       pool!.query("SELECT * FROM sources WHERE mission_id = $1 ORDER BY created_at", [id]),
       pool!.query("SELECT * FROM intent_assertions WHERE mission_id = $1 ORDER BY created_at", [id]),
       pool!.query("SELECT * FROM conflicts WHERE mission_id = $1 ORDER BY blocking DESC, created_at", [id]),
@@ -416,6 +548,8 @@ class PostgresRelayStore implements RelayStore {
       pool!.query("SELECT * FROM approvals WHERE mission_id = $1 ORDER BY created_at", [id]),
       pool!.query("SELECT * FROM audit_events WHERE mission_id = $1 ORDER BY created_at DESC LIMIT 200", [id]),
       pool!.query("SELECT * FROM outcomes WHERE mission_id = $1", [id]),
+      pool!.query("SELECT a.*, pv.version_no FROM artifacts a JOIN plan_versions pv ON pv.id = a.plan_version_id WHERE a.mission_id = $1 ORDER BY a.created_at DESC", [id]),
+      pool!.query("SELECT er.*, pv.version_no, t.task_key FROM execution_receipts er JOIN plan_versions pv ON pv.id = er.plan_version_id JOIN tasks t ON t.id = er.task_id WHERE er.mission_id = $1 ORDER BY er.created_at DESC", [id]),
     ]);
     const resolutionMap = new Map(resolutionResult.rows.map((row: Row) => [row.conflict_id, row]));
     const plans: PlanVersion[] = planResult.rows.map((row: Row) => ({
@@ -446,19 +580,24 @@ class PostgresRelayStore implements RelayStore {
       updatedAt: m.updated_at.toISOString(), workspaceName: m.workspace_name, createdBy: m.created_by, successMetric: m.success_metric,
       sources: sourceResult.rows.map((row: Row) => ({ id: row.id, type: row.source_type, title: row.title, author: row.author_name, content: row.content, occurredAt: row.occurred_at?.toISOString?.(), authorityLevel: row.authority_level, evidenceUrl: row.evidence_url ?? undefined, createdAt: row.created_at.toISOString() })),
       assertions, conflicts, planVersions: plans, currentPlan,
-      auditEvents, compilerReceipt,
+      auditEvents,
+      artifacts: artifactResult.rows.map((row: Row) => mapArtifact(row, row.version_no)),
+      executionReceipts: receiptResult.rows.map((row: Row) => mapExecutionReceipt(row, row.task_key, row.version_no)),
+      compilerReceipt,
       outcome: outcomeRow ? { id: outcomeRow.id, metricName: outcomeRow.metric_name, targetValue: outcomeRow.target_value, actualValue: outcomeRow.actual_value, status: outcomeRow.status, cost: Number(outcomeRow.cost), durationMinutes: outcomeRow.duration_minutes, humanInterventions: outcomeRow.human_interventions, blockers: outcomeRow.blockers, recommendation: outcomeRow.recommendation, updatedAt: outcomeRow.updated_at.toISOString() } : undefined,
       createdAt: m.created_at.toISOString(),
     } satisfies MissionDetail;
   }
 
-  async createMission(input: CreateMissionInput) {
+  async createMission(input: CreateMissionInput, scope: StoreScope) {
+    if (scope.kind === "share") throw new ConflictError("A shared mission link cannot create workspace missions.");
     const client = await pool!.connect();
     const missionId = uid();
+    const workspaceId = scope.kind === "session" ? scope.workspaceId : DEMO_WORKSPACE_ID;
     try {
       await client.query("BEGIN");
-      await this.ensureIdentity(client);
-      await client.query("INSERT INTO missions (id, workspace_id, title, objective, success_metric, status, created_by) VALUES ($1, $2, $3, $4, $5, 'intake', $6)", [missionId, WORKSPACE_ID, input.title, input.objective, input.successMetric, input.createdBy]);
+      if (scope.kind === "system") await this.ensureIdentity(client);
+      await client.query("INSERT INTO missions (id, workspace_id, title, objective, success_metric, status, created_by) VALUES ($1, $2, $3, $4, $5, 'intake', $6)", [missionId, workspaceId, input.title, input.objective, input.successMetric, input.createdBy]);
       for (const source of input.sources) {
         await client.query("INSERT INTO sources (id, mission_id, source_type, title, author_name, content, occurred_at, authority_level, evidence_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", [source.id ?? uid(), missionId, source.type, source.title, source.author, source.content, source.occurredAt ?? null, source.authorityLevel, source.evidenceUrl || null]);
       }
@@ -466,7 +605,7 @@ class PostgresRelayStore implements RelayStore {
       await client.query("INSERT INTO outcomes (id, mission_id, metric_name, target_value, status) VALUES ($1,$2,$3,$3,'not_started')", [outcomeId, missionId, input.successMetric]);
       await this.insertAudit(client, missionId, { actorType: "human", actorName: input.createdBy, eventType: "mission.created", entityType: "mission", entityId: missionId, summary: "Mission created with source evidence.", data: { sourceCount: input.sources.length } });
       await client.query("COMMIT");
-      return this.getMission(missionId);
+      return this.getMission(missionId, scope);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -494,8 +633,8 @@ class PostgresRelayStore implements RelayStore {
     }
   }
 
-  async compileMission(id: string) {
-    const current = await this.getMission(id);
+  async compileMission(id: string, scope: StoreScope) {
+    const current = await this.getMission(id, scope);
     if (current.assertions.length) return current;
     const compilation = await compileIntent({ title: current.title, objective: current.objective, successMetric: current.successMetric, createdBy: current.createdBy, sources: current.sources }, current.sources);
     const { assertions, conflicts } = compilation;
@@ -513,17 +652,20 @@ class PostgresRelayStore implements RelayStore {
       await client.query("UPDATE missions SET status = 'conflicts', current_plan_version = 1, updated_at = now() WHERE id = $1", [id]);
       await this.insertAudit(client, id, { actorType: "system", actorName: "Relay Compiler", eventType: "mission.compiled", entityType: "plan_version", entityId: plan.id, planVersion: 1, summary: `${assertions.length} assertions compiled into ${conflicts.length} conflicts and Plan v1.`, data: { assertionCount: assertions.length, conflictCount: conflicts.length, compilerReceipt: compilation.receipt } });
       await client.query("COMMIT");
-      return this.getMission(id);
+      const compiled = await this.getMission(id, scope);
+      const evidenceTask = compiled.currentPlan?.tasks.find((task) => task.key === "T-01");
+      return evidenceTask ? (await this.runTask(evidenceTask.id, "Relay Evidence Worker", scope)).mission : compiled;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     } finally { client.release(); }
   }
 
-  async resolveConflict(conflictId: string, input: { optionId: string; reason: string; decidedBy: string }) {
-    const result = await pool!.query("SELECT * FROM conflicts WHERE id = $1", [conflictId]);
+  async resolveConflict(conflictId: string, input: { optionId: string; reason: string; decidedBy: string }, scope: StoreScope) {
+    const result = await pool!.query("SELECT c.*, m.workspace_id FROM conflicts c JOIN missions m ON m.id = c.mission_id WHERE c.id = $1", [conflictId]);
     if (!result.rowCount) throw new NotFoundError("Conflict not found.");
     const row: Row = result.rows[0];
+    assertMissionAccess(scope, row.mission_id, row.workspace_id);
     const option = (row.options as Array<{ id: string; description: string }>).find((item) => item.id === input.optionId);
     if (!option) throw new ConflictError("Resolution option is not valid for this conflict.");
     const client = await pool!.connect();
@@ -535,12 +677,12 @@ class PostgresRelayStore implements RelayStore {
       if (open.rows[0].count === 0) await client.query("UPDATE missions SET status = 'planning', updated_at = now() WHERE id = $1", [row.mission_id]);
       await this.insertAudit(client, row.mission_id, { actorType: "human", actorName: input.decidedBy, eventType: "conflict.resolved", entityType: "conflict", entityId: conflictId, summary: row.title, data: { optionId: input.optionId, reason: input.reason } });
       await client.query("COMMIT");
-      return this.getMission(row.mission_id);
+      return this.getMission(row.mission_id, scope);
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   }
 
-  async recompilePlan(missionId: string, actor: string) {
-    const mission = await this.getMission(missionId);
+  async recompilePlan(missionId: string, actor: string, scope: StoreScope) {
+    const mission = await this.getMission(missionId, scope);
     if (mission.blockingConflicts) throw new ConflictError("Blocking conflicts must be resolved before a new plan can be activated.", { openBlocking: mission.blockingConflicts });
     const previous = mission.currentPlan;
     const nextVersion = (previous?.version ?? 0) + 1;
@@ -556,14 +698,17 @@ class PostgresRelayStore implements RelayStore {
       await client.query("UPDATE missions SET status = 'active', current_plan_version = $2, updated_at = now() WHERE id = $1", [missionId, nextVersion]);
       await this.insertAudit(client, missionId, { actorType: "system", actorName: "Relay Compiler", eventType: "plan.activated", entityType: "plan_version", entityId: plan.id, planVersion: nextVersion, summary: `Plan v${nextVersion} activated; previous approvals invalidated.`, data: { actor, previousVersion: previous?.version } });
       await client.query("COMMIT");
-      return this.getMission(missionId);
+      const compiled = await this.getMission(missionId, scope);
+      const evidenceTask = compiled.currentPlan?.tasks.find((task) => task.key === "T-01");
+      return evidenceTask ? (await this.runTask(evidenceTask.id, "Relay Evidence Worker", scope)).mission : compiled;
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   }
 
-  async decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decidedBy: string; reason: string }) {
-    const result = await pool!.query("SELECT a.*, pv.version_no, pv.status AS plan_status, m.current_plan_version FROM approvals a JOIN plan_versions pv ON pv.id = a.plan_version_id JOIN missions m ON m.id = a.mission_id WHERE a.id = $1", [approvalId]);
+  async decideApproval(approvalId: string, input: { decision: "approved" | "rejected"; decidedBy: string; reason: string }, scope: StoreScope) {
+    const result = await pool!.query("SELECT a.*, pv.version_no, pv.status AS plan_status, m.current_plan_version, m.workspace_id FROM approvals a JOIN plan_versions pv ON pv.id = a.plan_version_id JOIN missions m ON m.id = a.mission_id WHERE a.id = $1", [approvalId]);
     if (!result.rowCount) throw new NotFoundError("Approval not found.");
     const row: Row = result.rows[0];
+    assertMissionAccess(scope, row.mission_id, row.workspace_id);
     if (row.version_no !== row.current_plan_version || row.plan_status !== "active") throw new ConflictError("Approval belongs to a stale plan version.");
     if (row.expires_at.getTime() < Date.now()) throw new ConflictError("Approval has expired.");
     const client = await pool!.connect();
@@ -573,32 +718,60 @@ class PostgresRelayStore implements RelayStore {
       await client.query("UPDATE tasks SET status = $2 WHERE plan_version_id = $1 AND task_key = 'T-06'", [row.plan_version_id, input.decision === "approved" ? "completed" : "failed"]);
       await this.insertAudit(client, row.mission_id, { actorType: "human", actorName: input.decidedBy, eventType: `approval.${input.decision}`, entityType: "approval", entityId: approvalId, planVersion: row.version_no, summary: `${row.action} ${input.decision}.`, data: { payloadHash: row.payload_hash, reason: input.reason } });
       await client.query("COMMIT");
-      return this.getMission(row.mission_id);
+      return this.getMission(row.mission_id, scope);
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   }
 
-  async runTask(taskId: string, actor: string) {
-    const result = await pool!.query("SELECT mission_id FROM tasks WHERE id = $1", [taskId]);
+  async runTask(taskId: string, actor: string, scope: StoreScope) {
+    const result = await pool!.query("SELECT t.mission_id, m.workspace_id FROM tasks t JOIN missions m ON m.id = t.mission_id WHERE t.id = $1", [taskId]);
     if (!result.rowCount) throw new NotFoundError("Task not found.");
     const missionId = result.rows[0].mission_id;
-    const mission = await this.getMission(missionId);
+    assertMissionAccess(scope, missionId, result.rows[0].workspace_id);
+    const mission = await this.getMission(missionId, scope);
     const task = mission.currentPlan?.tasks.find((item) => item.id === taskId);
     if (!task) throw new ConflictError("Task is not part of the current plan version.");
+    const baseIdempotencyKey = `${missionId}:v${mission.currentPlanVersion}:${task.key}`;
+    const existing = await pool!.query("SELECT er.*, pv.version_no, t.task_key FROM execution_receipts er JOIN plan_versions pv ON pv.id = er.plan_version_id JOIN tasks t ON t.id = er.task_id WHERE er.idempotency_key = $1 AND er.status = 'succeeded'", [baseIdempotencyKey]);
+    if (existing.rowCount) {
+      const receipt = mapExecutionReceipt(existing.rows[0], existing.rows[0].task_key, existing.rows[0].version_no);
+      return { mission, preflight: receipt.preflight, receipt };
+    }
     const preflight = preflightFor(mission, task);
     const status = preflight.canRun ? "completed" : "blocked";
+    const artifact = preflight.canRun ? executeBuiltIn(mission, task, actor) : undefined;
+    const receipt: ExecutionReceipt = {
+      id: uid(),
+      taskId,
+      taskKey: task.key,
+      planVersion: mission.currentPlanVersion,
+      idempotencyKey: preflight.canRun ? baseIdempotencyKey : `${baseIdempotencyKey}:blocked:${uid()}`,
+      executor: preflight.canRun ? verifiedExecutorFor(task)!.name : "Relay Preflight",
+      status: preflight.canRun ? "succeeded" : "blocked",
+      preflight,
+      artifactId: artifact?.id,
+      artifactHash: artifact?.contentHash,
+      summary: preflight.canRun
+        ? `${task.key} produced ${artifact!.title}; completion is backed by an immutable artifact hash.`
+        : `${task.key} was stopped before execution; no artifact or external side effect was produced.`,
+      createdAt: now(),
+    };
     const client = await pool!.connect();
     try {
       await client.query("BEGIN");
       await client.query("UPDATE tasks SET preflight = $2, status = $3 WHERE id = $1", [taskId, JSON.stringify(preflight), status]);
-      await this.insertAudit(client, missionId, { actorType: preflight.canRun ? task.ownerType : "system", actorName: preflight.canRun ? actor : "Relay Preflight", eventType: preflight.canRun ? "task.completed" : "task.blocked", entityType: "task", entityId: taskId, planVersion: mission.currentPlanVersion, summary: preflight.canRun ? `${task.key} ${task.title} completed under a passing preflight.` : `${task.key} blocked by preflight.`, data: { idempotencyKey: `${missionId}:v${mission.currentPlanVersion}:${task.key}`, checks: preflight.checks } });
+      if (artifact) {
+        await client.query("INSERT INTO artifacts (id, mission_id, plan_version_id, task_id, artifact_type, title, content, content_hash, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", [artifact.id, missionId, mission.currentPlan!.id, taskId, artifact.type, artifact.title, JSON.stringify(artifact.content), artifact.contentHash, artifact.createdBy]);
+      }
+      await client.query("INSERT INTO execution_receipts (id, mission_id, plan_version_id, task_id, idempotency_key, executor, status, preflight, artifact_id, artifact_hash, summary) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [receipt.id, missionId, mission.currentPlan!.id, taskId, receipt.idempotencyKey, receipt.executor, receipt.status, JSON.stringify(preflight), receipt.artifactId ?? null, receipt.artifactHash ?? null, receipt.summary]);
+      await this.insertAudit(client, missionId, { actorType: preflight.canRun ? task.ownerType : "system", actorName: preflight.canRun ? actor : "Relay Preflight", eventType: preflight.canRun ? "task.completed" : "task.blocked", entityType: "task", entityId: taskId, planVersion: mission.currentPlanVersion, summary: receipt.summary, data: { idempotencyKey: receipt.idempotencyKey, artifactId: receipt.artifactId, artifactHash: receipt.artifactHash, checks: preflight.checks } });
       await client.query("UPDATE missions SET updated_at = now() WHERE id = $1", [missionId]);
       await client.query("COMMIT");
-      return { mission: await this.getMission(missionId), preflight };
+      return { mission: await this.getMission(missionId, scope), preflight, receipt };
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   }
 
-  async addCorrection(missionId: string, input: { statement: string; assertionType: IntentAssertion["type"]; author: string }) {
-    const mission = await this.getMission(missionId);
+  async addCorrection(missionId: string, input: { statement: string; assertionType: IntentAssertion["type"]; author: string }, scope: StoreScope) {
+    const mission = await this.getMission(missionId, scope);
     const assertionId = uid();
     const conflictId = uid();
     const options = [
@@ -619,12 +792,12 @@ class PostgresRelayStore implements RelayStore {
       await client.query("UPDATE missions SET status = 'conflicts', updated_at = now() WHERE id = $1", [missionId]);
       await this.insertAudit(client, missionId, { actorType: "human", actorName: input.author, eventType: "assertion.corrected", entityType: "intent_assertion", entityId: assertionId, planVersion: mission.currentPlanVersion, summary: "Correction added; active plan and approvals invalidated.", data: { statement: input.statement } });
       await client.query("COMMIT");
-      return this.getMission(missionId);
+      return this.getMission(missionId, scope);
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   }
 
-  async updateOutcome(missionId: string, input: Omit<Outcome, "id" | "blockers" | "updatedAt">) {
-    const mission = await this.getMission(missionId);
+  async updateOutcome(missionId: string, input: Omit<Outcome, "id" | "blockers" | "updatedAt">, scope: StoreScope) {
+    const mission = await this.getMission(missionId, scope);
     const blockers = mission.conflicts.filter((conflict) => conflict.status === "open").map((conflict) => conflict.title);
     const client = await pool!.connect();
     try {
@@ -636,16 +809,32 @@ class PostgresRelayStore implements RelayStore {
       if (["achieved", "missed"].includes(input.status)) await client.query("UPDATE missions SET status = 'completed', updated_at = now() WHERE id = $1", [missionId]);
       await this.insertAudit(client, missionId, { actorType: "human", actorName: mission.createdBy, eventType: "outcome.updated", entityType: "outcome", entityId: mission.outcome?.id, planVersion: mission.currentPlanVersion, summary: `Outcome marked ${input.status}.`, data: { actualValue: input.actualValue, cost: input.cost } });
       await client.query("COMMIT");
-      return this.getMission(missionId);
+      return this.getMission(missionId, scope);
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+  }
+
+  async createPublicReport(missionId: string, scope: StoreScope) {
+    const mission = await this.getMission(missionId, scope);
+    const slug = uid().replaceAll("-", "").slice(0, 16);
+    const generatedAt = now();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000).toISOString();
+    const report = publicReportFromMission(mission, slug, generatedAt, expiresAt);
+    await pool!.query("INSERT INTO public_reports (id, slug, mission_id, snapshot, created_by, expires_at) VALUES ($1,$2,$3,$4,$5,$6)", [uid(), slug, missionId, JSON.stringify(report), scope.kind === "session" ? scope.userId : null, expiresAt]);
+    return report;
+  }
+
+  async getPublicReport(slug: string) {
+    const result = await pool!.query("SELECT snapshot FROM public_reports WHERE slug = $1 AND revoked_at IS NULL AND expires_at > now()", [slug]);
+    if (!result.rowCount) throw new NotFoundError("Public report not found.");
+    return result.rows[0].snapshot as PublicMissionReport;
   }
 
   async seedDemo() {
     await this.ensureIdentity(pool!);
     const existing = await pool!.query("SELECT id FROM missions WHERE title = $1 ORDER BY created_at LIMIT 1", [demoMissionInput.title]);
     if (existing.rowCount) return existing.rows[0].id;
-    const created = await this.createMission(demoMissionInput);
-    await this.compileMission(created.id);
+    const created = await this.createMission(demoMissionInput, systemScope);
+    await this.compileMission(created.id, systemScope);
     return created.id;
   }
 }

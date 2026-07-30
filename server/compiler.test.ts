@@ -98,4 +98,26 @@ describe("Relay intent compiler", () => {
 
     expect(conflicts.some((conflict) => conflict.type === "Version conflict" && conflict.blocking)).toBe(true);
   });
+
+  it("detects a source-backed resource shortfall", () => {
+    const createdAt = new Date().toISOString();
+    const input = {
+      title: "Prepare launch creative",
+      objective: "Finish the launch creative before review.",
+      successMetric: "All launch assets ready",
+      createdBy: "Mina",
+      sources: [
+        { type: "Notion" as const, title: "Launch scope", author: "Creative lead", content: "The launch needs 4 designers to finish on time.", authorityLevel: 4 },
+        { type: "Slack" as const, title: "Staffing update", author: "Operations", content: "Only 2 designers are available this week.", authorityLevel: 5 },
+      ],
+    };
+    const sources = input.sources.map((source) => ({ ...source, id: randomUUID(), createdAt }));
+    const conflicts = detectConflicts(extractAssertions(input, sources));
+    const resourceConflict = conflicts.find((conflict) => conflict.type === "Resource conflict");
+
+    expect(resourceConflict).toMatchObject({ blocking: true, decisionOwner: "Operations owner" });
+    expect(resourceConflict?.sourceAssertionIds).toHaveLength(2);
+    expect(resourceConflict?.summary).toContain("requires 4");
+    expect(resourceConflict?.summary).toContain("available capacity is 2");
+  });
 });

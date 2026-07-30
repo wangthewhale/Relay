@@ -68,4 +68,49 @@ export const missionEvalCases: MissionEvalCase[] = [
     },
     expectedConflictTypes: ["Hard conflict"],
   },
+  {
+    id: "launch-resource-shortfall",
+    description: "A launch scope needs more design capacity than Operations can supply.",
+    input: {
+      title: "Prepare launch creative",
+      objective: "Finish all campaign assets before brand review.",
+      successMetric: "All approved assets ready on time",
+      createdBy: "Mina",
+      sources: [
+        { type: "Notion", title: "Creative plan", author: "Creative lead", content: "The launch needs 4 designers to finish on time.", authorityLevel: 4 },
+        { type: "Slack", title: "Staffing update", author: "Operations", content: "Only 2 designers are available this week.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: ["Resource conflict"],
+  },
+  {
+    id: "public-release-authority-gap",
+    description: "A public action requires approval but no authorized approver is named.",
+    input: {
+      title: "Publish the launch announcement",
+      objective: "Prepare a safe public launch announcement.",
+      successMetric: "One correctly approved announcement",
+      createdBy: "Ari",
+      sources: [
+        { type: "Email", title: "Executive instruction", author: "Executive office", content: "The announcement cannot be published without explicit approval.", authorityLevel: 5 },
+        { type: "Notion", title: "Launch checklist", author: "Growth", content: "The draft is ready, but no approver or approval lifetime is assigned.", authorityLevel: 3 },
+      ],
+    },
+    expectedConflictTypes: ["Authority conflict"],
+  },
+  {
+    id: "ads-payment-dependency",
+    description: "The paid launch depends on an advertising account that has no payment method.",
+    input: {
+      title: "Launch a paid acquisition campaign",
+      objective: "Activate paid distribution after all account dependencies are verified.",
+      successMetric: "Campaign ready without a failed launch",
+      createdBy: "Jules",
+      sources: [
+        { type: "Ads", title: "Campaign plan", author: "Growth", content: "The launch needs the Meta Ads campaign to be activated.", authorityLevel: 4 },
+        { type: "Ads", title: "Account status", author: "Ads administrator", content: "The advertising account is missing a verified payment method.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: ["Dependency conflict"],
+  },
 ];

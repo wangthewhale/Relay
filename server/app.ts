@@ -11,11 +11,33 @@ import { databaseHealth } from "./db";
 import { compilePlan } from "./compiler";
 import { compileIntent, compilerRuntimeStatus } from "./intelligence";
 import { ConflictError, NotFoundError, store } from "./store";
+import {
+  createGuestSession,
+  createMissionShare,
+  enforceSameOrigin,
+  resolveRequestScope,
+  setSessionCookie,
+  systemScope,
+} from "./security";
 
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "2mb" }));
+  app.use((_request, response, next) => {
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.setHeader("X-Frame-Options", "DENY");
+    response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    response.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; connect-src 'self'; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'");
+    next();
+  });
+  app.use((request, _response, next) => {
+    try {
+      if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) enforceSameOrigin(request);
+      next();
+    } catch (error) { next(error); }
+  });
 
   app.get("/api/health", async (_request, response, next) => {
     try {
@@ -41,10 +63,28 @@ export function createApp() {
     });
   });
 
+  app.post("/api/session/guest", async (request, response, next) => {
+    try {
+      const session = await createGuestSession({
+        name: typeof request.body?.name === "string" ? request.body.name : undefined,
+        workspaceName: typeof request.body?.workspaceName === "string" ? request.body.workspaceName : undefined,
+      });
+      setSessionCookie(response, session.rawToken);
+      response.status(201).json({ session: { actorName: session.scope.actorName, workspaceId: session.scope.kind === "session" ? session.scope.workspaceId : "", expiresAt: session.expiresAt, workspaceName: session.workspaceName } });
+    } catch (error) { next(error); }
+  });
+
+  app.get("/api/session", async (request, response, next) => {
+    try {
+      const scope = await resolveRequestScope(request, { sessionOnly: true });
+      response.json({ session: { actorName: scope.actorName, workspaceId: scope.kind === "session" ? scope.workspaceId : "" } });
+    } catch (error) { next(error); }
+  });
+
   app.get("/api/demo", async (_request, response, next) => {
     try {
       const missionId = await store.seedDemo();
-      response.json({ mission: await store.getMission(missionId), readOnly: true });
+      response.json({ mission: await store.getMission(missionId, systemScope), readOnly: true });
     } catch (error) { next(error); }
   });
 
@@ -96,15 +136,21 @@ export function createApp() {
     } catch (error) { next(error); }
   });
 
-  app.get("/api/missions", async (_request, response, next) => {
+  app.get("/api/public/reports/:slug", async (request, response, next) => {
+    try { response.json({ report: await store.getPublicReport(request.params.slug) }); } catch (error) { next(error); }
+  });
+
+  app.get("/api/missions", async (request, response, next) => {
     try {
-      response.json({ missions: await store.listMissions() });
+      const scope = await resolveRequestScope(request, { sessionOnly: true });
+      response.json({ missions: await store.listMissions(scope) });
     } catch (error) { next(error); }
   });
 
-  app.get("/api/dashboard", async (_request, response, next) => {
+  app.get("/api/dashboard", async (request, response, next) => {
     try {
-      const missions = await store.listMissions();
+      const scope = await resolveRequestScope(request, { sessionOnly: true });
+      const missions = await store.listMissions(scope);
       response.json({
         missions,
         metrics: {
@@ -119,60 +165,88 @@ export function createApp() {
   });
 
   app.get("/api/missions/:id", async (request, response, next) => {
-    try { response.json({ mission: await store.getMission(request.params.id) }); } catch (error) { next(error); }
+    try {
+      const scope = await resolveRequestScope(request);
+      response.json({ mission: await store.getMission(request.params.id, scope), access: scope.kind === "share" ? (scope.canWrite ? "editor" : "viewer") : "workspace" });
+    } catch (error) { next(error); }
   });
 
   app.post("/api/missions", async (request, response, next) => {
     try {
-      const input = createMissionSchema.parse(request.body);
-      const mission = await store.createMission(input);
+      const scope = await resolveRequestScope(request, { sessionOnly: true, write: true });
+      const input = createMissionSchema.parse({ ...request.body, createdBy: scope.actorName });
+      const mission = await store.createMission(input, scope);
       response.status(201).json({ mission });
     } catch (error) { next(error); }
   });
 
   app.post("/api/missions/:id/compile", async (request, response, next) => {
-    try { response.json({ mission: await store.compileMission(request.params.id) }); } catch (error) { next(error); }
+    try {
+      const scope = await resolveRequestScope(request, { write: true });
+      response.json({ mission: await store.compileMission(request.params.id, scope) });
+    } catch (error) { next(error); }
   });
 
   app.post("/api/conflicts/:id/resolve", async (request, response, next) => {
     try {
-      const input = resolveConflictSchema.parse(request.body);
-      response.json({ mission: await store.resolveConflict(request.params.id, input) });
+      const scope = await resolveRequestScope(request, { write: true });
+      const input = resolveConflictSchema.parse({ ...request.body, decidedBy: scope.actorName });
+      response.json({ mission: await store.resolveConflict(request.params.id, input, scope) });
     } catch (error) { next(error); }
   });
 
   app.post("/api/missions/:id/plan", async (request, response, next) => {
     try {
-      const actor = typeof request.body?.actor === "string" ? request.body.actor : "Mission owner";
-      response.json({ mission: await store.recompilePlan(request.params.id, actor) });
+      const scope = await resolveRequestScope(request, { write: true });
+      response.json({ mission: await store.recompilePlan(request.params.id, scope.actorName, scope) });
     } catch (error) { next(error); }
   });
 
   app.post("/api/approvals/:id/decide", async (request, response, next) => {
     try {
-      const input = approvalDecisionSchema.parse(request.body);
-      response.json({ mission: await store.decideApproval(request.params.id, input) });
+      const scope = await resolveRequestScope(request, { write: true });
+      const input = approvalDecisionSchema.parse({ ...request.body, decidedBy: scope.actorName });
+      response.json({ mission: await store.decideApproval(request.params.id, input, scope) });
     } catch (error) { next(error); }
   });
 
   app.post("/api/tasks/:id/run", async (request, response, next) => {
     try {
-      const actor = typeof request.body?.actor === "string" ? request.body.actor : "Relay Agent";
-      response.json(await store.runTask(request.params.id, actor));
+      const scope = await resolveRequestScope(request, { write: true });
+      response.json(await store.runTask(request.params.id, "Relay verified executor", scope));
     } catch (error) { next(error); }
   });
 
   app.post("/api/missions/:id/corrections", async (request, response, next) => {
     try {
-      const input = correctionSchema.parse(request.body);
-      response.json({ mission: await store.addCorrection(request.params.id, input) });
+      const scope = await resolveRequestScope(request, { write: true });
+      const input = correctionSchema.parse({ ...request.body, author: scope.actorName });
+      response.json({ mission: await store.addCorrection(request.params.id, input, scope) });
     } catch (error) { next(error); }
   });
 
   app.put("/api/missions/:id/outcome", async (request, response, next) => {
     try {
+      const scope = await resolveRequestScope(request, { write: true });
       const input = outcomeSchema.parse(request.body);
-      response.json({ mission: await store.updateOutcome(request.params.id, input) });
+      response.json({ mission: await store.updateOutcome(request.params.id, input, scope) });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/missions/:id/shares", async (request, response, next) => {
+    try {
+      const scope = await resolveRequestScope(request, { sessionOnly: true, write: true });
+      await store.getMission(request.params.id, scope);
+      const permission = request.body?.permission === "viewer" ? "viewer" : "editor";
+      const share = await createMissionShare({ missionId: request.params.id, permission, createdBy: scope.kind === "session" ? scope.userId : undefined });
+      response.status(201).json({ share });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/missions/:id/reports", async (request, response, next) => {
+    try {
+      const scope = await resolveRequestScope(request, { write: true });
+      response.status(201).json({ report: await store.createPublicReport(request.params.id, scope) });
     } catch (error) { next(error); }
   });
 
@@ -180,7 +254,7 @@ export function createApp() {
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     const maybeError = error as { status?: number; message?: string; details?: unknown; issues?: unknown };
-    const status = error instanceof NotFoundError || error instanceof ConflictError ? error.status : maybeError.issues ? 400 : 500;
+    const status = error instanceof NotFoundError || error instanceof ConflictError ? error.status : maybeError.status ?? (maybeError.issues ? 400 : 500);
     if (status === 500) console.error(error);
     response.status(status).json({
       error: maybeError.message || "Relay could not complete the request.",

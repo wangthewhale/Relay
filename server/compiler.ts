@@ -114,6 +114,49 @@ function extractDeterministicSemanticSignals(assertions: IntentAssertion[], sour
       }, 0.9);
     }
   }
+
+  const resourcePatterns = [
+    {
+      state: "required",
+      pattern: /(?:requires?|needs?|must have|at least)\s+(\d+)\s+(people|designers?|writers?|engineers?|reviewers?|hours?|days?)/gi,
+    },
+    {
+      state: "available",
+      pattern: /(?:we\s+have\s+)?(?:only\s+|just\s+)?(\d+)\s+(people|designers?|writers?|engineers?|reviewers?|hours?|days?)\s+(?:are\s+)?available/gi,
+    },
+    {
+      state: "required",
+      pattern: /(?:需要|至少要)\s*(\d+)\s*(位設計師|位工程師|位撰稿人|位審核人員|人|小時|天)/g,
+    },
+    {
+      state: "available",
+      pattern: /(?:只有|僅有|目前可用)\s*(\d+)\s*(位設計師|位工程師|位撰稿人|位審核人員|人|小時|天)/g,
+    },
+  ] as const;
+
+  for (const { state, pattern } of resourcePatterns) {
+    for (const match of content.matchAll(pattern)) {
+      const value = Number(match[1]);
+      const rawUnit = match[2].toLowerCase();
+      const resourceKey = rawUnit
+        .replace(/^位/, "")
+        .replace(/s$/, "")
+        .replace(/^designer$/, "設計師")
+        .replace(/^engineer$/, "工程師")
+        .replace(/^writer$/, "撰稿人")
+        .replace(/^reviewer$/, "審核人員")
+        .replace(/^people$/, "人")
+        .replace(/^hour$/, "小時")
+        .replace(/^day$/, "天");
+      pushAssertion(assertions, source, match[0], "Constraint", {
+        resourceKey,
+        resourceState: state,
+        resourceValue: value,
+        context: content,
+        origin: "deterministic_resource_signal",
+      }, 0.93);
+    }
+  }
 }
 
 export function extractAssertions(input: CreateMissionInput, sources: StoredSource[]): IntentAssertion[] {
@@ -259,6 +302,38 @@ function conflictBase(partial: Omit<Conflict, "id" | "status" | "createdAt">): C
 
 export function detectConflicts(assertions: IntentAssertion[]): Conflict[] {
   const conflicts: Conflict[] = [];
+
+  const resourceGroups = new Map<string, IntentAssertion[]>();
+  for (const assertion of assertions) {
+    if (typeof assertion.metadata.resourceKey !== "string" || typeof assertion.metadata.resourceValue !== "number") continue;
+    const key = assertion.metadata.resourceKey;
+    resourceGroups.set(key, [...(resourceGroups.get(key) ?? []), assertion]);
+  }
+  for (const [resourceKey, resourceAssertions] of resourceGroups) {
+    const required = resourceAssertions.filter((assertion) => assertion.metadata.resourceState === "required");
+    const available = resourceAssertions.filter((assertion) => assertion.metadata.resourceState === "available");
+    const requiredValue = Math.max(...required.map((assertion) => Number(assertion.metadata.resourceValue)));
+    const availableValue = Math.max(...available.map((assertion) => Number(assertion.metadata.resourceValue)));
+    if (!required.length || !available.length || requiredValue <= availableValue) continue;
+    conflicts.push(
+      conflictBase({
+        type: "Resource conflict",
+        title: `Not enough ${resourceKey} for the current plan`,
+        summary: `The plan requires ${requiredValue} ${resourceKey}, but the available capacity is ${availableValue}.`,
+        severity: "high",
+        blocking: true,
+        sourceAssertionIds: [...required, ...available].map((assertion) => assertion.id),
+        decisionOwner: "Operations owner",
+        consequences: "The current scope cannot finish on time without reducing work, adding capacity, or changing the deadline.",
+        options: optionSet(
+          `Reduce the plan to fit the verified capacity of ${availableValue} ${resourceKey}.`,
+          `Add ${requiredValue - availableValue} ${resourceKey} and recompile the budget and ownership plan.`,
+          "Move the deadline and require the mission owner to approve the new delivery date.",
+        ),
+      }),
+    );
+  }
+
   const budgets = assertions.filter((assertion) => assertion.type === "Budget" && typeof assertion.metadata.value === "number");
   const uniqueBudgets = [...new Set(budgets.map((assertion) => Number(assertion.metadata.value)))];
   if (uniqueBudgets.length > 1) {

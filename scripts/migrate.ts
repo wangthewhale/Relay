@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
 
@@ -10,9 +10,15 @@ if (!databaseUrl) {
 
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
 try {
-  const sql = await readFile(path.resolve(process.cwd(), "migrations/0001_relay_core.sql"), "utf8");
-  await pool.query(sql);
-  console.log("Relay database migration 0001_relay_core applied.");
+  const migrationDirectory = path.resolve(process.cwd(), "migrations");
+  const files = (await readdir(migrationDirectory))
+    .filter((file) => /^\d+_.+\.sql$/.test(file))
+    .sort();
+  for (const file of files) {
+    const sql = await readFile(path.join(migrationDirectory, file), "utf8");
+    await pool.query(sql);
+    console.log(`Relay database migration ${file} applied.`);
+  }
 } finally {
   await pool.end();
 }

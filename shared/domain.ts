@@ -169,6 +169,59 @@ export interface PreflightResult {
   checks: Array<{ name: string; passed: boolean; detail: string; nextAction?: string }>;
 }
 
+export interface Artifact {
+  id: string;
+  taskId: string;
+  planVersion: number;
+  type: "evidence_manifest" | "execution_brief" | "outcome_report";
+  title: string;
+  content: Record<string, unknown>;
+  contentHash: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ExecutionReceipt {
+  id: string;
+  taskId: string;
+  taskKey: string;
+  planVersion: number;
+  idempotencyKey: string;
+  executor: string;
+  status: "succeeded" | "blocked" | "failed";
+  preflight: PreflightResult;
+  artifactId?: string;
+  artifactHash?: string;
+  summary: string;
+  createdAt: string;
+}
+
+export interface PublicMissionReport {
+  slug: string;
+  missionTitle: string;
+  planVersion: number;
+  generatedAt: string;
+  expiresAt: string;
+  sourcesAnalyzed: number;
+  assertionsCompiled: number;
+  conflictsFound: number;
+  riskyActionsStopped: number;
+  evidenceCoverage: number;
+  sourceTypes: string[];
+  primaryConflicts: Array<{
+    type: ConflictType;
+    title: string;
+    severity: Conflict["severity"];
+    decisionOwner: string;
+    nextSafeAction: string;
+  }>;
+  executionProof?: {
+    taskKey: string;
+    executor: string;
+    artifactHash: string;
+  };
+}
+
 export interface AccessRequirement {
   id: string;
   provider: string;
@@ -297,6 +350,8 @@ export interface MissionDetail extends MissionSummary {
   planVersions: PlanVersion[];
   currentPlan?: PlanVersion;
   auditEvents: AuditEvent[];
+  artifacts: Artifact[];
+  executionReceipts: ExecutionReceipt[];
   compilerReceipt?: CompilerReceipt;
   outcome?: Outcome;
   createdAt: string;

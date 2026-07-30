@@ -18,8 +18,13 @@ Relay turns conflicting goals, constraints and instructions into a versioned, pe
 - Mission Room, corrections, audit ledger and outcome tracking
 - Mission-scoped Access Blueprint with truthful connector states
 - PostgreSQL persistence through `DATABASE_URL`
+- Hybrid intent compilation: an OpenAI semantic proposal stage followed by source validation and deterministic safety gates
+- A user-visible compiler receipt with model provenance, evidence coverage, rejected candidates, confidence and zero-write verification
+- Fail-closed degradation to the deterministic compiler when the model is not configured, times out, refuses, or returns an invalid schema
 
 The connector screens do not simulate OAuth success. Providers remain `not_connected` until a real authorization, resource-scope verification and Access Manifest flow exists.
+
+The model never receives connector credentials and never decides whether an action is authorized. Model output is a proposal. Relay code rejects candidates without exact source evidence and computes blocking, approval and execution boundaries after the model returns.
 
 ## Local development
 
@@ -46,6 +51,7 @@ Migrations are idempotent and live in [`migrations/`](./migrations).
 npm run check
 npm test
 npm run build
+OPENAI_API_KEY=... npm run eval:compiler
 NODE_ENV=production DATABASE_URL=postgresql://... npm start
 ```
 

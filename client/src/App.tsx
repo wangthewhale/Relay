@@ -14,7 +14,7 @@ import { localizeDomainText, localizeLabel, localizePayloadKey, tr, useLocale } 
 import { parseQuickMission } from "./quickMission";
 import CoworkReplay from "./CoworkReplay";
 import type {
-  ApprovalRequest, Conflict, CreateMissionInput, ExecutionTask, MissionDetail, MissionSummary, Outcome, PlanVersion, SourceInput,
+  ApprovalRequest, CompilerReceipt, Conflict, CreateMissionInput, ExecutionTask, MissionDetail, MissionSummary, Outcome, PlanVersion, SourceInput,
 } from "@shared/domain";
 
 type DashboardResponse = {
@@ -23,11 +23,18 @@ type DashboardResponse = {
 };
 
 type CompilerPreview = {
-  receipt: { sources: number; assertions: number; conflicts: number; blocking: number };
+  receipt: { sources: number; assertions: number; conflicts: number; blocking: number; compiler: CompilerReceipt };
   conflict: Conflict | null;
   evidence: Array<{ id: string; statement: string; assertionType: string; sourceType: string; sourceTitle: string; author: string }>;
   execution: { tasks: number; agentTasks: number; blockedAgents: number; requiredProviders: number };
   saved: false;
+};
+
+type CompilerRuntime = {
+  mode: "hybrid" | "policy_only";
+  model?: string;
+  policyEngine: string;
+  truthfulFallback: boolean;
 };
 
 const navigation = [
@@ -57,15 +64,25 @@ function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
 }
 
 const relayAgentDefinitions = [
-  { name: ["Source organizer", "資料整理 AI"], action: ["Labels every instruction with its source", "把每句話標上來源"], icon: FileCheck2 },
-  { name: ["Conflict checker", "矛盾檢查 AI"], action: ["Compares dates, budgets and rules", "比對日期、預算與規則"], icon: MessageSquareWarning },
-  { name: ["Safety coordinator", "安全協調 AI"], action: ["Stops risky work and names the next step", "停住風險並指出下一步"], icon: ShieldCheck },
+  { name: ["Evidence parser", "證據解析器"], action: ["Labels every claim with its exact source", "把每項主張綁回原始來源"], kind: ["Deterministic worker", "確定性程式"], icon: FileCheck2 },
+  { name: ["Semantic challenger", "語意挑戰 Agent"], action: ["Proposes contradictions beyond keyword matches", "找出關鍵字以外的語意矛盾"], kind: ["OpenAI model", "OpenAI 模型"], icon: MessageSquareWarning },
+  { name: ["Safety policy gate", "安全政策閘門"], action: ["Rejects weak evidence and blocks unsafe action", "剔除弱證據並阻擋不安全行動"], kind: ["Deterministic code", "確定性程式"], icon: ShieldCheck },
 ] as const;
+
+const relayPolicyDefinitions = [
+  relayAgentDefinitions[0],
+  { name: ["Conflict detector", "衝突偵測器"], action: ["Tests dates, budgets, policies and dependencies", "比對日期、預算、政策與依賴條件"], kind: ["Deterministic code", "確定性程式"], icon: MessageSquareWarning },
+  relayAgentDefinitions[2],
+] as const;
+
+function compilerDefinitions(modelEnabled: boolean) {
+  return modelEnabled ? relayAgentDefinitions : relayPolicyDefinitions;
+}
 
 function RelayJourney({ active }: { active: 1 | 2 | 3 }) {
   const steps = [
     { label: tr("You", "你"), title: tr("Paste what everyone said", "貼上大家說過的話"), icon: FileText },
-    { label: "Relay AI", title: tr("Find conflicts and pause risk", "找矛盾、先停風險"), icon: Bot },
+    { label: "Relay", title: tr("Find conflicts and pause risk", "找矛盾、先停風險"), icon: Bot },
     { label: tr("Your team", "你的團隊"), title: tr("Invite teammates to decide", "邀請同事一起決定"), icon: UsersRound },
   ];
   return <ol className="relay-journey" aria-label={tr("Relay three-step workflow", "Relay 三步驟使用流程")}>
@@ -120,7 +137,7 @@ function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: () => 
   const sourceLines = brief.split("\n").filter((line) => /^(Slack|Email|Calendar|Notion|Manual|CRM|Ads)[｜|]/i.test(line)).slice(0, 3);
 
   return <div className="magic-compiler" id="magic" aria-live="polite">
-    <div className="magic-topbar"><span><Braces size={14} /> {tr("LIVE INTENT COMPILER", "真實意圖編譯器")}</span><span className="magic-runtime"><span /> {tr("RUNNING REAL RULES", "執行真實規則")}</span></div>
+    <div className="magic-topbar"><span><Braces size={14} /> {tr("LIVE INTENT COMPILER", "真實意圖編譯器")}</span><span className="magic-runtime"><span /> {preview?.receipt.compiler.mode === "hybrid" ? tr("MODEL + POLICY GATE", "模型 + 政策閘門") : tr("EVIDENCE-SAFE PREVIEW", "證據安全預覽")}</span></div>
     <div className="magic-input">
       <div className="magic-input-head"><div><span>01 / {tr("MESSY BRIEF", "混亂 BRIEF")}</span><b>{tr("7 sources disagree", "7 個來源互相矛盾")}</b></div><button type="button" onClick={() => setEditing((value) => !value)}>{editing ? tr("Close editor", "收起編輯") : tr("Edit the evidence", "編輯來源")}</button></div>
       {editing ? <div className="magic-editor"><textarea aria-label={tr("Mission brief to compile", "要編譯的 Mission Brief")} value={brief} onChange={(event) => setBrief(event.target.value)} rows={10} /><button className="button button-primary button-full" type="button" disabled={busy || brief.trim().length < 10} onClick={() => { void compilePreview(brief); }}>{busy ? <><span className="loader small" /> {tr("Compiling…", "編譯中…")}</> : <><Zap size={16} /> {tr("Run the real compiler", "執行真實編譯")}</>}</button></div>
@@ -128,7 +145,7 @@ function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: () => 
     </div>
     <div className="magic-compile-rail"><span /><Zap size={17} /><b>{busy ? tr("COMPILING", "編譯中") : tr("CONTRACT CHECKED", "合約已檢查")}</b><span /></div>
     {busy && !preview ? <div className="magic-loading"><span className="loader" /><p>{tr("Extracting assertions and testing execution gates…", "正在拆解主張並檢查執行關卡…")}</p></div> : error ? <div className="magic-error"><AlertOctagon /><p>{error}</p><button onClick={() => { void compilePreview(brief); }}>{tr("Try again", "再試一次")}</button></div> : result && preview ? <div className="magic-result">
-      <div className="magic-receipt"><span>{tr("COMPILER RECEIPT", "編譯器憑據")}</span><div><b>{preview.receipt.sources}</b><small>{tr("sources", "來源")}</small></div><div><b>{preview.receipt.assertions}</b><small>{tr("assertions", "主張")}</small></div><div><b>{preview.receipt.conflicts}</b><small>{tr("conflicts", "衝突")}</small></div></div>
+      <div className="magic-receipt"><span>{tr("COMPILER RECEIPT", "編譯器憑據")}</span><div><b>{preview.receipt.sources}</b><small>{tr("sources", "來源")}</small></div><div><b>{preview.receipt.assertions}</b><small>{tr("assertions", "主張")}</small></div><div><b>{preview.receipt.conflicts}</b><small>{tr("conflicts", "衝突")}</small></div><div><b>{preview.receipt.compiler.evidenceCoverage}%</b><small>{tr("evidence linked", "證據覆蓋")}</small></div></div>
       <div className="magic-stop"><span className="magic-stop-icon"><CircleStop size={22} /></span><div><span>{tr("RELAY STOPPED EXECUTION", "RELAY 已停止執行")}</span><h3>{localizeDomainText(result.title)}</h3><p>{localizeDomainText(result.summary)}</p></div><span className="severity-pill">{localizeLabel(result.severity)}</span></div>
       <div className="magic-evidence"><span>{tr("WHY", "為什麼")}</span>{preview.evidence.slice(0, 2).map((item) => <div key={item.id}><FlowSourceIcon type={item.sourceType} /><p><b>{localizeDomainText(item.statement)}</b><small>{localizeLabel(item.sourceType)} · {localizeDomainText(item.author)}</small></p></div>)}</div>
       <div className="magic-control"><div><span><Bot size={14} /> {preview.execution.blockedAgents} {tr("agent tasks paused", "個 Agent 任務已暫停")}</span><span><LockKeyhole size={14} /> {preview.execution.requiredProviders} {tr("scoped providers", "個權限範圍")}</span></div><p><Sparkles size={15} /><span><b>{tr("NEXT SAFE ACTION", "下一步安全行動")}</b>{localizeDomainText(recommended?.description ?? result.consequences)}</span></p><button className="button button-primary button-full" type="button" onClick={onOpenFullMission}>{tr("Turn this into an execution contract", "把它變成可執行合約")} <ArrowRight size={17} /></button></div>
@@ -214,11 +231,11 @@ function LandingPage() {
           <div className="hero-copy">
             <div className="eyebrow"><span className="pulse-dot" /> {tr("A SIMPLE CONTROL ROOM FOR HUMANS + AI", "給人類與 AI 團隊共用的簡單控制室")}</div>
             <h1>{locale === "zh-TW" ? <><span className="hero-line">把大家說過的話</span><span className="hero-line">貼進來。</span><span className="hero-line hero-accent-line">Relay 先找出哪裡打架。</span></> : <><span className="hero-line">Paste what everyone said.</span><span className="hero-line hero-accent-line">Relay finds what conflicts.</span></>}</h1>
-            <h2>{locale === "zh-TW" ? <>不用先整理，也不用先搞懂 Agent。Relay 的三個 AI 工作角色會<b>整理來源、找出矛盾、停住有風險的工作</b>，再請正確的人做決定。</> : <>No setup or agent design required. Three Relay AI roles <b>organize sources, find conflicts and pause risky work</b>, then ask the right human to decide.</>}</h2>
+            <h2>{locale === "zh-TW" ? <>不用先整理，也不用先搞懂 Agent。Relay 會<b>整理來源、找出矛盾、停住有風險的工作</b>，再請正確的人做決定。</> : <>No setup or agent design required. Relay <b>organizes sources, finds conflicts and pauses risky work</b>, then asks the right human to decide.</>}</h2>
             <p>{tr("Start with one real task your team is already discussing. You can invite teammates after Relay finds the first decision.", "先拿團隊正在討論的一件真實任務開始。Relay 找到第一個待決定問題後，再邀請同事進來就好。")}</p>
             <div className="hero-actions">
               <button className="button button-primary button-large" onClick={() => navigate("/missions/new")}>{tr("Step 1: paste a task", "第一步：貼上任務")} <ArrowRight size={18} /></button>
-              <button className="button button-ghost button-large" onClick={() => document.getElementById("magic")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Play size={17} fill="currentColor" /> {tr("See the three AI roles", "先看三個 AI 角色")}</button>
+              <button className="button button-ghost button-large" onClick={() => document.getElementById("magic")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Play size={17} fill="currentColor" /> {tr("See Relay check the mission", "看 Relay 怎麼檢查")}</button>
             </div>
             <RelayJourney active={1} />
             <p className="agent-definition"><Bot size={16} /><span><b>{tr("What is an AI agent here?", "這裡的 AI Agent 是什麼？")}</b>{tr("A software role that performs one clearly named job—not a person and not an autonomous employee.", "它是只負責一種明確工作的軟體角色，不是真人，也不是會自行做主的虛擬員工。")}</span></p>
@@ -353,6 +370,7 @@ type CompileRunSummary = {
   agentTasks: number;
   blockedAgentTasks: number;
   planVersion: number;
+  compilerReceipt?: CompilerReceipt;
 };
 
 type CompileRunMomentState = {
@@ -365,23 +383,90 @@ type CompileRunMomentState = {
 
 const waitForMoment = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
-function CompileRunMoment({ state, onClose }: { state: CompileRunMomentState; onClose: () => void }) {
+function CompilerTrustReceipt({ receipt, compact = false }: { receipt: CompilerReceipt; compact?: boolean }) {
+  const hybrid = receipt.mode === "hybrid" && receipt.modelUsed;
+  const localizedCheck = (check: CompilerReceipt["checks"][number]) => {
+    switch (check.id) {
+      case "source_lineage":
+        return {
+          label: tr("Source lineage", "來源鏈結"),
+          detail: tr(
+            `${receipt.evidenceCoverage}% of accepted assertions retain source lineage.`,
+            `${receipt.evidenceCoverage}% 的已接受主張保留可追溯來源。`,
+          ),
+        };
+      case "semantic_model":
+        return {
+          label: tr("Semantic proposal", "語意提案"),
+          detail: hybrid
+            ? tr(
+              `${receipt.modelName ?? "OpenAI model"} proposed meaning; it received no execution authority.`,
+              `${receipt.modelName ?? "OpenAI 模型"} 只提出語意判讀，不具任何執行權。`,
+            )
+            : tr(
+              "Deterministic safety rules completed the run without model output.",
+              "本次沒有模型輸出，改由確定性安全規則完成。",
+            ),
+        };
+      case "evidence_validation":
+        return {
+          label: tr("Evidence validation", "證據驗證"),
+          detail: tr(
+            `${receipt.rejectedCandidates} unsupported or low-confidence candidates were rejected.`,
+            `有 ${receipt.rejectedCandidates} 個缺乏證據或低信心候選被剔除。`,
+          ),
+        };
+      case "policy_gate":
+        return {
+          label: tr("Deterministic policy gate", "確定性政策閘門"),
+          detail: hybrid
+            ? tr(
+              "Blocking, authority and approval rules were recomputed in code after model output.",
+              "模型輸出後，阻擋、權限與核准仍由程式重新計算。",
+            )
+            : tr(
+              "Blocking, authority and approval rules were computed by deterministic code.",
+              "阻擋、權限與核准皆由確定性程式計算。",
+            ),
+        };
+      case "execution_boundary":
+        return {
+          label: tr("Execution boundary", "執行邊界"),
+          detail: tr(
+            "This compilation made zero external writes and granted zero tool credentials.",
+            "本次外部寫入為 0，工具憑證授予為 0。",
+          ),
+        };
+    }
+  };
+  return <section className={`compiler-trust-receipt ${compact ? "compact" : ""} ${hybrid ? "hybrid" : "fallback"}`} aria-label={tr("Compiler trust receipt", "編譯可信收據")}>
+    <div className="compiler-trust-head"><span><Network size={18} /></span><div><small>{hybrid ? tr("HYBRID INTELLIGENCE", "混合式智慧") : tr("SAFE FALLBACK", "安全降級")}</small><b>{hybrid ? tr("The model proposed. Relay's code decided.", "模型提出判讀，Relay 程式負責裁決。") : tr("Relay did not pretend a model ran.", "Relay 沒有假裝模型已執行。")}</b><p>{hybrid ? `${receipt.modelName ?? tr("OpenAI model", "OpenAI 模型")} + ${receipt.engineVersion}` : tr("Deterministic safety rules completed this run.", "本次由確定性安全規則完成分析。")}</p></div><strong>{receipt.evidenceCoverage}%<small>{tr("evidence linked", "證據覆蓋")}</small></strong></div>
+    <div className="compiler-trust-metrics"><span><b>{receipt.averageConfidence}%</b><small>{tr("avg confidence", "平均信心")}</small></span><span><b>+{receipt.semanticConflictsAccepted}</b><small>{tr("semantic conflicts", "語意衝突")}</small></span><span><b>{receipt.rejectedCandidates}</b><small>{tr("claims rejected", "剔除候選")}</small></span><span><b>0</b><small>{tr("external writes", "外部寫入")}</small></span></div>
+    {!compact && <details className="compiler-trust-details"><summary>{tr("See exactly what Relay checked", "查看 Relay 實際檢查了什麼")} <ChevronDown size={15} /></summary><div>{receipt.checks.map((check) => { const copy = localizedCheck(check); return <p key={check.id}><span className={check.status}>{check.status === "passed" ? <Check size={13} /> : <AlertOctagon size={13} />}</span><b>{copy.label}</b><small>{copy.detail}</small></p>; })}</div></details>}
+  </section>;
+}
+
+function CompileRunMoment({ state, runtime, onClose }: { state: CompileRunMomentState; runtime: CompilerRuntime; onClose: () => void }) {
   if (!state.open) return null;
-  const steps = relayAgentDefinitions.map((agent) => ({ name: tr(agent.name[0], agent.name[1]), action: tr(agent.action[0], agent.action[1]), icon: agent.icon }));
+  const hybrid = state.summary?.compilerReceipt
+    ? state.summary.compilerReceipt.mode === "hybrid" && state.summary.compilerReceipt.modelUsed
+    : runtime.mode === "hybrid";
+  const definitions = compilerDefinitions(hybrid);
+  const steps = definitions.map((agent) => ({ name: tr(agent.name[0], agent.name[1]), action: tr(agent.action[0], agent.action[1]), icon: agent.icon }));
   const activeStep = Math.min(state.phase, steps.length - 1);
   return <div className="compile-run-backdrop" role="dialog" aria-modal="true" aria-labelledby="compile-run-title">
     <section className={"compile-run-moment" + (state.error ? " has-error" : "")} aria-live="polite">
-      <div className="compile-run-topline"><span><span className="compile-live-dot" /> {tr("LIVE RELAY RUN", "RELAY 即時執行")}</span><small>{tr("Real compiler · read-only analysis", "真實編譯器 · 唯讀分析")}</small></div>
-      <div className="compile-run-heading"><span className="compile-run-mark"><Sparkles /></span><div><p>{tr("STEP 2 OF 3 · RELAY AI TEAM", "第 2 步（共 3 步）· RELAY AI 團隊")}</p><h2 id="compile-run-title">{state.error ? tr("The run stopped safely.", "這次執行已安全停止。") : tr("Three AI roles are working. Each one has one clear job.", "三個 AI 工作角色正在處理，每個只負責一件事。")}</h2></div></div>
+      <div className="compile-run-topline"><span><span className="compile-live-dot" /> {tr("LIVE RELAY RUN", "RELAY 即時執行")}</span><small>{hybrid ? tr("Model proposes · policy engine decides", "模型提案 · 政策引擎決定") : tr("Evidence rules · policy engine", "證據規則 · 政策引擎")}</small></div>
+      <div className="compile-run-heading"><span className="compile-run-mark"><Sparkles /></span><div><p>{hybrid ? tr("STEP 2 OF 3 · HYBRID COMPILER", "第 2 步（共 3 步）· 混合式編譯器") : tr("STEP 2 OF 3 · SAFE COMPILER", "第 2 步（共 3 步）· 安全編譯器")}</p><h2 id="compile-run-title">{state.error ? tr("The run stopped safely.", "這次執行已安全停止。") : hybrid ? tr("One model challenges the meaning. Two code gates keep it honest.", "一個模型挑戰語意，兩道程式閘門負責守真。") : tr("Three deterministic checks build a source-backed contract.", "三道確定性檢查，建立有來源依據的合約。")}</h2></div></div>
       {!state.error ? <>
         <div className="compile-run-canvas" aria-hidden="true">
           <div className="compile-input-summary"><Braces size={18} /><span><small>{tr("YOU GAVE RELAY", "你交給 RELAY")}</small><b>{state.sourceCount} {tr("source messages", "則來源訊息")}</b></span><ArrowRight size={17} /></div>
-          <div className="compile-agent-orbit">{steps.map((step, index) => { const Icon = step.icon; const stateName = index < activeStep ? "done" : index === activeStep ? "running" : "waiting"; return <div className={"compile-agent-node " + stateName} key={step.name}><span><Icon size={17} /></span><small>{tr("AI WORK ROLE", "AI 工作角色")}</small><b>{step.name}</b><em>{step.action}</em>{stateName === "done" ? <Check size={13} /> : stateName === "running" ? <span className="agent-pulse" /> : null}</div>; })}</div>
+          <div className="compile-agent-orbit">{steps.map((step, index) => { const Icon = step.icon; const stateName = index < activeStep ? "done" : index === activeStep ? "running" : "waiting"; return <div className={"compile-agent-node " + stateName} key={step.name}><span><Icon size={17} /></span><small>{tr(definitions[index].kind[0], definitions[index].kind[1])}</small><b>{step.name}</b><em>{step.action}</em>{stateName === "done" ? <Check size={13} /> : stateName === "running" ? <span className="agent-pulse" /> : null}</div>; })}</div>
         </div>
         <div className="compile-current-step"><span>{String(activeStep + 1).padStart(2, "0")}</span><div><small>{steps[activeStep].name}</small><b>{steps[activeStep].action}</b></div><span className="loader small" /></div>
-        {state.summary ? <div className="compile-run-receipt"><span>{tr("LIVE RECEIPT", "即時憑據")}</span><div><b>{state.summary.sources}</b><small>{tr("sources", "來源")}</small></div><div><b>{state.summary.assertions}</b><small>{tr("assertions", "主張")}</small></div><div className="danger"><b>{state.summary.conflicts}</b><small>{tr("conflicts", "衝突")}</small></div><div><b>{state.summary.blockedAgentTasks}</b><small>{tr("agents held", "Agent 暫停")}</small></div></div> : <div className="compile-run-placeholder"><span /><span /><span /></div>}
+        {state.summary ? <><div className="compile-run-receipt"><span>{tr("LIVE RECEIPT", "即時憑據")}</span><div><b>{state.summary.sources}</b><small>{tr("sources", "來源")}</small></div><div><b>{state.summary.assertions}</b><small>{tr("assertions", "主張")}</small></div><div className="danger"><b>{state.summary.conflicts}</b><small>{tr("conflicts", "衝突")}</small></div><div><b>{state.summary.compilerReceipt?.evidenceCoverage ?? 0}%</b><small>{tr("evidence linked", "證據覆蓋")}</small></div></div>{state.summary.compilerReceipt && <CompilerTrustReceipt receipt={state.summary.compilerReceipt} compact />}</> : <div className="compile-run-placeholder"><span /><span /><span /></div>}
       </> : <div className="compile-run-error"><AlertOctagon size={25} /><div><b>{state.error}</b><p>{tr("Nothing was sent to an external system. Return to the brief and try again.", "沒有任何內容送往外部系統。請返回 Brief 後再試一次。")}</p></div><button className="button button-dark" type="button" onClick={onClose}>{tr("Back to brief", "返回 Brief")}</button></div>}
-      <p className="compile-run-truth"><ShieldCheck size={14} /> {tr("These AI roles are software workers inside Relay—not people. They are analyzing this pasted mission now and are not pretending that external tools ran.", "這三個 AI 是 Relay 內的軟體工作角色，不是真人。它們正在分析你貼上的內容，不會假裝已操作外部工具。")}</p>
+      <p className="compile-run-truth"><ShieldCheck size={14} /> {hybrid ? tr("The model can propose meaning, but only source-backed candidates survive code validation. No external tool runs here.", "模型可以提出語意判讀，但只有通過來源驗證的候選會留下；這一步不會執行任何外部工具。") : tr("No model output was used. Deterministic evidence and policy checks completed the run without external writes.", "本次未使用模型輸出；確定性證據與政策檢查完成分析，且沒有外部寫入。")}</p>
     </section>
   </div>;
 }
@@ -397,6 +482,10 @@ function MissionIntakePage() {
   const [form, setForm] = useState<CreateMissionInput>({ title: "", objective: "", successMetric: "", createdBy: "Jennifer", sources: [{ type: "Slack", title: "", author: "", content: "", authorityLevel: 3 }, { type: "Email", title: "", author: "", content: "", authorityLevel: 3 }] });
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [stage, setStage] = useState("");
   const [runMoment, setRunMoment] = useState<CompileRunMomentState>({ open: false, phase: 0, sourceCount: 0 });
+  const [compilerRuntime, setCompilerRuntime] = useState<CompilerRuntime>({ mode: "policy_only", policyEngine: "relay-safety-v2", truthfulFallback: true });
+  useEffect(() => {
+    void api<{ compiler: CompilerRuntime }>("/api/meta").then((meta) => setCompilerRuntime(meta.compiler)).catch(() => undefined);
+  }, []);
   useEffect(() => {
     if (!runMoment.open) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -429,6 +518,7 @@ function MissionIntakePage() {
         agentTasks: agentTasks.length,
         blockedAgentTasks: agentTasks.filter((task) => task.status === "blocked").length,
         planVersion: compiledMission.currentPlanVersion,
+        compilerReceipt: compiledMission.compilerReceipt,
       };
       setRunMoment((current) => ({ ...current, phase: 3, summary }));
       setStage(tr("Holding unsafe agent actions…", "正在暫停不安全的 Agent 行動…"));
@@ -450,10 +540,11 @@ function MissionIntakePage() {
   const submitQuick = (event: FormEvent) => { event.preventDefault(); runQuick(); };
   const submitStructured = (event: FormEvent) => { event.preventDefault(); void compileInput(form); };
   const runButtonContent = busy ? <><span className="loader small" /> {stage}</> : <><Play size={18} /> {tr("Start analysis", "開始分析")} <ArrowRight size={18} /></>;
-  const mobileRunDock = <div className="mobile-run-dock"><div><span>{tr("NEXT", "下一步")}</span><small>{tr("Let the three Relay AI roles organize this", "交給三個 Relay AI 角色處理")}</small></div>{error && <p className="form-error">{error}</p>}<button className="button button-primary run-submit" disabled={busy} type="submit" form={mode === "quick" ? "quick-mission-form" : "structured-mission-form"}>{runButtonContent}</button></div>;
-  const compileSidebar = <aside className="compile-sidebar"><div className="compile-card simple-compile-card"><span>{tr("WHAT HAPPENS NEXT", "按下後會發生什麼")}</span><h3>{tr("Relay's AI team does three small jobs.", "Relay AI 團隊只做三件小事。")}</h3><div className="sidebar-agent-list">{relayAgentDefinitions.map((agent, index) => { const Icon = agent.icon; return <div key={agent.name[0]}><span><Icon size={16} /></span><p><small>AI {index + 1}</small><b>{tr(agent.name[0], agent.name[1])}</b><em>{tr(agent.action[0], agent.action[1])}</em></p></div>; })}</div><div className="compile-notice"><ShieldCheck size={17} /><p>{tr("It only analyzes what you pasted. It will not send email, publish content or change an external tool.", "這一步只分析你貼的文字，不會寄信、發布內容或修改外部工具。")}</p></div>{error && <p className="form-error">{error}</p>}<button className="button button-primary button-full button-large run-submit" disabled={busy} type="submit">{runButtonContent}</button></div></aside>;
+  const activeCompilerDefinitions = compilerDefinitions(compilerRuntime.mode === "hybrid");
+  const mobileRunDock = <div className="mobile-run-dock"><div><span>{tr("NEXT", "下一步")}</span><small>{compilerRuntime.mode === "hybrid" ? tr("Run the model with two safety gates", "執行模型與兩道安全閘門") : tr("Run three source-safe checks", "執行三道來源安全檢查")}</small></div>{error && <p className="form-error">{error}</p>}<button className="button button-primary run-submit" disabled={busy} type="submit" form={mode === "quick" ? "quick-mission-form" : "structured-mission-form"}>{runButtonContent}</button></div>;
+  const compileSidebar = <aside className="compile-sidebar"><div className="compile-card simple-compile-card"><span>{tr("WHAT HAPPENS NEXT", "按下後會發生什麼")}</span><h3>{compilerRuntime.mode === "hybrid" ? tr("One model proposes. Two code gates decide.", "一個模型提案，兩道程式閘門裁決。") : tr("Relay runs three deterministic checks.", "Relay 執行三道確定性檢查。")}</h3><div className="sidebar-agent-list">{activeCompilerDefinitions.map((agent, index) => { const Icon = agent.icon; return <div key={agent.name[0]}><span><Icon size={16} /></span><p><small>{tr("ROLE", "角色")} {index + 1} · {tr(agent.kind[0], agent.kind[1])}</small><b>{tr(agent.name[0], agent.name[1])}</b><em>{tr(agent.action[0], agent.action[1])}</em></p></div>; })}</div><div className="compile-notice"><ShieldCheck size={17} /><p>{tr("It only analyzes what you pasted. It will not send email, publish content or change an external tool.", "這一步只分析你貼的文字，不會寄信、發布內容或修改外部工具。")}</p></div>{error && <p className="form-error">{error}</p>}<button className="button button-primary button-full button-large run-submit" disabled={busy} type="submit">{runButtonContent}</button></div></aside>;
   return <AppShell><main className="page intake-page">
-    <CompileRunMoment state={runMoment} onClose={() => setRunMoment((current) => ({ ...current, open: false, error: undefined }))} />
+    <CompileRunMoment state={runMoment} runtime={compilerRuntime} onClose={() => setRunMoment((current) => ({ ...current, open: false, error: undefined }))} />
     {mobileRunDock}
     <div className="page-title intake-title"><div><Link to="/app" className="back-link">← {tr("Workspace", "工作區")}</Link><span className="page-kicker">{tr("STEP 1 OF 3", "第 1 步（共 3 步）")}</span><h1>{tr("Paste what everyone said.", "把大家說過的話貼進來。")}</h1><p>{tr("Do not clean it up and do not decide who is right. Paste Slack messages, email requirements and meeting notes together.", "不用整理，也不用先決定誰對。把 Slack 訊息、Email 要求與會議紀錄一起貼上即可。")}</p></div><button className="button button-ghost" onClick={loadExample}><Sparkles size={16} /> {tr("Not sure? Load an example", "不知道怎麼貼？載入範例")}</button></div>
     <RelayJourney active={1} />
@@ -474,16 +565,18 @@ function MissionRunReceipt({ mission, onInvite, onOpenRoom }: { mission: Mission
   const agentTasks = tasks.filter((task) => task.ownerType === "agent");
   const blockedAgentTasks = agentTasks.filter((task) => task.status === "blocked").length;
   const blockers = mission.conflicts.filter((conflict) => conflict.blocking && conflict.status === "open").length;
+  const hybrid = Boolean(mission.compilerReceipt?.modelUsed && mission.compilerReceipt.mode === "hybrid");
   return <section className="mission-run-reveal" aria-labelledby="mission-run-reveal-title">
     <div className="mission-run-reveal-head"><span><span className="compile-live-dot" /> {tr("STEP 2 COMPLETE", "第 2 步完成")}</span><small>{tr("Saved · Plan v", "已保存 · 計畫 v")}{mission.currentPlanVersion}</small></div>
-    <div className="mission-run-reveal-copy"><span className="mission-run-reveal-icon"><CircleStop /></span><div><p>{tr("THE RELAY AI TEAM FINISHED", "RELAY AI 團隊處理完成")}</p><h2 id="mission-run-reveal-title">{tr("There are ", "有 ")}{blockers}{tr(" places where a human decision is needed.", " 個地方需要人來決定。")}</h2><small>{tr("Risky work is paused. Nothing was sent, published or changed in another tool.", "有風險的工作已先暫停；尚未寄送、發布或修改任何外部工具。")}</small></div></div>
-    <p className="mission-agent-definition"><Bot size={15} /><span><b>{tr("Who are these AI agents?", "這些 AI Agent 是誰？")}</b>{tr("Three software roles inside Relay. They are not people and each role performs only the job named below.", "它們是 Relay 裡的三個軟體工作角色，不是真人；每個角色只做下方寫明的工作。")}</span></p>
+    <div className="mission-run-reveal-copy"><span className="mission-run-reveal-icon"><CircleStop /></span><div><p>{mission.compilerReceipt?.modelUsed ? tr("MODEL + SAFETY ENGINE FINISHED", "模型 + 安全引擎已完成") : tr("SAFETY COMPILER FINISHED", "安全編譯器已完成")}</p><h2 id="mission-run-reveal-title">{tr("There are ", "有 ")}{blockers}{tr(" places where a human decision is needed.", " 個地方需要人來決定。")}</h2><small>{tr("Risky work is paused. Nothing was sent, published or changed in another tool.", "有風險的工作已先暫停；尚未寄送、發布或修改任何外部工具。")}</small></div></div>
+    {mission.compilerReceipt && <CompilerTrustReceipt receipt={mission.compilerReceipt} />}
+    <p className="mission-agent-definition"><Bot size={15} /><span><b>{tr("What actually ran?", "剛才到底是誰在工作？")}</b>{hybrid ? tr("One semantic model challenged meaning. Deterministic workers preserved evidence and kept execution authority out of the model.", "一個語意模型挑戰句子含義；確定性程式保留證據，並把執行權留在模型之外。") : tr("No semantic model ran. Deterministic evidence, conflict and policy checks completed the compilation safely.", "本次沒有執行語意模型；確定性的證據、衝突與政策檢查安全完成編譯。")}</span></p>
     <div className="mission-run-agent-line" aria-label={tr("Relay agent work completed", "Relay Agent 協作結果")}>
-      <div><span><FileCheck2 /></span><small>AI 1</small><b>{tr("Source organizer", "資料整理 AI")}</b><em>{mission.sources.length} {tr("source messages labeled", "則來源已標記")}</em><Check /></div>
+      <div><span><FileCheck2 /></span><small>{tr("CODE WORKER", "程式 WORKER")}</small><b>{tr("Evidence parser", "證據解析器")}</b><em>{mission.sources.length} {tr("source messages labeled", "則來源已標記")}</em><Check /></div>
       <span className="mission-run-link"><i /></span>
-      <div className="danger"><span><MessageSquareWarning /></span><small>AI 2</small><b>{tr("Conflict checker", "矛盾檢查 AI")}</b><em>{mission.conflicts.length} {tr("conflicts found", "個矛盾已找到")}</em><Check /></div>
+      <div className="danger"><span><MessageSquareWarning /></span><small>{hybrid ? tr("OPENAI MODEL", "OPENAI 模型") : tr("DETERMINISTIC CODE", "確定性程式")}</small><b>{hybrid ? tr("Semantic challenger", "語意挑戰 Agent") : tr("Conflict detector", "衝突偵測器")}</b><em>{hybrid ? `${mission.compilerReceipt?.semanticConflictsAccepted ?? 0} ${tr("extra semantic conflicts accepted", "個額外語意衝突通過")}` : tr("Dates, budgets, policies and dependencies checked", "已比對日期、預算、政策與依賴條件")}</em><Check /></div>
       <span className="mission-run-link"><i /></span>
-      <div><span><ShieldCheck /></span><small>AI 3</small><b>{tr("Safety coordinator", "安全協調 AI")}</b><em>{blockedAgentTasks} {tr("risky tasks paused", "個風險任務已暫停")}</em><Check /></div>
+      <div><span><ShieldCheck /></span><small>{tr("CODE GATE", "程式 GATE")}</small><b>{tr("Safety policy gate", "安全政策閘門")}</b><em>{blockedAgentTasks} {tr("risky tasks paused", "個風險任務已暫停")}</em><Check /></div>
     </div>
     <div className="mission-run-next"><span>{tr("STEP 3", "第 3 步")}</span><div><h3>{tr("Invite the teammates who should decide.", "邀請該做決定的同事進來。")}</h3><p>{tr("They will open this same saved mission, see the evidence and resolve the five questions with you.", "同事會開啟同一份已保存的任務，看到證據，並和你一起處理這些問題。")}</p></div><button className="button button-primary" type="button" onClick={onInvite}><UsersRound size={17} /> {tr("Invite teammates", "邀請同事")}</button><button className="button button-ghost" type="button" onClick={onOpenRoom}>{tr("Review the decisions first", "先查看待決定問題")} <ArrowRight size={16} /></button></div>
   </section>;
@@ -688,11 +781,17 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   </div>;
 }
 
+function ConflictSourceProof({ mission, conflict }: { mission: MissionDetail; conflict: Conflict }) {
+  const evidence = conflict.sourceAssertionIds.map((id) => mission.assertions.find((assertion) => assertion.id === id)).filter((assertion): assertion is MissionDetail["assertions"][number] => Boolean(assertion)).slice(0, 3);
+  if (!evidence.length) return null;
+  return <div className="conflict-source-proof"><span>{tr("SOURCE PROOF", "來源證據")}</span><div>{evidence.map((assertion) => { const source = mission.sources.find((item) => item.id === assertion.sourceId); const quote = typeof assertion.metadata.evidenceQuote === "string" ? assertion.metadata.evidenceQuote : assertion.statement; return <article key={assertion.id}><FlowSourceIcon type={source?.type ?? "Mission"} /><p><q>{localizeDomainText(quote)}</q><small>{source ? `${localizeLabel(source.type)} · ${localizeDomainText(source.author)}` : tr("Mission intake", "Mission 建立資料")} · {Math.round(assertion.confidence * 100)}%</small></p></article>; })}</div></div>;
+}
+
 function ConflictInbox({ mission, action, busy }: { mission: MissionDetail; action: MissionAction; busy: string }) {
   const [selected, setSelected] = useState<Record<string, string>>({}); const [reasons, setReasons] = useState<Record<string, string>>({});
   const open = mission.conflicts.filter((conflict) => conflict.status === "open"); const resolved = mission.conflicts.filter((conflict) => conflict.status === "resolved");
   return <div className="content-stack"><div className="view-heading"><div><span className="page-kicker">{tr("CONFLICT COMPILER", "衝突編譯器")}</span><h2>{open.length ? tr(`${open.length} contradictions need a decision`, `${open.length} 項矛盾需要決策`) : tr("Organizational intent is resolved", "組織意圖衝突已解決")}</h2><p>{tr("Blocking conflicts stop only the affected execution path. Every resolution becomes part of the next contract.", "阻擋性衝突只會停止受影響的執行路徑；每項解法都會成為下一版合約的一部分。")}</p></div><div className="conflict-summary"><span><AlertOctagon />{mission.blockingConflicts} {tr("blocking", "項阻擋")}</span><span><Scale />{open.length} {tr("open", "項待處理")}</span><span><Check />{resolved.length} {tr("resolved", "項已解決")}</span></div></div>
-    {open.map((conflict, index) => <article className={`conflict-card ${conflict.blocking ? "blocking" : ""}`} key={conflict.id}><div className="conflict-number">C-{String(index + 1).padStart(2, "0")}</div><div className="conflict-card-main"><div className="conflict-head"><div><div className="conflict-tags"><span className={`severity-tag ${conflict.severity}`}>{localizeLabel(conflict.severity)}</span><span>{localizeLabel(conflict.type)}</span>{conflict.blocking && <span className="blocking-tag"><CircleStop size={13} /> {tr("Blocks execution", "阻擋執行")}</span>}</div><h3>{localizeDomainText(conflict.title)}</h3><p>{localizeDomainText(conflict.summary)}</p></div><div className="decision-owner"><span>{tr("DECISION OWNER", "決策負責人")}</span><b><UserRound size={15} />{localizeDomainText(conflict.decisionOwner)}</b>{conflict.decisionDueAt && <small>{tr("Due", "期限")} {conflict.decisionDueAt}</small>}</div></div><div className="consequence"><Ban size={17} /><div><span>{tr("IF UNRESOLVED", "若未解決")}</span><p>{localizeDomainText(conflict.consequences)}</p></div></div><div className="resolution-options">{conflict.options.map((option) => <label className={`resolution-option ${selected[conflict.id] === option.id ? "selected" : ""} ${option.recommended ? "recommended" : ""}`} key={option.id}><input type="radio" name={conflict.id} value={option.id} checked={selected[conflict.id] === option.id} onChange={() => setSelected({ ...selected, [conflict.id]: option.id })} /><div className="option-top"><b>{localizeDomainText(option.label)}</b>{option.recommended && <span><Sparkles size={13} /> {tr("Relay recommends", "Relay 建議")}</span>}</div><p>{localizeDomainText(option.description)}</p><div className="option-impact"><span><Clock3 />{localizeDomainText(option.timeImpact)}</span><span><CircleDollarSign />{localizeDomainText(option.budgetImpact)}</span><span><ShieldCheck />{localizeDomainText(option.risk)}</span></div></label>)}</div>{selected[conflict.id] && <div className="resolution-submit"><textarea placeholder={tr("Why is this the right decision? This becomes permanent evidence.", "為什麼這是正確決策？這段理由會成為永久證據。")} value={reasons[conflict.id] ?? ""} onChange={(event) => setReasons({ ...reasons, [conflict.id]: event.target.value })} rows={2} /><button className="button button-primary" disabled={(reasons[conflict.id]?.length ?? 0) < 3 || busy === conflict.id} onClick={() => action(conflict.id, api<{ mission: MissionDetail }>(`/api/conflicts/${conflict.id}/resolve`, { method: "POST", body: JSON.stringify({ optionId: selected[conflict.id], reason: reasons[conflict.id], decidedBy: "Jennifer" }) }), tr("Decision recorded. Resolve remaining blockers, then compile the next plan version.", "決策已記錄。請解決其餘阻擋項目，再編譯下一版計畫。"))}><Check size={16} /> {tr("Record decision", "記錄決策")}</button></div>}</div></article>)}
+    {open.map((conflict, index) => <article className={`conflict-card ${conflict.blocking ? "blocking" : ""}`} key={conflict.id}><div className="conflict-number">C-{String(index + 1).padStart(2, "0")}</div><div className="conflict-card-main"><div className="conflict-head"><div><div className="conflict-tags"><span className={`severity-tag ${conflict.severity}`}>{localizeLabel(conflict.severity)}</span><span>{localizeLabel(conflict.type)}</span>{conflict.blocking && <span className="blocking-tag"><CircleStop size={13} /> {tr("Blocks execution", "阻擋執行")}</span>}</div><h3>{localizeDomainText(conflict.title)}</h3><p>{localizeDomainText(conflict.summary)}</p></div><div className="decision-owner"><span>{tr("DECISION OWNER", "決策負責人")}</span><b><UserRound size={15} />{localizeDomainText(conflict.decisionOwner)}</b>{conflict.decisionDueAt && <small>{tr("Due", "期限")} {conflict.decisionDueAt}</small>}</div></div><ConflictSourceProof mission={mission} conflict={conflict} /><div className="consequence"><Ban size={17} /><div><span>{tr("IF UNRESOLVED", "若未解決")}</span><p>{localizeDomainText(conflict.consequences)}</p></div></div><div className="resolution-options">{conflict.options.map((option) => <label className={`resolution-option ${selected[conflict.id] === option.id ? "selected" : ""} ${option.recommended ? "recommended" : ""}`} key={option.id}><input type="radio" name={conflict.id} value={option.id} checked={selected[conflict.id] === option.id} onChange={() => setSelected({ ...selected, [conflict.id]: option.id })} /><div className="option-top"><b>{localizeDomainText(option.label)}</b>{option.recommended && <span><Sparkles size={13} /> {tr("Relay recommends", "Relay 建議")}</span>}</div><p>{localizeDomainText(option.description)}</p><div className="option-impact"><span><Clock3 />{localizeDomainText(option.timeImpact)}</span><span><CircleDollarSign />{localizeDomainText(option.budgetImpact)}</span><span><ShieldCheck />{localizeDomainText(option.risk)}</span></div></label>)}</div>{selected[conflict.id] && <div className="resolution-submit"><textarea placeholder={tr("Why is this the right decision? This becomes permanent evidence.", "為什麼這是正確決策？這段理由會成為永久證據。")} value={reasons[conflict.id] ?? ""} onChange={(event) => setReasons({ ...reasons, [conflict.id]: event.target.value })} rows={2} /><button className="button button-primary" disabled={(reasons[conflict.id]?.length ?? 0) < 3 || busy === conflict.id} onClick={() => action(conflict.id, api<{ mission: MissionDetail }>(`/api/conflicts/${conflict.id}/resolve`, { method: "POST", body: JSON.stringify({ optionId: selected[conflict.id], reason: reasons[conflict.id], decidedBy: "Jennifer" }) }), tr("Decision recorded. Resolve remaining blockers, then compile the next plan version.", "決策已記錄。請解決其餘阻擋項目，再編譯下一版計畫。"))}><Check size={16} /> {tr("Record decision", "記錄決策")}</button></div>}</div></article>)}
     {!open.length && <div className="resolved-celebration"><BadgeCheck /><div><h3>{tr("All conflicts have an explicit decision.", "所有衝突都已有明確決策。")}</h3><p>{tr("Compile the next plan version to convert those decisions into task constraints, invalidate stale approvals and activate execution.", "編譯下一版計畫，把這些決策轉為任務限制、使過期核准失效並啟用執行。")}</p></div>{mission.status === "planning" && <button className="button button-primary" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: JSON.stringify({ actor: "Jennifer" }) }), tr("Plan activated.", "計畫已啟用。"))}><GitBranch size={17} /> {tr("Compile Plan", "編譯計畫")} v{mission.currentPlanVersion + 1}</button>}</div>}
     {resolved.length > 0 && <section className="resolved-list"><div className="panel-heading"><div><span>{tr("DECISION HISTORY", "決策歷史")}</span><h2>{tr("Resolved conflicts", "已解決衝突")}</h2></div></div>{resolved.map((conflict) => <div className="resolved-item" key={conflict.id}><Check size={17} /><div><b>{localizeDomainText(conflict.title)}</b><p>{localizeDomainText(conflict.resolution?.decision)}</p><small>{conflict.resolution?.decidedBy} · {formatDate(conflict.resolution?.createdAt, true)}</small></div></div>)}</section>}
   </div>;

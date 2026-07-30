@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
-import { compilePlan, demoMissionInput, detectConflicts, extractAssertions } from "./compiler";
+import { compilePlan, demoMissionInput } from "./compiler";
+import { compileIntent, fallbackCompilerReceipt } from "./intelligence";
 import { pool } from "./db";
 import type {
   ApprovalRequest,
   AuditEvent,
+  CompilerReceipt,
   Conflict,
   CreateMissionInput,
   ExecutionTask,
@@ -67,6 +69,7 @@ interface InternalMission {
   planVersions: PlanVersion[];
   auditEvents: AuditEvent[];
   outcome?: Outcome;
+  compilerReceipt?: CompilerReceipt;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +94,9 @@ function summaryFromMission(mission: InternalMission): MissionSummary {
 
 function detailFromMission(mission: InternalMission): MissionDetail {
   const summary = summaryFromMission(mission);
+  const compilerReceipt = mission.compilerReceipt ?? (mission.assertions.length
+    ? fallbackCompilerReceipt({ sources: mission.sources.length, assertions: mission.assertions, conflicts: mission.conflicts, generatedAt: mission.updatedAt })
+    : undefined);
   return {
     ...summary,
     workspaceName: "Relay Labs",
@@ -102,6 +108,7 @@ function detailFromMission(mission: InternalMission): MissionDetail {
     planVersions: mission.planVersions,
     currentPlan: mission.planVersions.find((plan) => plan.version === mission.currentPlanVersion),
     auditEvents: [...mission.auditEvents].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    compilerReceipt,
     outcome: mission.outcome,
     createdAt: mission.createdAt,
   };
@@ -215,13 +222,15 @@ class MemoryRelayStore implements RelayStore {
     const mission = this.missions.get(id);
     if (!mission) throw new NotFoundError("Mission not found.");
     if (mission.assertions.length > 0) return detailFromMission(mission);
-    mission.assertions = extractAssertions({ title: mission.title, objective: mission.objective, successMetric: mission.successMetric, createdBy: mission.createdBy, sources: mission.sources }, mission.sources);
-    mission.conflicts = detectConflicts(mission.assertions);
+    const compilation = await compileIntent({ title: mission.title, objective: mission.objective, successMetric: mission.successMetric, createdBy: mission.createdBy, sources: mission.sources }, mission.sources);
+    mission.assertions = compilation.assertions;
+    mission.conflicts = compilation.conflicts;
+    mission.compilerReceipt = compilation.receipt;
     const plan = compilePlan({ input: mission, sources: mission.sources, conflicts: mission.conflicts, version: 1 });
     mission.planVersions = [plan];
     mission.currentPlanVersion = 1;
     mission.status = "conflicts";
-    audit(mission, { actorType: "system", actorName: "Relay Compiler", eventType: "mission.compiled", entityType: "plan_version", entityId: plan.id, planVersion: 1, summary: `${mission.assertions.length} assertions compiled into ${mission.conflicts.length} conflicts and Plan v1.`, data: { assertionCount: mission.assertions.length, conflictCount: mission.conflicts.length } });
+    audit(mission, { actorType: "system", actorName: "Relay Compiler", eventType: "mission.compiled", entityType: "plan_version", entityId: plan.id, planVersion: 1, summary: `${mission.assertions.length} assertions compiled into ${mission.conflicts.length} conflicts and Plan v1.`, data: { assertionCount: mission.assertions.length, conflictCount: mission.conflicts.length, compilerReceipt: compilation.receipt } });
     return detailFromMission(mission);
   }
 
@@ -420,6 +429,12 @@ class PostgresRelayStore implements RelayStore {
       createdBy: row.created_by, createdAt: row.created_at.toISOString(),
     }));
     const currentPlan = plans.find((plan) => plan.version === m.current_plan_version);
+    const auditEvents: AuditEvent[] = auditResult.rows.map((row: Row) => ({ id: row.id, actorType: row.actor_type, actorName: row.actor_name, eventType: row.event_type, entityType: row.entity_type, entityId: row.entity_id ?? undefined, planVersion: row.plan_version ?? undefined, summary: row.summary, data: row.data, createdAt: row.created_at.toISOString() }));
+    const compiledAudit = auditEvents.find((event) => event.eventType === "mission.compiled" && event.data?.compilerReceipt);
+    const assertions = assertionResult.rows.map(mapAssertion);
+    const conflicts = conflictResult.rows.map((row: Row) => mapConflict(row, resolutionMap.get(row.id)));
+    const compilerReceipt = compiledAudit?.data.compilerReceipt as CompilerReceipt | undefined
+      ?? (assertions.length ? fallbackCompilerReceipt({ sources: sourceResult.rows.length, assertions, conflicts, generatedAt: compiledAudit?.createdAt ?? m.updated_at.toISOString() }) : undefined);
     const outcomeRow: Row | undefined = outcomeResult.rows[0];
     return {
       id: m.id, title: m.title, objective: m.objective, status: m.status, currentPlanVersion: m.current_plan_version,
@@ -430,8 +445,8 @@ class PostgresRelayStore implements RelayStore {
       totalTasks: currentPlan?.tasks.length ?? 0,
       updatedAt: m.updated_at.toISOString(), workspaceName: m.workspace_name, createdBy: m.created_by, successMetric: m.success_metric,
       sources: sourceResult.rows.map((row: Row) => ({ id: row.id, type: row.source_type, title: row.title, author: row.author_name, content: row.content, occurredAt: row.occurred_at?.toISOString?.(), authorityLevel: row.authority_level, evidenceUrl: row.evidence_url ?? undefined, createdAt: row.created_at.toISOString() })),
-      assertions: assertionResult.rows.map(mapAssertion), conflicts: conflictResult.rows.map((row: Row) => mapConflict(row, resolutionMap.get(row.id))), planVersions: plans, currentPlan,
-      auditEvents: auditResult.rows.map((row: Row) => ({ id: row.id, actorType: row.actor_type, actorName: row.actor_name, eventType: row.event_type, entityType: row.entity_type, entityId: row.entity_id ?? undefined, planVersion: row.plan_version ?? undefined, summary: row.summary, data: row.data, createdAt: row.created_at.toISOString() })),
+      assertions, conflicts, planVersions: plans, currentPlan,
+      auditEvents, compilerReceipt,
       outcome: outcomeRow ? { id: outcomeRow.id, metricName: outcomeRow.metric_name, targetValue: outcomeRow.target_value, actualValue: outcomeRow.actual_value, status: outcomeRow.status, cost: Number(outcomeRow.cost), durationMinutes: outcomeRow.duration_minutes, humanInterventions: outcomeRow.human_interventions, blockers: outcomeRow.blockers, recommendation: outcomeRow.recommendation, updatedAt: outcomeRow.updated_at.toISOString() } : undefined,
       createdAt: m.created_at.toISOString(),
     } satisfies MissionDetail;
@@ -482,8 +497,8 @@ class PostgresRelayStore implements RelayStore {
   async compileMission(id: string) {
     const current = await this.getMission(id);
     if (current.assertions.length) return current;
-    const assertions = extractAssertions({ title: current.title, objective: current.objective, successMetric: current.successMetric, createdBy: current.createdBy, sources: current.sources }, current.sources);
-    const conflicts = detectConflicts(assertions);
+    const compilation = await compileIntent({ title: current.title, objective: current.objective, successMetric: current.successMetric, createdBy: current.createdBy, sources: current.sources }, current.sources);
+    const { assertions, conflicts } = compilation;
     const plan = compilePlan({ input: current, sources: current.sources, conflicts, version: 1 });
     const client = await pool!.connect();
     try {
@@ -496,7 +511,7 @@ class PostgresRelayStore implements RelayStore {
       }
       await this.insertPlan(client, id, plan);
       await client.query("UPDATE missions SET status = 'conflicts', current_plan_version = 1, updated_at = now() WHERE id = $1", [id]);
-      await this.insertAudit(client, id, { actorType: "system", actorName: "Relay Compiler", eventType: "mission.compiled", entityType: "plan_version", entityId: plan.id, planVersion: 1, summary: `${assertions.length} assertions compiled into ${conflicts.length} conflicts and Plan v1.`, data: { assertionCount: assertions.length, conflictCount: conflicts.length } });
+      await this.insertAudit(client, id, { actorType: "system", actorName: "Relay Compiler", eventType: "mission.compiled", entityType: "plan_version", entityId: plan.id, planVersion: 1, summary: `${assertions.length} assertions compiled into ${conflicts.length} conflicts and Plan v1.`, data: { assertionCount: assertions.length, conflictCount: conflicts.length, compilerReceipt: compilation.receipt } });
       await client.query("COMMIT");
       return this.getMission(id);
     } catch (error) {

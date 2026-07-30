@@ -12,6 +12,7 @@
     "start": "NODE_ENV=production node dist/server.js",
     "check": "tsc --noEmit",
     "test": "vitest run --root .",
+    "eval:compiler": "tsx scripts/evaluate-intelligence.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "replit:start": "npm run db:migrate && npm run db:seed && npm start"

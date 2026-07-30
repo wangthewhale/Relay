@@ -65,10 +65,14 @@ function pushAssertion(
   confidence = 0.88,
 ) {
   const normalized = normalizeStatement(statement);
-  const duplicate = assertions.some(
+  const duplicate = assertions.find(
     (assertion) => assertion.sourceId === source?.id && assertion.type === type && assertion.statement === normalized,
   );
-  if (duplicate) return;
+  if (duplicate) {
+    duplicate.metadata = { ...duplicate.metadata, ...metadata };
+    duplicate.confidence = Math.max(duplicate.confidence, confidence);
+    return;
+  }
   assertions.push({
     id: uid(),
     sourceId: source?.id,
@@ -80,6 +84,36 @@ function pushAssertion(
     metadata,
     createdAt: isoNow(),
   });
+}
+
+function extractDeterministicSemanticSignals(assertions: IntentAssertion[], source: StoredSource, content: string) {
+  const refundMentioned = /\brefund(?:ed|ing)?\b|退款/i.test(content);
+  if (refundMentioned) {
+    const forbidden = /\bno\s+refund\b|\brefund\b.{0,40}\b(?:must not|may not|cannot|can't|forbidden)\b|\b(?:must not|may not|cannot|can't|do not)\b.{0,40}\brefund\b|不得.{0,24}退款|不可.{0,24}退款|不能.{0,24}退款|禁止.{0,24}退款/i.test(content);
+    const required = /\b(?:promise|promised|promises|issue|send|provide|approve|approved|must issue|will issue)\b.{0,40}\brefund\b|\brefund\b.{0,40}\b(?:today|required|approved|promised)\b|承諾.{0,24}退款|必須.{0,24}退款|核准.{0,24}退款|今天.{0,24}退款/i.test(content);
+    if (forbidden || required) {
+      pushAssertion(assertions, source, content, "Constraint", {
+        actionKey: "refund",
+        actionPolarity: forbidden ? "forbids" : "requires",
+        context: content,
+        origin: "deterministic_semantic_signal",
+      }, 0.91);
+    }
+  }
+
+  const scopeMentioned = /\bscope\b|\bpackage\b|\bdeliver(?:y|able|ables)?\b|landing page|social posts?|email sequence|交付|範圍|規格|素材/i.test(content);
+  if (scopeMentioned) {
+    const supersedes = /\breplace\b|\binstead\b|\bsupersed(?:e|es|ed)\b|\bdo not deliver\b|\bno longer\b|改為|取代|不再|不要交付/i.test(content);
+    const approved = /\bapproved\b|\bcurrent\b|\bfinal\b|已核准|核准版本|目前版本|最終版本/i.test(content);
+    if (supersedes || approved) {
+      pushAssertion(assertions, source, content, "Constraint", {
+        subject: "delivery_scope",
+        scopeVersionState: supersedes ? "supersedes" : "approved",
+        context: content,
+        origin: "deterministic_semantic_signal",
+      }, 0.9);
+    }
+  }
 }
 
 export function extractAssertions(input: CreateMissionInput, sources: StoredSource[]): IntentAssertion[] {
@@ -123,6 +157,7 @@ export function extractAssertions(input: CreateMissionInput, sources: StoredSour
   for (const source of sources) {
     const content = source.content;
     pushAssertion(assertions, source, content, inferPrimaryType(content), { sourceType: source.type }, 0.86);
+    extractDeterministicSemanticSignals(assertions, source, content);
 
     for (const value of parseBudgetValues(content)) {
       pushAssertion(assertions, source, `Budget limit stated as NT$${value.toLocaleString("en-US")}.`, "Budget", {
@@ -336,6 +371,54 @@ export function detectConflicts(assertions: IntentAssertion[]): Conflict[] {
           "Assign one named approver and bind approval to the active plan version, exact payload hash, budget, audience and expiration.",
           "Require two approvers for public launch and budget spend.",
           "Keep all work at Draft risk level until authority is assigned.",
+        ),
+      }),
+    );
+  }
+
+  const refundRequirements = assertions.filter((assertion) => assertion.metadata.actionKey === "refund" && assertion.metadata.actionPolarity === "requires");
+  const refundProhibitions = assertions.filter((assertion) => assertion.metadata.actionKey === "refund" && assertion.metadata.actionPolarity === "forbids");
+  const refundRequirement = [...refundRequirements].sort((a, b) => b.authorityLevel - a.authorityLevel)[0];
+  const refundProhibition = [...refundProhibitions].sort((a, b) => b.authorityLevel - a.authorityLevel)[0];
+  if (refundRequirement && refundProhibition && refundRequirement.sourceId !== refundProhibition.sourceId) {
+    conflicts.push(
+      conflictBase({
+        type: "Policy conflict",
+        title: "Refund action is simultaneously required and forbidden",
+        summary: "One source commits the team to a refund while another source forbids issuing it under the current payment process.",
+        severity: "high",
+        blocking: true,
+        sourceAssertionIds: [refundRequirement.id, refundProhibition.id],
+        decisionOwner: "Finance owner",
+        consequences: "Continuing both paths can create a duplicate refund, an unresolved chargeback, or a misleading customer promise.",
+        options: optionSet(
+          "Pause both financial actions, verify the active payment state, then let the Finance owner select exactly one settlement path.",
+          "Close the chargeback path before issuing a newly approved refund.",
+          "Keep the chargeback path and send a human-reviewed correction to the customer.",
+        ),
+      }),
+    );
+  }
+
+  const approvedScopes = assertions.filter((assertion) => assertion.metadata.subject === "delivery_scope" && assertion.metadata.scopeVersionState === "approved");
+  const supersedingScopes = assertions.filter((assertion) => assertion.metadata.subject === "delivery_scope" && assertion.metadata.scopeVersionState === "supersedes");
+  const approvedScope = [...approvedScopes].sort((a, b) => b.authorityLevel - a.authorityLevel)[0];
+  const supersedingScope = [...supersedingScopes].sort((a, b) => b.authorityLevel - a.authorityLevel)[0];
+  if (approvedScope && supersedingScope && approvedScope.sourceId !== supersedingScope.sourceId) {
+    conflicts.push(
+      conflictBase({
+        type: "Version conflict",
+        title: "The approved delivery scope has been superseded",
+        summary: "An approved deliverable set and a later replacement instruction cannot both remain the active scope.",
+        severity: "high",
+        blocking: true,
+        sourceAssertionIds: [approvedScope.id, supersedingScope.id],
+        decisionOwner: "Mission owner",
+        consequences: "Agents may deliver obsolete work, omit the replacement deliverables, or create avoidable rework.",
+        options: optionSet(
+          "Confirm the replacement instruction as the current scope, invalidate affected drafts, and compile a new plan version.",
+          "Keep the approved scope and ask the requester to withdraw the replacement instruction.",
+          "Pause delivery and request one exact scope signed off by both owners.",
         ),
       }),
     );

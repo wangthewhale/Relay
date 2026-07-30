@@ -232,6 +232,33 @@ export interface AuditEvent {
   createdAt: string;
 }
 
+export interface CompilerCheck {
+  id: "source_lineage" | "semantic_model" | "evidence_validation" | "policy_gate" | "execution_boundary";
+  label: string;
+  status: "passed" | "warning" | "fallback";
+  detail: string;
+}
+
+export interface CompilerReceipt {
+  mode: "hybrid" | "policy_only";
+  engineVersion: string;
+  modelName?: string;
+  modelUsed: boolean;
+  sourceCount: number;
+  assertionCount: number;
+  conflictCount: number;
+  blockingConflictCount: number;
+  evidenceCoverage: number;
+  averageConfidence: number;
+  semanticAssertionsAccepted: number;
+  semanticConflictsAccepted: number;
+  rejectedCandidates: number;
+  latencyMs: number;
+  checks: CompilerCheck[];
+  warnings: string[];
+  generatedAt: string;
+}
+
 export interface Outcome {
   id: string;
   metricName: string;
@@ -270,6 +297,7 @@ export interface MissionDetail extends MissionSummary {
   planVersions: PlanVersion[];
   currentPlan?: PlanVersion;
   auditEvents: AuditEvent[];
+  compilerReceipt?: CompilerReceipt;
   outcome?: Outcome;
   createdAt: string;
 }

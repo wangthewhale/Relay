@@ -8,7 +8,8 @@ import {
   resolveConflictSchema,
 } from "../shared/domain";
 import { databaseHealth } from "./db";
-import { compilePlan, detectConflicts, extractAssertions } from "./compiler";
+import { compilePlan } from "./compiler";
+import { compileIntent, compilerRuntimeStatus } from "./intelligence";
 import { ConflictError, NotFoundError, store } from "./store";
 
 export function createApp() {
@@ -28,6 +29,7 @@ export function createApp() {
     response.json({
       product: "Relay",
       definition: "Intent compiler and execution control plane",
+      compiler: compilerRuntimeStatus(),
       connectorPolicy: "No connector is shown as verified until Relay completes a real provider capability check.",
       riskLevels: [
         { level: 0, label: "Read", approval: "Access grant required" },
@@ -46,13 +48,15 @@ export function createApp() {
     } catch (error) { next(error); }
   });
 
-  app.post("/api/preview-compile", (request, response, next) => {
+  app.post("/api/preview-compile", async (request, response, next) => {
     try {
       const input = createMissionSchema.parse(request.body);
       const createdAt = new Date().toISOString();
       const sources = input.sources.map((source) => ({ ...source, id: source.id ?? randomUUID(), createdAt }));
-      const assertions = extractAssertions(input, sources);
-      const conflicts = detectConflicts(assertions);
+      // Landing-page previews stay policy-only to prevent an unsolicited model
+      // call on every page view. Saved mission compilation enables the model.
+      const compilation = await compileIntent(input, sources, { allowModel: false });
+      const { assertions, conflicts } = compilation;
       const plan = compilePlan({ input, sources, conflicts, version: 1 });
       const primaryConflict = conflicts.find((conflict) => conflict.type === "Hard conflict")
         ?? conflicts.find((conflict) => conflict.blocking)
@@ -77,6 +81,7 @@ export function createApp() {
           assertions: assertions.length,
           conflicts: conflicts.length,
           blocking: conflicts.filter((conflict) => conflict.blocking).length,
+          compiler: compilation.receipt,
         },
         conflict: primaryConflict ?? null,
         evidence,

@@ -62,4 +62,40 @@ describe("Relay intent compiler", () => {
 
     expect(conflicts.some((conflict) => conflict.type === "Hard conflict")).toBe(true);
   });
+
+  it("detects mutually exclusive financial actions without a model", () => {
+    const createdAt = new Date().toISOString();
+    const input = {
+      title: "Resolve a payment incident",
+      objective: "Resolve the customer payment incident through one verified path.",
+      successMetric: "No duplicate financial action",
+      createdBy: "Nina",
+      sources: [
+        { type: "Slack" as const, title: "Support", author: "Support lead", content: "The support team promises a full refund today.", authorityLevel: 3 },
+        { type: "Email" as const, title: "Finance", author: "Finance lead", content: "The chargeback review must remain open; no refund may be issued while it is active.", authorityLevel: 5 },
+      ],
+    };
+    const sources = input.sources.map((source) => ({ ...source, id: randomUUID(), createdAt }));
+    const conflicts = detectConflicts(extractAssertions(input, sources));
+
+    expect(conflicts.some((conflict) => conflict.type === "Policy conflict" && conflict.blocking)).toBe(true);
+  });
+
+  it("detects when a newer delivery instruction supersedes an approved scope", () => {
+    const createdAt = new Date().toISOString();
+    const input = {
+      title: "Deliver a client launch package",
+      objective: "Ship only the current client-approved deliverables.",
+      successMetric: "Accepted without rework",
+      createdBy: "Lee",
+      sources: [
+        { type: "Notion" as const, title: "Approved scope", author: "Account lead", content: "The approved package contains one landing page and three social posts.", authorityLevel: 4 },
+        { type: "Email" as const, title: "Client change", author: "Client", content: "Replace the landing page with an email sequence and do not deliver social posts.", authorityLevel: 5 },
+      ],
+    };
+    const sources = input.sources.map((source) => ({ ...source, id: randomUUID(), createdAt }));
+    const conflicts = detectConflicts(extractAssertions(input, sources));
+
+    expect(conflicts.some((conflict) => conflict.type === "Version conflict" && conflict.blocking)).toBe(true);
+  });
 });

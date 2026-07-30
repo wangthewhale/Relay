@@ -16,18 +16,26 @@ Relay turns conflicting goals, constraints and instructions into a versioned, pe
 - Exact, payload-hashed approvals bound to one plan version
 - Preflight execution checks with precise blockers and next actions
 - Mission Room, corrections, audit ledger and outcome tracking
+- Named, role-bound single-use invites, live presence, comments, mentions and checkpoint handoffs
+- Mission-scoped SSE event stream backed by monotonic PostgreSQL event sequence numbers
+- Durable Agent runs with a queue, heartbeat, checkpoint, restart recovery, pause, resume and cancel
+- An enforceable Authority Graph for conflict decisions, invitations and exact approvals
 - Mission-scoped Access Blueprint with truthful connector states
+- Real Google Workspace, Slack, Notion, GitHub and Figma OAuth adapters with provider verification
+- AES-256-GCM encrypted credential vault, refresh/reconnect/revoke and plan-bound Access Manifests
+- A Tool Gateway that validates plan version, task, resource scope, capability, risk and approval before every provider call
+- A versioned runtime contract and TypeScript SDK for other Agent products
 - PostgreSQL persistence through `DATABASE_URL`
 - Hybrid intent compilation: an OpenAI semantic proposal stage followed by source validation and deterministic safety gates
 - A user-visible compiler receipt with model provenance, evidence coverage, rejected candidates, confidence and zero-write verification
 - Fail-closed degradation to the deterministic compiler when the model is not configured, times out, refuses, or returns an invalid schema
 - Private browser sessions and workspace-level tenant isolation
-- Mission-scoped, high-entropy viewer/editor links with server-side expiration and revocation state
+- Mission-scoped, high-entropy read-only links with server-side expiration and revocation state; collaborators join through named invitations
 - Built-in evidence, brief and outcome executors that must produce a hashed artifact before an agent task can complete
 - Immutable execution receipts with plan-bound idempotency keys
 - Sanitized public blocker cards that omit raw source content and personal evidence
 
-The connector screens do not simulate OAuth success. Providers remain `not_connected` until a real authorization, resource-scope verification and Access Manifest flow exists. Tasks that require those providers fail preflight with an explicit next action; they cannot be marked complete by the generic run endpoint.
+The connector screens do not simulate OAuth success. A provider remains unavailable until its OAuth application and vault key are configured, and a connection becomes `verified` only after a live provider identity check plus a plan-bound Access Manifest. Tasks that require an unverified provider fail preflight with an explicit next action; they cannot be marked complete by the generic run endpoint.
 
 The model never receives connector credentials and never decides whether an action is authorized. Model output is a proposal. Relay code rejects candidates without exact source evidence and computes blocking, approval and execution boundaries after the model returns.
 
@@ -48,7 +56,7 @@ npm run db:migrate
 npm run db:seed
 ```
 
-Migrations are idempotent, execute in filename order and live in [`migrations/`](./migrations). `0002_security_execution.sql` adds sessions, mission shares, artifacts, execution receipts and sanitized public reports.
+Migrations are additive, execute once in filename order and live in [`migrations/`](./migrations). `0002_security_execution.sql` adds session and execution trust primitives. `0003_multiplayer_runtime.sql` adds identities, presence, collaboration events, authority, durable Agent runs, OAuth connections, Access Manifests, Tool Calls and learning signals.
 
 ## Verification
 
@@ -60,7 +68,28 @@ OPENAI_API_KEY=... npm run eval:compiler
 NODE_ENV=production DATABASE_URL=postgresql://... npm start
 ```
 
-The deterministic evaluation set contains source-backed cases for all six conflict classes. Model-assisted runs use the same evidence gate; set `RELAY_REQUIRE_MODEL_EVAL=true` in a credentialed evaluation environment to make model coverage and evidence thresholds blocking.
+The deterministic evaluation set contains 12 source-backed positive and negative cases across all six conflict classes. It blocks release when conflict precision/recall, blocking precision/recall, authority-owner accuracy or evidence coverage falls below the configured threshold. This is a regression benchmark, not a claim of real-world production accuracy. Model-assisted runs use the same evidence gate; set `RELAY_REQUIRE_MODEL_EVAL=true` in a credentialed evaluation environment to make model coverage and evidence thresholds blocking.
+
+## Connector configuration
+
+Set `RELAY_VAULT_KEY` plus the client ID and client secret for each provider you want to enable. Register `https://YOUR_DOMAIN/api/oauth/PROVIDER/callback` as its callback URL, where `PROVIDER` is `google`, `slack`, `notion`, `github` or `figma`. Providers without all required secrets remain visibly unavailable.
+
+OAuth tokens never enter model context. They are decrypted only inside the Tool Gateway after mission, plan, capability, resource, approval and tenant checks pass.
+
+## Embed Relay in another Agent runtime
+
+A Workspace owner can create a short-lived, mission-scoped Runtime API key through `POST /api/runtime-keys`. The raw key is returned once. Each key names its allowed Mission IDs and only the capabilities it needs (`runtime:control`, `tool:call`, `mission:correct`, `mission:comment`, `mission:handoff`); it can be revoked with `DELETE /api/runtime-keys/:id`.
+
+```ts
+import { RelayClient } from "./sdk/relay";
+
+const relay = new RelayClient({ baseUrl: "https://relay.example", apiKey: process.env.RELAY_RUNTIME_KEY });
+const { contract, contractHash } = await relay.getRuntimeContract(missionId);
+if (!contract.blockingConflicts) await relay.enqueueAgentRun(taskId);
+const stop = relay.subscribe(missionId, handleEvent, handleStreamError);
+```
+
+The SDK receives a versioned runtime contract, hashes and provider receipts—never connector credentials.
 
 ## Deployment workflow
 

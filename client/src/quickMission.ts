@@ -40,7 +40,7 @@ function fallbackSegments(raw: string) {
     .filter((line) => line.length >= 3);
 }
 
-export function parseQuickMission(raw: string, createdBy = "Jennifer"): CreateMissionInput {
+export function parseQuickMission(raw: string, createdBy = "Mission owner"): CreateMissionInput {
   const normalized = raw.replace(/\r/g, "").trim();
   if (normalized.length < 10) throw new Error("Mission brief must contain at least 10 characters.");
 
@@ -116,4 +116,3 @@ export function parseQuickMission(raw: string, createdBy = "Jennifer"): CreateMi
     sources: sources.slice(0, 20),
   };
 }
-

@@ -24,7 +24,9 @@ Relay should not present itself as a general company operating system before it 
 3. Relay identifies the affected actions and the accountable decision owner.
 4. Resolve the conflict and compile a new plan version.
 5. Run the evidence task and inspect its artifact hash and execution receipt.
-6. Attempt an unverified external task and see it stop with one explicit next action.
+6. Invite a named teammate, watch presence and comments arrive on the Mission event stream, and hand off a task with its checkpoint.
+7. Pause, resume or cancel the durable Agent run without losing the checkpoint.
+8. Attempt an unverified external task and see it stop with one explicit next action—or connect a configured provider and create a draft through the Tool Gateway.
 
 The demo proves a technical invariant, not a traction claim: no verified executor and artifact means no completed Agent task.
 
@@ -33,11 +35,15 @@ The demo proves a technical invariant, not a traction claim: no verified executo
 Agent frameworks orchestrate an already-defined workflow. Relay operates before and around that workflow:
 
 - an Intent Graph represents source, authority, scope and version;
+- an Authority Graph determines which named human may resolve, invite or approve at each risk level;
 - the Conflict Compiler detects six conflict classes while retaining evidence lineage;
 - every Mission is isolated to one Workspace or one expiring share grant;
 - preflight binds execution to the current Plan Version, dependencies, capability grants and exact approvals;
 - deterministic idempotency keys prevent the same successful task from creating duplicate completion records;
 - successful Agent completion requires a hashed Artifact and Execution Receipt;
+- every human, Agent and provider transition is a persisted, ordered Mission event delivered through SSE;
+- Agent runs survive request boundaries and expose heartbeat, checkpoint, pause, resume, cancel and stale-plan invalidation;
+- OAuth credentials stay encrypted outside model context and provider calls cross one plan-bound Capability Gateway;
 - a correction invalidates the stale plan and approvals instead of remaining an ignored chat message.
 
 ## Why the insight is founder-led
@@ -60,8 +66,12 @@ Over time that graph can learn which sources are authoritative in a given scope,
 - The evaluation suite covers all six conflict classes.
 - Cross-workspace mission access is denied.
 - Viewer links cannot mutate a Mission; share grants are Mission-specific and expiring.
+- Named invitations create role-bound Mission members; contributors cannot exercise decision authority.
+- Presence, comments, mentions, checkpoint handoffs and Agent state changes share one persisted event lineage.
+- Durable Agent runs can pause, resume, cancel and stop automatically when their Plan Version becomes stale.
 - A built-in Agent task cannot complete without a generated artifact and SHA-256 receipt.
 - A task with no verified provider executor stops before side effects.
+- Google Workspace, Slack, Notion, GitHub and Figma have real OAuth, verification and encrypted-vault adapters; an unconfigured deployment never reports them as connected.
 - Public blocker cards omit raw source evidence.
 
 ## What remains a hypothesis
@@ -69,19 +79,17 @@ Over time that graph can learn which sources are authoritative in a given scope,
 - Teams will repeatedly entrust the same category of launch Mission to Relay.
 - Accepted conflict detections will prevent enough rework to justify a paid plan.
 - The launch wedge will expand naturally into onboarding, customer success, procurement and other high-impact processes.
-- Provider-specific execution will remain reliable under real OAuth, token expiry, rate limits and rollback conditions.
+- Provider execution reliability under production-scale token expiry, rate limits and rollback conditions remains to be measured.
 
 These belong in design-partner experiments, not in launch-day claims.
 
 ## The next technical milestone
 
-Complete one provider end to end before adding more logos:
+Run the launch wedge repeatedly with design partners and turn runtime lineage into a measured benchmark:
 
-1. OAuth callback and encrypted credential storage;
-2. Mission- and resource-scoped capability grant;
-3. read verification against a named resource;
-4. one draft-only action;
-5. provider response captured as an execution receipt;
-6. revoke, reconnect, token refresh and cross-tenant tests.
-
-Until that chain is live, Relay must display external connectors as unavailable rather than simulated.
+1. connector success, refresh, rate-limit and revocation reliability;
+2. conflict precision and false-positive rate on real launch missions;
+3. authority-owner accuracy after human corrections;
+4. prevented stale-plan and unauthorized-action counts;
+5. mission outcome, rework and rollback rates;
+6. policy regression fixtures contributed by every corrected production incident.

@@ -5,6 +5,8 @@ export type MissionEvalCase = {
   description: string;
   input: CreateMissionInput;
   expectedConflictTypes: ConflictType[];
+  expectedBlockingConflictTypes?: ConflictType[];
+  minimumReferencedAuthority?: number;
 };
 
 export const missionEvalCases: MissionEvalCase[] = [
@@ -22,6 +24,7 @@ export const missionEvalCases: MissionEvalCase[] = [
       ],
     },
     expectedConflictTypes: ["Hard conflict"],
+    minimumReferencedAuthority: 5,
   },
   {
     id: "refund-chargeback",
@@ -37,6 +40,7 @@ export const missionEvalCases: MissionEvalCase[] = [
       ],
     },
     expectedConflictTypes: ["Policy conflict"],
+    minimumReferencedAuthority: 5,
   },
   {
     id: "client-scope-version",
@@ -52,6 +56,7 @@ export const missionEvalCases: MissionEvalCase[] = [
       ],
     },
     expectedConflictTypes: ["Version conflict"],
+    minimumReferencedAuthority: 5,
   },
   {
     id: "procurement-security-gate",
@@ -67,6 +72,7 @@ export const missionEvalCases: MissionEvalCase[] = [
       ],
     },
     expectedConflictTypes: ["Hard conflict"],
+    minimumReferencedAuthority: 5,
   },
   {
     id: "launch-resource-shortfall",
@@ -82,6 +88,7 @@ export const missionEvalCases: MissionEvalCase[] = [
       ],
     },
     expectedConflictTypes: ["Resource conflict"],
+    minimumReferencedAuthority: 5,
   },
   {
     id: "public-release-authority-gap",
@@ -97,6 +104,7 @@ export const missionEvalCases: MissionEvalCase[] = [
       ],
     },
     expectedConflictTypes: ["Authority conflict"],
+    minimumReferencedAuthority: 5,
   },
   {
     id: "ads-payment-dependency",
@@ -112,5 +120,67 @@ export const missionEvalCases: MissionEvalCase[] = [
       ],
     },
     expectedConflictTypes: ["Dependency conflict"],
+    minimumReferencedAuthority: 5,
+  },
+  {
+    id: "aligned-review-before-launch",
+    description: "A brand review before launch must not create a blocking date conflict.",
+    input: {
+      title: "Publish an approved launch",
+      objective: "Review on 8 月 10 日 and launch on 8 月 12 日.", successMetric: "Launch on time", createdBy: "Ada",
+      sources: [
+        { type: "Calendar", title: "Brand review", author: "Brand lead", content: "Mandatory brand approval review is scheduled for 8 月 10 日.", authorityLevel: 5 },
+        { type: "Slack", title: "Launch date", author: "Growth lead", content: "The campaign must launch on 8 月 12 日.", authorityLevel: 4 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
+  },
+  {
+    id: "sufficient-design-capacity",
+    description: "Verified capacity above the requirement must not be blocked.",
+    input: {
+      title: "Prepare launch assets", objective: "Finish the creative package this week.", successMetric: "Assets ready", createdBy: "Mia",
+      sources: [
+        { type: "Notion", title: "Creative plan", author: "Creative lead", content: "The launch needs 2 designers to finish on time.", authorityLevel: 4 },
+        { type: "Slack", title: "Staffing", author: "Operations", content: "4 designers are available this week.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
+  },
+  {
+    id: "same-budget-two-sources",
+    description: "Two sources agreeing on the same budget must not look like a version conflict.",
+    input: {
+      title: "Approve campaign budget", objective: "Run within NT$30,000.", successMetric: "Stay within budget", createdBy: "Noah",
+      sources: [
+        { type: "Notion", title: "Budget", author: "Finance", content: "Campaign budget limit is NT$30,000.", authorityLevel: 5 },
+        { type: "Email", title: "Budget confirmation", author: "CEO", content: "The approved budget is NT$30,000 maximum.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
+  },
+  {
+    id: "ads-payment-present",
+    description: "A verified payment method must not trigger a dependency blocker.",
+    input: {
+      title: "Prepare paid campaign", objective: "Prepare the paid campaign after account checks.", successMetric: "Draft ready", createdBy: "Jae",
+      sources: [
+        { type: "Ads", title: "Campaign plan", author: "Growth", content: "The launch needs a Meta Ads campaign draft.", authorityLevel: 4 },
+        { type: "Ads", title: "Account status", author: "Billing admin", content: "A verified payment method is available.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
+  },
+  {
+    id: "audience-policy-satisfied",
+    description: "A source confirming exclusions are applied must not create an audience blocker.",
+    input: {
+      title: "Prepare campaign audience", objective: "Reach only new prospects.", successMetric: "Zero members contacted", createdBy: "Lin",
+      sources: [
+        { type: "Slack", title: "Audience policy", author: "Growth", content: "Do not promote to existing members.", authorityLevel: 5 },
+        { type: "CRM", title: "Audience check", author: "CRM owner", content: "The current campaign audience contains new leads only.", authorityLevel: 4 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
   },
 ];

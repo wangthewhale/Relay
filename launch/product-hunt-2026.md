@@ -18,10 +18,13 @@
 - Detect six classes of intent conflict with source lineage.
 - Bind plans, decisions and approvals to an immutable version.
 - Mark an agent task complete only when a verified executor produces an artifact and receipt.
-- Create mission-scoped, expiring viewer or editor links.
+- Invite named, role-bound teammates and show live presence, comments and checkpoint handoffs.
+- Pause, resume and cancel durable Agent runs on one current Plan Version.
+- Create mission-scoped, expiring read-only links.
 - Generate a sanitized public blocker card without exposing raw mission evidence.
+- Connect configured Google Workspace, Slack, Notion, GitHub or Figma accounts through real OAuth; unconfigured providers stay unavailable.
 
-Do not claim verified Slack, Gmail, Notion, Drive or Calendar execution until the corresponding OAuth callback, credential vault, resource-scope verification and provider receipt are live. Do not claim customers, adoption, error reduction or time saved without measured evidence.
+Do not claim that every provider action is implemented merely because its OAuth adapter exists. Claim only the operations registered in the Tool Gateway and demonstrated with a provider receipt. Do not claim customers, adoption, error reduction or time saved without measured evidence.
 
 ## Gallery sequence
 
@@ -33,7 +36,9 @@ Do not claim verified Slack, Gmail, Notion, Drive or Calendar execution until th
    Caption: “Ask the accountable human, not every human.”
 4. **The execution contract:** Plan version, owners, dependencies, forbidden actions and stop conditions.
    Caption: “One current version for humans and agents.”
-5. **The proof:** Artifact hash, execution receipt and sanitized share card.
+5. **Live multiplayer:** A named teammate joins, corrects the Mission and hands a checkpoint to an Agent.
+   Caption: “Everyone sees one version; every correction becomes executable state.”
+6. **The proof:** Artifact hash, provider receipt and sanitized share card.
    Caption: “No artifact, no completion.”
 
 ## 90-second demo script
@@ -58,11 +63,15 @@ Choose the recommended resolution. Show the decision owner and record the reason
 
 Compile Plan v2. Show Plan v1 superseded, old approvals invalidated and one current task graph.
 
-**69–81s — Real execution boundary**
+**69–79s — Live runtime**
+
+Invite a named teammate, show presence and a correction arriving instantly, then pause and resume one Agent from its checkpoint.
+
+**79–87s — Real execution boundary**
 
 Open T-01. Show the evidence-manifest artifact and SHA-256 receipt. Open an unverified provider task and show the precise blocker. Say: “No artifact, no completion. No verified provider, no external action.”
 
-**81–90s — Share loop**
+**87–90s — Share loop**
 
 Generate the sanitized blocker card. End with: “Paste the launch your team is most afraid to get wrong.”
 
@@ -70,7 +79,7 @@ Generate the sanitized blocker card. End with: “Paste the launch your team is 
 
 AI agents rarely receive one clean instruction. They receive a deadline in Slack, a customer constraint in email, an old budget in Notion and an approval date in Calendar. Most agent tools begin after the workflow is defined. Relay works one layer earlier: it determines which intent is current and safe enough to execute.
 
-Today the product can compile pasted source evidence, find six classes of conflict, route a decision, version the resulting plan, invalidate stale approval, isolate each workspace and require a hashed artifact receipt before an agent task is complete. External connectors are deliberately shown as unavailable until their real OAuth and resource verification are complete.
+Today the product can compile pasted source evidence, find six classes of conflict, route a decision by named authority, version the resulting plan, invalidate stale approval, stream persisted multiplayer events, control durable Agent runs and require a hashed artifact or provider receipt before completion. Configured connectors use real OAuth and resource verification; unconfigured providers remain explicitly unavailable.
 
 We would love one kind of feedback: paste a messy launch brief and tell us whether Relay found a decision your team would otherwise have missed.
 
@@ -81,7 +90,9 @@ We would love one kind of feedback: paste a messy launch brief and tell us wheth
 - Run the production migration before switching traffic.
 - Verify anonymous private session creation and cookie flags on the production domain.
 - Verify two independent sessions cannot read each other's missions.
-- Verify editor and viewer mission links, expiration and cross-mission denial.
+- Verify named invitation roles, read-only links, expiration and cross-mission denial.
+- Verify two browsers see presence, comments, handoffs and Agent transitions without polling.
+- Verify pause, checkpoint, resume, cancel and stale-plan invalidation.
 - Verify T-01 produces an artifact and identical reruns return the same successful receipt.
 - Verify provider-backed tasks remain blocked while connectors are unavailable.
 - Verify public cards contain no raw source text or personal names from evidence.

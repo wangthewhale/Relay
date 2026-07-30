@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "./router";
 import type { Edge, MarkerType } from "@xyflow/react";
 import type { MissionFlowNode } from "./ExecutionFlowCanvas";
@@ -12,9 +12,8 @@ import {
 import { api, formatDate, formatMoney } from "./api";
 import { localizeDomainText, localizeLabel, localizePayloadKey, tr, useLocale } from "./i18n";
 import { parseQuickMission } from "./quickMission";
-import CoworkReplay from "./CoworkReplay";
 import type {
-  ApprovalRequest, CompilerReceipt, Conflict, CreateMissionInput, ExecutionTask, MissionDetail, MissionSummary, Outcome, PlanVersion, PublicMissionReport, SourceInput,
+  AgentRun, ApprovalRequest, CollaborationSnapshot, CompilerReceipt, Conflict, ConnectorDescriptor, CreateMissionInput, ExecutionTask, MissionDetail, MissionMember, MissionSummary, Outcome, PlanVersion, PublicMissionReport, SourceInput,
 } from "@shared/domain";
 
 type DashboardResponse = {
@@ -37,6 +36,29 @@ type CompilerRuntime = {
   truthfulFallback: boolean;
 };
 
+type SessionIdentity = {
+  actorName: string;
+  workspaceId: string;
+  userId: string;
+  workspaceRole?: "owner" | "admin" | "member" | "viewer";
+  email?: string;
+  title?: string;
+  department?: string;
+  identityVerified: boolean;
+};
+
+function useSessionIdentity() {
+  const [session, setSession] = useState<SessionIdentity>();
+  useEffect(() => {
+    let active = true;
+    void api<{ session: SessionIdentity }>("/api/session")
+      .then((response) => { if (active) setSession(response.session); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  return session;
+}
+
 const navigation = [
   { label: "Overview", labelZh: "總覽", href: "/app", icon: LayoutDashboard },
   { label: "Missions", labelZh: "任務", href: "/app", icon: Radar },
@@ -47,6 +69,7 @@ const navigation = [
 const sourceColors: Record<string, string> = {
   Slack: "violet", Email: "coral", Gmail: "coral", Notion: "stone", "Google Drive": "blue", Calendar: "amber",
   "Google Calendar": "amber", CRM: "teal", Ads: "pink", Manual: "lime", "Meeting note": "blue",
+  GitHub: "stone", Figma: "pink",
 };
 
 const ExecutionFlowCanvas = lazy(() => import("./ExecutionFlowCanvas"));
@@ -106,14 +129,14 @@ function PublicHeader() {
   );
 }
 
-function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: () => void }) {
+function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: (brief: string) => void }) {
   const { locale } = useLocale();
   const sampleBrief = locale === "zh-TW"
     ? `Mission：推出高雄活動行銷專案\n目標：7 月 29 日前上線，取得 24 筆付費報名\nSlack｜Growth 負責人：不得向既有會員推廣\nEmail｜客戶：所有公開素材都必須先通過品牌核准\nCalendar｜營運：品牌審查排在 7 月 30 日\nNotion｜行銷：預算上限是 NT$20,000\nManual｜Mission owner：核准預算上限是 NT$30,000，未經我核准不得發布\nCRM｜CRM system：目前受眾同時包含既有會員與新名單\nAds｜Meta Ads：缺少付款方式，目前無法發布\n成功指標：24 筆付費報名，CPA 不高於 NT$1,250`
     : `Mission: Launch the Kaohsiung campaign\nGoal: Launch by July 29 and acquire 24 paid registrations\nSlack | Growth lead: Do not promote to existing members\nEmail | Client: Every public creative requires brand approval\nCalendar | Operations: Brand review is scheduled for July 30\nNotion | Marketing: Budget limit is NT$20,000\nManual | Mission owner: Approved budget is NT$30,000 and nothing can publish without my approval\nCRM | CRM system: Current audience includes existing members and new leads\nAds | Meta Ads: Payment method is missing, so publishing is unavailable\nSuccess: 24 paid registrations at CPA no higher than NT$1,250`;
-  const [brief, setBrief] = useState(sampleBrief);
+  const [brief, setBrief] = useState("");
   const [preview, setPreview] = useState<CompilerPreview>();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -126,11 +149,6 @@ function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: () => 
     finally { setBusy(false); }
   }, []);
 
-  useEffect(() => {
-    setBrief(sampleBrief);
-    void compilePreview(sampleBrief);
-  }, [locale]);
-
   const result = preview?.conflict;
   const recommended = result?.options.find((option) => option.recommended);
   const attachedSourceCount = brief.split("\n").filter((line) => /^(Slack|Email|Calendar|Notion|Manual|CRM|Ads)[｜|]/i.test(line)).length;
@@ -139,8 +157,8 @@ function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: () => 
   return <div className="magic-compiler" id="magic" aria-live="polite">
     <div className="magic-topbar"><span><Braces size={14} /> {tr("LIVE INTENT COMPILER", "真實意圖編譯器")}</span><span className="magic-runtime"><span /> {preview?.receipt.compiler.mode === "hybrid" ? tr("MODEL + POLICY GATE", "模型 + 政策閘門") : tr("EVIDENCE-SAFE PREVIEW", "證據安全預覽")}</span></div>
     <div className="magic-input">
-      <div className="magic-input-head"><div><span>01 / {tr("MESSY BRIEF", "混亂 BRIEF")}</span><b>{tr("7 sources disagree", "7 個來源互相矛盾")}</b></div><button type="button" onClick={() => setEditing((value) => !value)}>{editing ? tr("Close editor", "收起編輯") : tr("Edit the evidence", "編輯來源")}</button></div>
-      {editing ? <div className="magic-editor"><textarea aria-label={tr("Mission brief to compile", "要編譯的 Mission Brief")} value={brief} onChange={(event) => setBrief(event.target.value)} rows={10} /><button className="button button-primary button-full" type="button" disabled={busy || brief.trim().length < 10} onClick={() => { void compilePreview(brief); }}>{busy ? <><span className="loader small" /> {tr("Compiling…", "編譯中…")}</> : <><Zap size={16} /> {tr("Run the real compiler", "執行真實編譯")}</>}</button></div>
+      <div className="magic-input-head"><div><span>01 / {tr("YOUR REAL BRIEF", "你的真實 BRIEF")}</span><b>{attachedSourceCount ? tr(`${attachedSourceCount} source lines ready`, `${attachedSourceCount} 個來源待比對`) : tr("Nothing runs until you press Run", "按下 Run 前不會自動執行")}</b></div><div className="magic-input-actions"><button type="button" onClick={() => { setBrief(sampleBrief); setPreview(undefined); setEditing(true); }}>{tr("Load example", "載入範例")}</button>{preview && <button type="button" onClick={() => setEditing((value) => !value)}>{editing ? tr("Show result", "查看結果") : tr("Edit input", "修改輸入")}</button>}</div></div>
+      {editing ? <div className="magic-editor"><textarea aria-label={tr("Mission brief to compile", "要編譯的 Mission Brief")} value={brief} onChange={(event) => { setBrief(event.target.value); setPreview(undefined); }} rows={10} placeholder={tr("Paste Slack, email, calendar, budget and approval requirements here. One source per line is enough.", "把 Slack、Email、行事曆、預算與核准要求貼在這裡；每個來源一行即可。")}/><button className="button button-primary button-full" type="button" disabled={busy || brief.trim().length < 10} onClick={() => { void compilePreview(brief); }}>{busy ? <><span className="loader small" /> {tr("Agents are checking every instruction…", "AI 正在逐條檢查指令…")}</> : <><Play size={16} /> {tr("Run Relay on my brief", "Run：分析我的 Brief")}</>}</button><small className="magic-input-privacy"><LockKeyhole size={13}/>{tr("Preview input is analyzed in memory and is not saved.", "預覽內容只在記憶體中分析，不會保存。")}</small></div>
         : <div className="magic-source-list">{sourceLines.map((line) => { const [provider, ...parts] = line.split(/[：:]/); return <div key={line}><span>{provider.split(/[｜|]/)[0]}</span><p>{parts.join(":")}</p><FileCheck2 size={13} /></div>; })}<small>+{Math.max(0, attachedSourceCount - sourceLines.length)} {tr("more attached sources", "個已附來源")}</small></div>}
     </div>
     <div className="magic-compile-rail"><span /><Zap size={17} /><b>{busy ? tr("COMPILING", "編譯中") : tr("CONTRACT CHECKED", "合約已檢查")}</b><span /></div>
@@ -148,7 +166,7 @@ function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: () => 
       <div className="magic-receipt"><span>{tr("COMPILER RECEIPT", "編譯器憑據")}</span><div><b>{preview.receipt.sources}</b><small>{tr("sources", "來源")}</small></div><div><b>{preview.receipt.assertions}</b><small>{tr("assertions", "主張")}</small></div><div><b>{preview.receipt.conflicts}</b><small>{tr("conflicts", "衝突")}</small></div><div><b>{preview.receipt.compiler.evidenceCoverage}%</b><small>{tr("evidence linked", "證據覆蓋")}</small></div></div>
       <div className="magic-stop"><span className="magic-stop-icon"><CircleStop size={22} /></span><div><span>{tr("RELAY STOPPED EXECUTION", "RELAY 已停止執行")}</span><h3>{localizeDomainText(result.title)}</h3><p>{localizeDomainText(result.summary)}</p></div><span className="severity-pill">{localizeLabel(result.severity)}</span></div>
       <div className="magic-evidence"><span>{tr("WHY", "為什麼")}</span>{preview.evidence.slice(0, 2).map((item) => <div key={item.id}><FlowSourceIcon type={item.sourceType} /><p><b>{localizeDomainText(item.statement)}</b><small>{localizeLabel(item.sourceType)} · {localizeDomainText(item.author)}</small></p></div>)}</div>
-      <div className="magic-control"><div><span><Bot size={14} /> {preview.execution.blockedAgents} {tr("agent tasks paused", "個 Agent 任務已暫停")}</span><span><LockKeyhole size={14} /> {preview.execution.requiredProviders} {tr("scoped providers", "個權限範圍")}</span></div><p><Sparkles size={15} /><span><b>{tr("NEXT SAFE ACTION", "下一步安全行動")}</b>{localizeDomainText(recommended?.description ?? result.consequences)}</span></p><button className="button button-primary button-full" type="button" onClick={onOpenFullMission}>{tr("Turn this into an execution contract", "把它變成可執行合約")} <ArrowRight size={17} /></button></div>
+      <div className="magic-control"><div><span><Bot size={14} /> {preview.execution.blockedAgents} {tr("agent paths held", "條 Agent 路徑已停住")}</span><span><LockKeyhole size={14} /> {preview.execution.requiredProviders} {tr("scoped providers required", "個服務需要範圍化權限")}</span></div><p><Sparkles size={15} /><span><b>{tr("NEXT SAFE ACTION", "下一步安全行動")}</b>{localizeDomainText(recommended?.description ?? result.consequences)}</span></p><button className="button button-primary button-full" type="button" onClick={() => onOpenFullMission(brief)}>{tr("Save it and open the live mission room", "保存並進入即時 Mission Room")} <ArrowRight size={17} /></button></div>
       <small className="magic-truth"><ShieldCheck size={13} /> {tr("This result came from the live Relay compiler. Preview text is not stored.", "這是 Relay 真實編譯器的即時結果；預覽文字不會被保存。")}</small>
     </div> : null}
   </div>;
@@ -165,7 +183,7 @@ function RelayPlainStory() {
     </div>
     <div className="relay-story-collision"><span /><AlertOctagon size={18} /><b>{tr("Relay finds the collision", "Relay 找到撞車的地方")}</b><span /></div>
     <div className="relay-story-stop"><span><CircleStop size={22} /></span><div><small>{tr("CANNOT BOTH BE TRUE", "兩件事不能同時成立")}</small><h3>{tr("Launch July 29, but approve July 30?", "7 月 29 日發布，卻要 7 月 30 日才核准？")}</h3><p>{tr("Email, Ads and CRM agents pause before they touch customers, money or data.", "Email、Ads、CRM Agent 先暫停，不碰客戶、不花錢、不改資料。")}</p></div></div>
-    <div className="relay-story-human"><UserRound size={19} /><div><small>{tr("ASK THE RIGHT HUMAN", "交給真正能決定的人")}</small><b>{tr("Jennifer chooses: move review to July 28.", "Jennifer 決定：把審查提前到 7 月 28 日。")}</b></div><span>{tr("WAITING", "等待決定")}</span></div>
+    <div className="relay-story-human"><UserRound size={19} /><div><small>{tr("ASK THE RIGHT HUMAN", "交給真正能決定的人")}</small><b>{tr("The mission owner chooses: move review to July 28.", "Mission 負責人決定：把審查提前到 7 月 28 日。")}</b></div><span>{tr("WAITING", "等待決定")}</span></div>
     <div className="relay-story-safe"><ShieldCheck size={20} /><div><small>{tr("SAFE PLAN v2", "安全計畫 v2")}</small><b>{tr("Approve first. Then let the agents continue from one shared version.", "先核准，再讓所有 Agent 按同一個版本繼續。")}</b></div><ArrowRight size={18} /></div>
   </div>;
 }
@@ -216,8 +234,25 @@ function LandingUseCases() {
       <div className="use-case-questions">{questions.map((question) => <span key={question}><Check size={14} /> {question}</span>)}</div>
       <div className="use-case-result"><ShieldCheck size={16} /><div><small>{tr("RELAY OUTPUT", "RELAY 最後交付")}</small><b>{result}</b></div></div>
     </article>)}</div>
-    <p className="use-case-truth"><ShieldCheck size={15} /> {tr("The public MVP fully demonstrates the first workflow through pasted sources and versioned mission state. Verified external OAuth execution is still rolling out provider by provider.", "公開 MVP 已完整示範第一個流程：貼上來源、偵測衝突、建立版本化 Mission；外部 OAuth 與真實工具執行仍在逐一導入。")}</p>
+    <p className="use-case-truth"><ShieldCheck size={15} /> {tr("The live MVP supports pasted evidence, versioned execution, realtime teammates and durable Agent runs. A provider remains unavailable until its OAuth app and vault secrets are configured and verified.", "目前版本支援貼上證據、版本化執行、即時團隊協作與可恢復 Agent Run；任何服務都必須完成 OAuth App 與 Vault Secret 設定並驗證後才會開放。")}</p>
   </section>;
+}
+
+function RuntimePromiseCard() {
+  const roles = [
+    ["CEO", tr("Decides budget", "決定預算")],
+    [tr("Engineer", "工程師"), tr("Ships code", "交付程式")],
+    [tr("Designer", "設計師"), tr("Reviews Figma", "審查 Figma")],
+    [tr("Finance", "財務"), tr("Guards spend", "控管支出")],
+  ];
+  const agents = [["Conflict Agent", tr("found 2 blockers", "找到 2 個阻擋")], ["Launch Agent", tr("paused at approval", "停在核准關卡")], ["GitHub Agent", tr("checkpoint saved", "Checkpoint 已保存")]];
+  return <aside className="runtime-promise" aria-label={tr("What the live mission room contains", "即時 Mission Room 會顯示什麼") }>
+    <div className="runtime-promise-head"><span><Activity size={15}/>{tr("LIVE MISSION ROOM", "即時 MISSION ROOM")}</span><em><span/>{tr("SERVER-SENT EVENTS", "事件即時推送")}</em></div>
+    <div className="runtime-team-lane"><small>{tr("VERIFIED HUMANS", "具名人類同事")}</small><div>{roles.map(([name, action]) => <article key={name}><span>{name.slice(0, 2)}</span><p><b>{name}</b><small>{action}</small></p><i/></article>)}</div></div>
+    <div className="runtime-contract-pulse"><span/><GitBranch size={17}/><b>{tr("ONE ACTIVE PLAN · v4", "唯一有效計畫 · v4")}</b><span/></div>
+    <div className="runtime-agent-lane"><small>{tr("DURABLE AGENT RUNS", "可恢復的 AGENT RUN")}</small>{agents.map(([name, action], index) => <article key={name}><span><Bot size={16}/></span><p><b>{name}</b><small>{action}</small></p><div className="runtime-progress"><i style={{width: `${[100, 62, 38][index]}%`}}/></div><em>{index === 0 ? tr("DONE", "完成") : index === 1 ? tr("PAUSED", "暫停") : tr("RUNNING", "執行中")}</em></article>)}</div>
+    <div className="runtime-proof-row"><ShieldCheck size={16}/><p><b>{tr("Every action is real or visibly blocked.", "每個行動不是有真實憑據，就是清楚標示被阻擋。")}</b><small>{tr("No fake connection. No anonymous editor. No lost checkpoint.", "不假裝已連線、不允許匿名編輯、也不遺失執行進度。")}</small></p></div>
+  </aside>;
 }
 
 function LandingPage() {
@@ -234,20 +269,20 @@ function LandingPage() {
             <h2>{locale === "zh-TW" ? <>把 Slack、Email、Brief、預算與審核日期一起貼上。Relay 會在一分鐘內<b>指出互相衝突的原句、停住受影響的 Agent，並交給真正有權決定的人。</b></> : <>Paste Slack, email, briefs, budgets and review dates together. In under a minute Relay <b>shows the exact conflicting lines, pauses affected agents and routes the decision to the accountable human.</b></>}</h2>
             <p>{tr("Built first for cross-functional campaign and product launches where one wrong version can contact customers, waste budget or publish before approval.", "第一個切口就是跨部門 Campaign 與產品 Launch：一個錯誤版本就可能誤觸客戶、浪費預算，或在核准前公開發布。")}</p>
             <div className="hero-actions">
-              <button className="button button-primary button-large" onClick={() => navigate("/missions/new")}>{tr("Check my launch brief", "檢查我的 Launch Brief")} <ArrowRight size={18} /></button>
-              <button className="button button-ghost button-large" onClick={() => document.getElementById("magic")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Play size={17} fill="currentColor" /> {tr("See Relay check the mission", "看 Relay 怎麼檢查")}</button>
+              <button className="button button-primary button-large" onClick={() => document.getElementById("magic")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{tr("Run Relay on my brief", "立刻 Run 我的 Brief")} <ArrowRight size={18} /></button>
+              <button className="button button-ghost button-large" onClick={() => navigate("/demo")}><Play size={17} fill="currentColor" /> {tr("See the real workflow", "看真實操作流程")}</button>
             </div>
             <RelayJourney active={1} />
             <p className="agent-definition"><Bot size={16} /><span><b>{tr("What is an AI agent here?", "這裡的 AI Agent 是什麼？")}</b>{tr("A software role that performs one clearly named job—not a person and not an autonomous employee.", "它是只負責一種明確工作的軟體角色，不是真人，也不是會自行做主的虛擬員工。")}</span></p>
           </div>
-          <CoworkReplay variant="hero" />
+          <RuntimePromiseCard />
         </section>
 
         <section className="proof-strip"><span>{tr("RELAY IS THE CHECKPOINT BEFORE ACTION", "RELAY 是 AI 動手前的檢查站")}</span><ArrowRight size={18} /><b>{tr("source-backed conflict → affected agents stop → accountable human decides → one version resumes", "有來源的衝突 → 受影響 Agent 停止 → 權責人決定 → 只讓同一版本繼續")}</b></section>
 
         <section className="section live-proof-section">
           <div className="live-proof-copy"><span className="section-index">01 / {tr("REAL MAGIC MOMENT", "真實 MAGIC MOMENT")}</span><h2>{tr("This is not a video. Relay is really comparing seven sources.", "這不是動畫。Relay 真的正在把 7 個來源互相比對。")}</h2><p>{tr("The compiler below extracts statements, detects a rule collision, pauses affected work and proposes one safe next step. Edit the evidence and run it again.", "下方編譯器會拆出每項主張、找出規則衝突、暫停受影響的工作，再提出一個安全下一步。你可以直接修改來源再跑一次。")}</p><div className="live-proof-legend"><span><FileCheck2 size={15} /> {tr("Input: pasted source text", "輸入：貼上的原始文字")}</span><span><CircleStop size={15} /> {tr("Output: a source-backed blocker", "輸出：有來源的阻擋原因")}</span><span><ShieldCheck size={15} /> {tr("Preview is not stored", "預覽內容不保存")}</span></div></div>
-          <LandingMagicCompiler onOpenFullMission={() => navigate("/missions/new?sample=1")} />
+          <LandingMagicCompiler onOpenFullMission={(brief) => { sessionStorage.setItem("relay_mission_draft", brief); navigate("/missions/new?draft=1"); }} />
         </section>
 
         <LandingPainSection />
@@ -261,18 +296,18 @@ function LandingPage() {
         <LandingUseCases />
 
         <section className="section multiplayer-section" id="multiplayer">
-          <div className="multiplayer-copy"><span className="section-index">06 / {tr("ONE SHARED VERSION", "全隊共用一個版本")}</span><h2>{tr("When one human changes a sentence, every working agent must know.", "有人改了一句話，正在工作的 Agent 也要立刻知道。")}</h2><p>{tr("Jennifer changes the budget. Relay does not leave that correction in chat. It records who changed it, makes the old contract and approvals stale, pauses affected agents, and creates the next plan version.", "Jennifer 修改預算後，Relay 不會把修正留在聊天室裡。它會記下誰改了內容、讓舊合約與舊核准失效、停住受影響的 Agent，再建立下一個計畫版本。")}</p><Link to="/demo" className="button button-dark">{tr("Watch this exact mission", "打開這個真實 Mission")} <ArrowRight size={16} /></Link></div>
+          <div className="multiplayer-copy"><span className="section-index">06 / {tr("ONE SHARED VERSION", "全隊共用一個版本")}</span><h2>{tr("When one human changes a sentence, every working agent must know.", "有人改了一句話，正在工作的 Agent 也要立刻知道。")}</h2><p>{tr("A named mission owner changes the budget. Relay does not leave that correction in chat. It records who changed it, makes the old contract and approvals stale, pauses affected agents, and creates the next plan version.", "具名的 Mission 負責人修改預算後，Relay 不會把修正留在聊天室裡。它會記下是誰改了內容、讓舊合約與舊核准失效、停住受影響的 Agent，再建立下一個計畫版本。")}</p><Link to="/demo" className="button button-dark">{tr("Watch this exact mission", "打開這個真實 Mission")} <ArrowRight size={16} /></Link></div>
           <div className="multiplayer-proof" aria-label={tr("Shared mission proof", "共用 Mission 證明") }>
-            <div className="multiplayer-proof-head"><span><UsersRound size={16} /> {tr("SHARED MISSION URL", "共用 MISSION URL")}</span><span className="sync-chip"><span /> {tr("SYNC EVERY 10S", "每 10 秒同步")}</span></div>
+            <div className="multiplayer-proof-head"><span><UsersRound size={16} /> {tr("ROLE-BOUND MISSION INVITE", "綁定身分與角色的 MISSION 邀請")}</span><span className="sync-chip"><span /> {tr("LIVE EVENT STREAM", "即時事件流")}</span></div>
             <div className="multiplayer-path">
-              <article><span>01</span><UserRound size={19} /><b>{tr("Jennifer changes the budget", "Jennifer 修改預算")}</b><small>{tr("Named and sourced", "記名並保留來源")}</small></article>
+              <article><span>01</span><UserRound size={19} /><b>{tr("The owner changes the budget", "負責人修改預算")}</b><small>{tr("Named and sourced", "記名並保留來源")}</small></article>
               <ArrowRight size={17} />
               <article><span>02</span><GitBranch size={19} /><b>{tr("Plan v3 becomes stale", "計畫 v3 立即失效")}</b><small>{tr("Old approval cannot follow", "舊核准不能沿用")}</small></article>
               <ArrowRight size={17} />
               <article><span>03</span><Bot size={19} /><b>{tr("Agents pause for Plan v4", "Agent 等待計畫 v4")}</b><small>{tr("One explicit next action", "只有一個明確下一步")}</small></article>
             </div>
-            <div className="multiplayer-event"><Activity size={17} /><div><span>{tr("RECORDED ACTIVITY", "已記錄活動")}</span><b>{tr("Jennifer changed the budget limit; Plan v4 requires replanning.", "Jennifer 修改預算上限；Plan v4 需要重新規劃。")}</b></div><small>{tr("persisted", "已保存")}</small></div>
-            <p className="multiplayer-truth"><ShieldCheck size={15} /> {tr("Current public MVP uses persisted events and 10-second refresh—not simulated cursor presence or fake online agents.", "目前公開 MVP 使用已保存事件與 10 秒同步，不模擬游標共編，也不假裝 Agent 正在線上。")}</p>
+            <div className="multiplayer-event"><Activity size={17} /><div><span>{tr("RECORDED ACTIVITY", "已記錄活動")}</span><b>{tr("The mission owner changed the budget limit; Plan v4 requires replanning.", "Mission 負責人修改預算上限；Plan v4 需要重新規劃。")}</b></div><small>{tr("persisted", "已保存")}</small></div>
+            <p className="multiplayer-truth"><ShieldCheck size={15} /> {tr("Presence, corrections, comments, handoffs and Agent checkpoints now arrive through one persisted realtime event stream.", "Presence、修正、留言、交接與 Agent Checkpoint 現在都透過同一條可保存的即時事件流送達。")}</p>
           </div>
         </section>
 
@@ -282,7 +317,7 @@ function LandingPage() {
             <h3>{tr("Launch Kaohsiung campaign", "推出高雄活動行銷專案")}</h3>
             <div className="contract-row"><span>{tr("GOAL", "目標")}</span><p>{tr("Acquire 24 paid registrations by Jul 29", "7 月 29 日前取得 24 筆付費報名")}</p><BadgeCheck size={18} /></div>
             <div className="contract-row"><span>{tr("CONSTRAINT", "限制")}</span><p>{tr("Exclude existing members · Max NT$30,000", "排除既有會員 · 上限 NT$30,000")}</p><BadgeCheck size={18} /></div>
-            <div className="contract-row"><span>{tr("APPROVAL", "核准")}</span><p>{tr("Jennifer · exact payload · expires in 18h", "Jennifer · 精確內容 · 18 小時後到期")}</p><BadgeCheck size={18} /></div>
+            <div className="contract-row"><span>{tr("APPROVAL", "核准")}</span><p>{tr("Named approver · exact payload · expires in 18h", "具名核准者 · 精確內容 · 18 小時後到期")}</p><BadgeCheck size={18} /></div>
             <div className="contract-row"><span>{tr("STOP", "停止")}</span><p>{tr("Pause if CPA > NT$1,250 after 10 conversions", "10 次轉換後若 CPA > NT$1,250 就暫停")}</p><CircleStop size={18} /></div>
             <div className="contract-hash"><Fingerprint size={16} /> sha256:8b1f…c04d <span>{tr("payload locked", "內容已鎖定")}</span></div>
           </div>
@@ -299,8 +334,8 @@ function LandingPage() {
         <section className="section reality-section" id="proof">
           <div className="reality-copy"><span className="section-index">09 / {tr("WHAT WORKS TODAY", "今天真的能用什麼")}</span><h2>{tr("No fake agents. No fake connections. Here is the honest line.", "不假裝 Agent 在線，也不假裝工具已連線。界線寫清楚。")}</h2><p>{tr("Today Relay can take pasted source text, find conflicts, resolve decisions, version a mission, invalidate stale approvals, run verified built-in tasks and preserve artifact-backed receipts. External tool execution comes only after each real connection is verified.", "今天 Relay 可以接收貼上的原始文字、找衝突、解決決策、建立 Mission 版本、讓舊核准失效、執行已驗證的內建任務，並保存由產出物支撐的執行收據。外部工具只有在真實連線逐一驗證後才會執行。")}</p></div>
           <div className="reality-board">
-            <article className="available"><span>{tr("AVAILABLE NOW", "目前可用")}</span><h3>{tr("Shared intent conflict compiler", "共用意圖衝突編譯器")}</h3><ul><li><Check />{tr("One-paste mission intake", "一次貼上 Mission")}</li><li><Check />{tr("Mission-scoped links with expiry and view/edit roles", "綁定 Mission、可到期並區分檢視／編輯的分享連結")}</li><li><Check />{tr("Named corrections, versioned plans and approval invalidation", "具名修正、版本化計畫與核准失效")}</li><li><Check />{tr("Artifact-backed execution receipts and outcome records", "由產出物支撐的執行收據與成果紀錄")}</li></ul></article>
-            <article className="rollout"><span>{tr("DESIGN PARTNER ROLLOUT", "DESIGN PARTNER 導入中")}</span><h3>{tr("Verified external execution", "已驗證的外部執行")}</h3><ul><li><Clock3 />{tr("Slack, Gmail, Notion, Drive and Calendar OAuth", "Slack、Gmail、Notion、Drive 與 Calendar OAuth")}</li><li><Clock3 />{tr("Credential vault and resource verification", "憑證保管庫與資源驗證")}</li><li><Clock3 />{tr("Tool gateway execution and rollback receipts", "Tool Gateway 執行與回滾憑據")}</li><li><Ban />{tr("No simulated connected state", "不模擬已連線狀態")}</li></ul></article>
+            <article className="available"><span>{tr("AVAILABLE NOW", "目前可用")}</span><h3>{tr("Live multiplayer execution control", "即時多人 AI 執行控制")}</h3><ul><li><Check />{tr("User-triggered mission compiler", "由使用者親手觸發的 Mission Compiler")}</li><li><Check />{tr("Named, role-bound team invites and presence", "具名、綁定角色的團隊邀請與 Presence")}</li><li><Check />{tr("Durable Agent queue, checkpoints, pause, resume and cancel", "可恢復的 Agent Queue、Checkpoint、暫停、繼續與取消")}</li><li><Check />{tr("Mission-scoped Runtime API keys and SDK", "綁定 Mission 的 Runtime API Key 與 SDK")}</li><li><Check />{tr("Versioned approvals, artifacts, receipts and outcomes", "版本化核准、Artifact、憑據與成果")}</li></ul></article>
+            <article className="rollout"><span>{tr("REAL PROVIDER GATEWAY", "真實服務 GATEWAY")}</span><h3>{tr("OAuth only becomes green after verification", "OAuth 只有驗證通過才會變綠")}</h3><ul><li><Check />{tr("Google, Slack, Notion, GitHub and Figma OAuth adapters", "Google、Slack、Notion、GitHub 與 Figma OAuth Adapter")}</li><li><Check />{tr("AES-GCM credential vault and token refresh", "AES-GCM 憑證保管庫與 Token Refresh")}</li><li><Check />{tr("Plan-bound Access Manifest and Tool Gateway receipts", "綁定 Plan 的 Access Manifest 與 Tool Gateway 憑據")}</li><li><Ban />{tr("Unconfigured providers stay visibly unavailable", "未設定的服務會誠實顯示不可用")}</li></ul></article>
             <div className="data-flywheel"><Network /><div><span>{tr("THE COMPOUNDING ASSET", "持續複利的資產")}</span><h3>Source → Assertion → Conflict → Decision → Plan → Approval → Artifact → Receipt → Outcome</h3><p>{tr("Each completed mission adds a structured intent-to-outcome chain—not another chat transcript.", "每個完成的 Mission 會增加一條結構化的意圖到成果關係，而不只是另一份對話紀錄。")}</p></div></div>
           </div>
         </section>
@@ -315,16 +350,19 @@ function LandingPage() {
 function AppShell({ children }: { children: ReactNode }) {
   const [sidebar, setSidebar] = useState(false);
   const location = useLocation();
+  const session = useSessionIdentity();
+  const actorName = session?.actorName || tr("Mission owner", "Mission 負責人");
+  const actorRole = session?.title || localizeLabel(session?.department || "Other");
   const isMissionWorkspace = /^\/missions\/[^/]+$/.test(location.pathname);
   return (
     <div className={`app-shell ${isMissionWorkspace ? "mission-shell" : ""}`}>
       {!isMissionWorkspace && <aside className={sidebar ? "sidebar open" : "sidebar"}>
         <div className="sidebar-head"><Logo compact /><button className="icon-button sidebar-close" onClick={() => setSidebar(false)}><X size={18} /></button></div>
-        <div className="workspace-switch"><span className="workspace-avatar">RL</span><div><b>Relay Labs</b><small>{tr("Design partner workspace", "Design Partner 工作區")}</small></div><ChevronDown size={16} /></div>
+        <div className="workspace-switch"><span className="workspace-avatar">PW</span><div><b>{tr("Private workspace", "私人工作區")}</b><small>{tr("Your mission-scoped control plane", "只限你 Mission 的控制平面")}</small></div><ChevronDown size={16} /></div>
         <nav>{navigation.map(({ label, labelZh, href, icon: Icon }) => <NavLink to={href} key={label} className={({ isActive }) => isActive && label === "Overview" ? "active" : ""} onClick={() => setSidebar(false)}><Icon size={18} />{tr(label, labelZh)}</NavLink>)}</nav>
         <div className="sidebar-spacer" />
-        <div className="control-status"><span className="status-orb"><ShieldCheck size={15} /></span><div><b>{tr("Policy checks active", "合約檢查已啟用")}</b><small>{tr("External connectors not linked", "尚未連接外部 Connector")}</small></div></div>
-        <div className="user-card"><span className="user-avatar">JE</span><div><b>Jennifer</b><small>{tr("Workspace owner", "工作區擁有者")}</small></div><button className="icon-button" aria-label={tr("Open user menu", "開啟使用者選單")}><ChevronDown size={15} /></button></div>
+        <div className="control-status"><span className="status-orb"><ShieldCheck size={15} /></span><div><b>{tr("Policy checks active", "合約檢查已啟用")}</b><small>{tr("Provider status is verified per mission", "服務連線會逐一在 Mission 驗證")}</small></div></div>
+        <div className="user-card"><span className="user-avatar">{initials(actorName)}</span><div><b>{actorName}</b><small>{actorRole}</small></div><button className="icon-button" aria-label={tr("Open user menu", "開啟使用者選單")}><ChevronDown size={15} /></button></div>
       </aside>}
       <div className="app-main">{!isMissionWorkspace && <header className="app-header"><button className="icon-button app-menu" onClick={() => setSidebar(true)} aria-label={tr("Open navigation", "開啟導覽選單")}><Menu size={20} /></button><div className="app-search"><Search size={17} /><span>{tr("Search missions, evidence, decisions…", "搜尋 Mission、證據與決策…")}</span><kbd>⌘ K</kbd></div><div className="header-actions"><LanguageSwitcher compact /><span className="environment"><span /> {tr("MVP CONTRACT CHECKS", "MVP 合約檢查")}</span><Link to="/missions/new" className="button button-primary button-small"><Plus size={16} /> {tr("New mission", "新增 Mission")}</Link></div></header>}{children}</div>
       {!isMissionWorkspace && sidebar && <button className="sidebar-scrim" onClick={() => setSidebar(false)} aria-label={tr("Close navigation", "關閉導覽選單")} />}
@@ -340,6 +378,7 @@ function LoadingBlock({ label }: { label?: string }) { return <div className="lo
 function ErrorBlock({ error, retry }: { error: string; retry?: () => void }) { return <div className="error-block"><AlertOctagon /><div><b>{tr("Relay could not load this view", "Relay 無法載入此畫面")}</b><p>{error}</p></div>{retry && <button className="button button-ghost" onClick={retry}>{tr("Retry", "重試")}</button>}</div>; }
 
 function DashboardPage() {
+  const session = useSessionIdentity();
   const [data, setData] = useState<DashboardResponse>();
   const [error, setError] = useState("");
   const [params] = useSearchParams();
@@ -351,7 +390,7 @@ function DashboardPage() {
   const missions = focus === "conflicts" ? data.missions.filter((mission) => mission.openConflicts) : focus === "approvals" ? data.missions.filter((mission) => mission.pendingApprovals) : data.missions;
   return (
     <AppShell><main className="page dashboard-page">
-      <div className="page-title"><div><span className="page-kicker">{tr("WORKSPACE CONTROL CENTER", "WORKSPACE 控制中心")}</span><h1>{tr("Good morning, Jennifer.", "早安，Jennifer。")}</h1><p>{tr("Here’s what needs human judgment before your agents can move.", "以下事項需要人工判斷，完成後 Agent 才能繼續執行。")}</p></div><Link to="/missions/new" className="button button-dark"><Plus size={17} /> {tr("Create mission", "建立 Mission")}</Link></div>
+      <div className="page-title"><div><span className="page-kicker">{tr("WORKSPACE CONTROL CENTER", "WORKSPACE 控制中心")}</span><h1>{tr(`Welcome, ${session?.actorName || "Mission owner"}.`, `歡迎，${session?.actorName || "Mission 負責人"}。`)}</h1><p>{tr("Here’s what needs human judgment before your agents can move.", "以下事項需要人工判斷，完成後 Agent 才能繼續執行。")}</p></div><Link to="/missions/new" className="button button-dark"><Plus size={17} /> {tr("Create mission", "建立 Mission")}</Link></div>
       <section className="stats-grid"><StatCard label={tr("Active missions", "進行中的 Mission")} value={data.metrics.active} icon={Radar} helper={tr("under valid contracts", "受有效合約治理")} /><StatCard label={tr("Blocked", "已阻擋")} value={data.metrics.blocked} icon={CircleStop} helper={tr("execution safely stopped", "已安全停止執行")} accent="danger" /><StatCard label={tr("Awaiting decisions", "等待決策")} value={data.metrics.awaitingDecisions} icon={Scale} helper={tr("conflicts need owners", "衝突需要負責人")} accent="amber" /><StatCard label={tr("Awaiting approvals", "等待核准")} value={data.metrics.awaitingApprovals} icon={ShieldCheck} helper={tr("exact payload review", "等待精確內容審查")} accent="violet" /><StatCard label={tr("Successful", "成功")} value={data.metrics.successfulThisWeek} icon={Target} helper={tr("outcomes verified", "成果已驗證")} accent="teal" /></section>
       <section className="dashboard-grid">
         <div className="panel missions-panel"><div className="panel-heading"><div><span>{tr("MISSIONS", "任務")}</span><h2>{focus ? (focus === "conflicts" ? tr("Conflicts", "衝突") : tr("Approvals", "核准")) : tr("Execution portfolio", "執行組合")}</h2></div><span className="count-chip">{missions.length}</span></div>
@@ -484,8 +523,13 @@ function MissionIntakePage() {
     `Mission：推出高雄活動行銷專案\n目標：7 月 29 日前上線，取得 24 筆付費報名\nSlack｜Growth 負責人：不得向既有會員推廣\nEmail｜客戶：所有公開素材都必須先通過品牌核准\nCalendar｜營運：品牌審查排在 7 月 30 日\nNotion｜行銷：預算上限是 NT$20,000\nManual｜Mission owner：核准預算上限是 NT$30,000，未經我核准不得發布\nCRM｜CRM system：目前受眾同時包含既有會員與新名單\nAds｜Meta Ads：缺少付款方式，目前無法發布\n成功指標：24 筆付費報名，CPA 不高於 NT$1,250`,
   );
   const [mode, setMode] = useState<"quick" | "structured">("quick");
-  const [rawBrief, setRawBrief] = useState(() => new URLSearchParams(window.location.search).get("sample") === "1" ? quickExample : "");
-  const [form, setForm] = useState<CreateMissionInput>({ title: "", objective: "", successMetric: "", createdBy: "Jennifer", sources: [{ type: "Slack", title: "", author: "", content: "", authorityLevel: 3 }, { type: "Email", title: "", author: "", content: "", authorityLevel: 3 }] });
+  const [rawBrief, setRawBrief] = useState(() => {
+    const search = new URLSearchParams(window.location.search);
+    if (search.get("draft") === "1") return sessionStorage.getItem("relay_mission_draft") || "";
+    return search.get("sample") === "1" ? quickExample : "";
+  });
+  const [form, setForm] = useState<CreateMissionInput>({ title: "", objective: "", successMetric: "", createdBy: "Mission owner", sources: [{ type: "Slack", title: "", author: "", content: "", authorityLevel: 3 }, { type: "Email", title: "", author: "", content: "", authorityLevel: 3 }] });
+  const [owner, setOwner] = useState({ name: "", email: "", title: "", department: "Product" });
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [stage, setStage] = useState("");
   const [runMoment, setRunMoment] = useState<CompileRunMomentState>({ open: false, phase: 0, sourceCount: 0 });
   const [compilerRuntime, setCompilerRuntime] = useState<CompilerRuntime>({ mode: "policy_only", policyEngine: "relay-safety-v2", truthfulFallback: true });
@@ -501,8 +545,11 @@ function MissionIntakePage() {
   const updateSource = (index: number, patch: Partial<SourceInput>) => setForm((current) => ({ ...current, sources: current.sources.map((source, sourceIndex) => sourceIndex === index ? { ...source, ...patch } : source) }));
   const loadExample = () => { setMode("quick"); setRawBrief(quickExample); };
   const compileInput = async (input: CreateMissionInput) => {
+    if (!owner.name.trim()) { setError(tr("Tell Relay your name before opening a shared mission room.", "建立共用 Mission Room 前，請先填寫你的姓名。")); return; }
     setBusy(true); setError(""); setRunMoment({ open: true, phase: 0, sourceCount: input.sources.length });
     try {
+      await api("/api/session/profile", { method: "PUT", body: JSON.stringify(owner) });
+      input = { ...input, createdBy: owner.name.trim() };
       setStage(tr("Securing source evidence…", "正在保存來源證據…"));
       const [created] = await Promise.all([
         api<{ mission: MissionDetail }>("/api/missions", { method: "POST", body: JSON.stringify(input) }),
@@ -532,7 +579,8 @@ function MissionIntakePage() {
       setRunMoment((current) => ({ ...current, phase: 4, summary }));
       setStage(tr("Execution contract ready", "執行合約已完成"));
       await waitForMoment(850);
-      navigate("/missions/" + created.mission.id + "?view=conflicts&new=1");
+      sessionStorage.removeItem("relay_mission_draft");
+      navigate("/missions/" + created.mission.id + "?view=room&new=1");
     } catch (err) {
       const message = (err as Error).message;
       setError(message); setBusy(false); setStage("");
@@ -553,11 +601,12 @@ function MissionIntakePage() {
     <CompileRunMoment state={runMoment} runtime={compilerRuntime} onClose={() => setRunMoment((current) => ({ ...current, open: false, error: undefined }))} />
     {mobileRunDock}
     <div className="page-title intake-title"><div><Link to="/app" className="back-link">← {tr("Workspace", "工作區")}</Link><span className="page-kicker">{tr("STEP 1 OF 3", "第 1 步（共 3 步）")}</span><h1>{tr("Paste what everyone said.", "把大家說過的話貼進來。")}</h1><p>{tr("Do not clean it up and do not decide who is right. Paste Slack messages, email requirements and meeting notes together.", "不用整理，也不用先決定誰對。把 Slack 訊息、Email 要求與會議紀錄一起貼上即可。")}</p></div><button className="button button-ghost" onClick={loadExample}><Sparkles size={16} /> {tr("Not sure? Load an example", "不知道怎麼貼？載入範例")}</button></div>
+    <section className="mission-owner-profile"><div><Fingerprint size={18}/><p><b>{tr("Who is opening this Mission?", "誰正在建立這個 Mission？")}</b><small>{tr("Your teammates and Agent receipts will use this identity.", "同事與 Agent 憑據都會使用這個身分。")}</small></p></div><label>{tr("Name", "姓名")}<input required value={owner.name} onChange={(event) => setOwner({...owner, name: event.target.value})} placeholder={tr("Your real name", "你的真實姓名")}/></label><label>{tr("Work email (optional)", "工作 Email（選填）")}<input type="email" value={owner.email} onChange={(event) => setOwner({...owner, email: event.target.value})} placeholder="you@company.com"/></label><label>{tr("Title", "職稱")}<input value={owner.title} onChange={(event) => setOwner({...owner, title: event.target.value})} placeholder={tr("Product lead", "產品負責人")}/></label><label>{tr("Department", "部門")}<select value={owner.department} onChange={(event) => setOwner({...owner, department: event.target.value})}>{["Executive","Product","Engineering","Design","Finance","People","Growth","Operations","Other"].map((item) => <option value={item} key={item}>{localizeLabel(item)}</option>)}</select></label></section>
     <RelayJourney active={1} />
     <button className="advanced-input-toggle" type="button" onClick={() => setMode(mode === "quick" ? "structured" : "quick")}><Braces size={15} /> {mode === "quick" ? tr("Advanced: label every source yourself", "進階：自己逐項標記來源") : tr("Back to the simple paste box", "回到簡單貼上模式")} <ArrowRight size={14} /></button>
     {mode === "quick" ? <form id="quick-mission-form" onSubmit={submitQuick} className="intake-layout quick-intake-layout"><div className="intake-main"><section className="quick-brief-card"><div className="quick-brief-head"><div><span>{tr("PASTE HERE", "貼在這裡")}</span><h2>{tr("Put every version in one box.", "把不同版本全部放進同一格。")}</h2><p>{tr("One line per person or tool is enough. Example: “Slack | Amy: launch July 29”.", "每個人或工具一行就好，例如：「Slack｜Amy：7 月 29 日發布」。")}</p></div><span className="time-to-value"><Clock3 size={15} /> {tr("About one minute", "約 1 分鐘")}</span></div><label className="quick-brief-label"><span>{tr("Your team's messages", "團隊的原始訊息")}</span><textarea className="quick-brief-textarea" value={rawBrief} onChange={(event) => setRawBrief(event.target.value)} rows={18} placeholder={tr("Paste messages, client requirements, dates and budgets here. Contradictions are welcome.", "把訊息、客戶要求、日期與預算貼在這裡。不一致也沒關係。") } required /></label><p className="quick-analysis-note"><ShieldCheck size={14} /> {tr("Relay only analyzes this text in step 2. It will not contact anyone or change another tool.", "第 2 步只會分析這些文字，不會聯絡任何人，也不會修改其他工具。")}</p></section></div>{compileSidebar}</form>
       : <form id="structured-mission-form" onSubmit={submitStructured} className="intake-layout"><div className="intake-main"><section className="form-section"><div className="form-section-title"><span>01</span><div><h2>{tr("Define the outcome", "定義成果")}</h2><p>{tr("What must be true when this mission succeeds?", "這個 Mission 成功時，哪些條件必須成立？")}</p></div></div><label>{tr("Mission name", "Mission 名稱")}<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={tr("Launch Kaohsiung campaign", "推出高雄活動行銷專案")} required minLength={3} /></label><label>{tr("Objective", "目標")}<textarea value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })} placeholder={tr("Launch by… within… while never…", "在……前完成；限制為……；且絕不能……")} required minLength={10} rows={4} /></label><label>{tr("Success contract", "成功合約")}<input value={form.successMetric} onChange={(event) => setForm({ ...form, successMetric: event.target.value })} placeholder={tr("24 paid registrations at CPA ≤ NT$1,250", "24 筆付費報名，CPA ≤ NT$1,250")} required /></label></section>
-        <section className="form-section"><div className="form-section-title"><span>02</span><div><h2>{tr("Attach sources", "加入來源")}</h2><p>{tr("Add at least two messages, documents or system records.", "至少加入兩則訊息、文件或系統紀錄。")}</p></div></div><div className="source-editor-list">{form.sources.map((source, index) => <article className="source-editor" key={index}><div className="source-editor-head"><span className={`source-number ${sourceColors[source.type] ?? "lime"}`}>{index + 1}</span><select value={source.type} onChange={(event) => updateSource(index, { type: event.target.value as SourceInput["type"] })}>{["Slack", "Email", "Notion", "Google Drive", "Calendar", "CRM", "Ads", "Meeting note", "Manual"].map((type) => <option key={type} value={type}>{localizeLabel(type)}</option>)}</select>{form.sources.length > 2 && <button type="button" className="icon-button" aria-label={tr("Remove source", "移除來源")} onClick={() => setForm({ ...form, sources: form.sources.filter((_, itemIndex) => itemIndex !== index) })}><X size={17} /></button>}</div><div className="form-grid"><label>{tr("Source title", "來源標題")}<input value={source.title} onChange={(event) => updateSource(index, { title: event.target.value })} placeholder={tr("#launch or client thread", "#launch 或客戶對話串")} required /></label><label>{tr("Author / system", "作者／系統")}<input value={source.author} onChange={(event) => updateSource(index, { author: event.target.value })} placeholder={tr("Growth lead", "Growth 負責人")} required /></label></div><label>{tr("Exact content", "原始內容")}<textarea value={source.content} onChange={(event) => updateSource(index, { content: event.target.value })} placeholder={tr("Paste the original instruction—do not clean it up.", "貼上原始指令，不要先整理或改寫。")} rows={4} required /></label><div className="authority-row"><span>{tr("Authority", "權威等級")}</span><input aria-label={tr("Source authority level", "來源權威等級")} type="range" min="1" max="5" value={source.authorityLevel} onChange={(event) => updateSource(index, { authorityLevel: Number(event.target.value) })} /><b>{source.authorityLevel}/5</b></div></article>)}</div><button type="button" className="button button-ghost add-source" onClick={() => setForm({ ...form, sources: [...form.sources, { type: "Manual", title: "", author: "", content: "", authorityLevel: 3 }] })}><Plus size={17} /> {tr("Add another source", "再加入一個來源")}</button></section></div>{compileSidebar}</form>}
+        <section className="form-section"><div className="form-section-title"><span>02</span><div><h2>{tr("Attach sources", "加入來源")}</h2><p>{tr("Add at least two messages, documents or system records.", "至少加入兩則訊息、文件或系統紀錄。")}</p></div></div><div className="source-editor-list">{form.sources.map((source, index) => <article className="source-editor" key={index}><div className="source-editor-head"><span className={`source-number ${sourceColors[source.type] ?? "lime"}`}>{index + 1}</span><select value={source.type} onChange={(event) => updateSource(index, { type: event.target.value as SourceInput["type"] })}>{["Slack", "Email", "Notion", "Google Drive", "Calendar", "CRM", "Ads", "GitHub", "Figma", "Meeting note", "Manual"].map((type) => <option key={type} value={type}>{localizeLabel(type)}</option>)}</select>{form.sources.length > 2 && <button type="button" className="icon-button" aria-label={tr("Remove source", "移除來源")} onClick={() => setForm({ ...form, sources: form.sources.filter((_, itemIndex) => itemIndex !== index) })}><X size={17} /></button>}</div><div className="form-grid"><label>{tr("Source title", "來源標題")}<input value={source.title} onChange={(event) => updateSource(index, { title: event.target.value })} placeholder={tr("#launch or client thread", "#launch 或客戶對話串")} required /></label><label>{tr("Author / system", "作者／系統")}<input value={source.author} onChange={(event) => updateSource(index, { author: event.target.value })} placeholder={tr("Growth lead", "Growth 負責人")} required /></label></div><label>{tr("Exact content", "原始內容")}<textarea value={source.content} onChange={(event) => updateSource(index, { content: event.target.value })} placeholder={tr("Paste the original instruction—do not clean it up.", "貼上原始指令，不要先整理或改寫。")} rows={4} required /></label><div className="authority-row"><span>{tr("Authority", "權威等級")}</span><input aria-label={tr("Source authority level", "來源權威等級")} type="range" min="1" max="5" value={source.authorityLevel} onChange={(event) => updateSource(index, { authorityLevel: Number(event.target.value) })} /><b>{source.authorityLevel}/5</b></div></article>)}</div><button type="button" className="button button-ghost add-source" onClick={() => setForm({ ...form, sources: [...form.sources, { type: "Manual", title: "", author: "", content: "", authorityLevel: 3 }] })}><Plus size={17} /> {tr("Add another source", "再加入一個來源")}</button></section></div>{compileSidebar}</form>}
   </main></AppShell>;
 }
 
@@ -606,66 +655,195 @@ function MissionRunReceipt({ mission, onInvite, onOpenRoom }: { mission: Mission
   </section>;
 }
 
-function InviteTeammatesDialog({ mission, open, roomUrl, expiresAt, onClose, onCopy }: { mission: MissionDetail; open: boolean; roomUrl: string; expiresAt: string; onClose: () => void; onCopy: () => void }) {
+function InviteTeammatesDialog({ mission, open, onClose, onInvited }: { mission: MissionDetail; open: boolean; onClose: () => void; onInvited: () => void }) {
+  const [form, setForm] = useState({ email: "", name: "", title: "", department: "Engineering", workspaceRole: "member", missionRole: "contributor" });
+  const [invite, setInvite] = useState<{ url: string; expiresAt: string }>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   if (!open) return null;
+  const createInvite = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const response = await api<{ invite: { token: string; expiresAt: string } }>(`/api/missions/${mission.id}/invites`, { method: "POST", body: JSON.stringify(form) });
+      setInvite({ url: `${window.location.origin}/join/${response.invite.token}`, expiresAt: response.invite.expiresAt });
+      onInvited();
+    } catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
+  };
+  const copy = async () => { if (invite) await navigator.clipboard.writeText(invite.url); };
   return <div className="invite-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="invite-dialog" role="dialog" aria-modal="true" aria-labelledby="invite-dialog-title">
       <div className="invite-dialog-head"><span><UsersRound size={18} /></span><div><small>{tr("STEP 3 OF 3", "第 3 步（共 3 步）")}</small><h2 id="invite-dialog-title">{tr("Invite teammates into this mission", "邀請同事加入這個任務")}</h2></div><button className="icon-button" type="button" onClick={onClose} aria-label={tr("Close invite dialog", "關閉邀請視窗")}><X size={18} /></button></div>
-      <p className="invite-dialog-intro">{tr("Send this mission-scoped editor link to the people who should see evidence or make a decision. It cannot open your workspace or other missions.", "把這個只適用於此 Mission 的可編輯連結傳給需要看證據或做決定的同事；它不能開啟你的工作區或其他 Mission。")}</p>
-      <ol className="invite-steps"><li><span>1</span><p><b>{tr("Copy the link", "複製連結")}</b><small>{tr("Relay creates one shared mission URL", "Relay 已建立這份任務的共用網址")}</small></p></li><li><span>2</span><p><b>{tr("Send it in Slack or email", "貼到 Slack 或 Email")}</b><small>{tr("Choose the teammates who should decide", "傳給真正需要做決定的同事")}</small></p></li><li><span>3</span><p><b>{tr("Work from the same saved state", "一起查看同一份任務")}</b><small>{tr("Changes are stored and refresh every 10 seconds", "變更會保存，並每 10 秒同步")}</small></p></li></ol>
-      <label className="invite-link-label"><span>{tr("Shared mission link", "共用任務連結")}</span><div><Link2 size={15} /><input value={roomUrl} readOnly /></div></label>
-      <button className="button button-primary button-full button-large" type="button" onClick={onCopy}><Copy size={17} /> {tr("Copy invite link", "複製邀請連結")}</button>
-      <p className="invite-privacy"><ShieldCheck size={14} /> {tr(`Private capability link · editor access · expires ${formatDate(expiresAt, true)} · revoke support is stored server-side.`, `私人能力連結 · 可編輯 · ${formatDate(expiresAt, true)} 到期 · 伺服器保留撤銷狀態。`)}</p>
+      <p className="invite-dialog-intro">{tr("Create a named, role-bound invite. Anonymous editor links cannot change a mission.", "建立具名、綁定角色的邀請；匿名連結無法修改 Mission。")}</p>
+      {!invite ? <form className="invite-member-form" onSubmit={createInvite}>
+        <div className="form-grid"><label>{tr("Name", "姓名")}<input required value={form.name} onChange={(event) => setForm({...form, name: event.target.value})} placeholder={tr("Alex Chen", "陳小明")}/></label><label>{tr("Work email", "工作 Email")}<input required type="email" value={form.email} onChange={(event) => setForm({...form, email: event.target.value})} placeholder="alex@company.com"/></label></div>
+        <div className="form-grid"><label>{tr("Title", "職稱")}<input value={form.title} onChange={(event) => setForm({...form, title: event.target.value})} placeholder={tr("Staff Engineer", "資深工程師")}/></label><label>{tr("Department", "部門")}<select value={form.department} onChange={(event) => setForm({...form, department: event.target.value})}>{["Executive","Product","Engineering","Design","Finance","People","Growth","Operations","Other"].map((item) => <option value={item} key={item}>{localizeLabel(item)}</option>)}</select></label></div>
+        <label>{tr("Mission role", "Mission 角色")}<select value={form.missionRole} onChange={(event) => setForm({...form, missionRole: event.target.value})}><option value="decision_maker">{tr("Decision maker", "決策者")}</option><option value="contributor">{tr("Contributor", "協作者")}</option><option value="observer">{tr("Observer", "觀察者")}</option></select></label>
+        {error && <p className="form-error">{error}</p>}
+        <button className="button button-primary button-full button-large" disabled={busy}><UsersRound size={17}/>{busy ? tr("Creating secure invite…", "正在建立安全邀請…") : tr("Create role-bound invite", "建立角色邀請")}</button>
+      </form> : <div className="invite-created">
+        <BadgeCheck size={28}/><h3>{tr(`${form.name} now has an individual invitation.`, `${form.name} 已有專屬邀請。`)}</h3>
+        <p>{tr("Possession of this single-use token creates their own verified Relay identity. It expires automatically.", "這個一次性 Token 會建立對方自己的 Relay 身分，並會自動到期。")}</p>
+        <label className="invite-link-label"><span>{tr("Individual invite link", "個人邀請連結")}</span><div><Link2 size={15}/><input value={invite.url} readOnly/></div></label>
+        <button className="button button-primary button-full button-large" type="button" onClick={() => { void copy(); }}><Copy size={17}/>{tr("Copy invite link", "複製邀請連結")}</button>
+        <button className="text-link invite-another" type="button" onClick={() => { setInvite(undefined); setForm({...form, email: "", name: "", title: ""}); }}>{tr("Invite another teammate", "再邀請一位同事")}</button>
+        <p className="invite-privacy"><ShieldCheck size={14}/>{tr(`Named identity · ${form.department} · ${form.missionRole} · expires ${formatDate(invite.expiresAt, true)}`, `具名身分 · ${form.department} · ${localizeLabel(form.missionRole)} · ${formatDate(invite.expiresAt, true)} 到期`)}</p>
+      </div>}
     </section>
   </div>;
 }
 
+function initials(value: string) {
+  return value.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function LiveMissionRuntime({ mission, collaboration, onRefresh, onInvite }: { mission: MissionDetail; collaboration?: CollaborationSnapshot; onRefresh: () => Promise<void>; onInvite: () => void }) {
+  const [comment, setComment] = useState("");
+  const [mention, setMention] = useState("");
+  const [handoffTask, setHandoffTask] = useState("");
+  const [handoffTo, setHandoffTo] = useState("");
+  const [handoffReason, setHandoffReason] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const members = collaboration?.members ?? [];
+  const agents = collaboration?.agents ?? [];
+  const runs = collaboration?.runs ?? [];
+  const activePresence = new Set((collaboration?.presence ?? []).map((item) => item.userId));
+  const tasks = mission.currentPlan?.tasks.filter((task) => task.ownerType === "agent") ?? [];
+  const latestRunForTask = (taskId: string) => runs.find((run) => run.taskId === taskId);
+  const perform = async (key: string, request: Promise<unknown>) => { setBusy(key); setError(""); try { await request; await onRefresh(); return true; } catch (err) { setError((err as Error).message); return false; } finally { setBusy(""); } };
+  const submitComment = (event: FormEvent) => {
+    event.preventDefault();
+    if (!comment.trim()) return;
+    void perform("comment", api(`/api/missions/${mission.id}/comments`, { method: "POST", body: JSON.stringify({ body: comment.trim(), mentions: mention ? [mention] : [] }) })).then((ok) => { if (ok) { setComment(""); setMention(""); } });
+  };
+  const submitHandoff = (event: FormEvent) => {
+    event.preventDefault();
+    if (!handoffTask || !handoffTo || handoffReason.trim().length < 3) return;
+    void perform("handoff", api(`/api/missions/${mission.id}/handoffs`, { method: "POST", body: JSON.stringify({ taskId: handoffTask, toUserId: handoffTo, reason: handoffReason, checkpoint: { planVersion: mission.currentPlanVersion, requestedFrom: "mission_room" } }) })).then((ok) => { if (ok) setHandoffReason(""); });
+  };
+  return <section className="live-runtime" aria-label={tr("Live humans and agents", "人類與 AI 的即時協作") }>
+    <header className="live-runtime-head"><div><span><Activity size={15}/>{tr("LIVE · PERSISTED EVENT STREAM", "LIVE · 可保存即時事件流")}</span><h2>{tr("Humans decide. Agents run. Relay keeps everyone on one version.", "人類做決定、Agent 執行；Relay 讓所有人只用同一版本。")}</h2></div><button className="button button-dark button-small" onClick={onInvite}><Plus size={15}/>{tr("Add teammate", "加入同事")}</button></header>
+    <div className="authority-strip"><span><LockKeyhole size={14}/>{tr("WHO MAY DECIDE", "誰可以做決定")}</span><div>{(collaboration?.authorityGraph ?? []).map((edge) => <p key={edge.id}><b>{edge.subjectName}</b><small>{tr(`authority ${edge.authorityLevel}/5 · may approve through L${edge.canApproveRisk}`, `權威 ${edge.authorityLevel}/5 · 可核准至 L${edge.canApproveRisk}`)}</small></p>)}</div>{!(collaboration?.authorityGraph.length) && <em>{tr("No decision authority is active; governed actions stay blocked.", "尚無有效決策權；受治理操作會保持阻擋。")}</em>}</div>
+    <div className="live-runtime-grid">
+      <section className="live-humans"><div className="runtime-section-title"><UsersRound size={16}/><span>{tr("HUMANS", "人類同事")}</span><em>{members.length}</em></div>
+        <div className="live-people-list">{members.map((member) => <article key={member.user.id}><span className="person-avatar">{initials(member.user.name)}</span><div><b>{member.user.name}{member.user.identityVerified && <BadgeCheck size={13}/>}</b><small>{member.user.department || tr("Team", "團隊")} · {localizeLabel(member.role)}</small></div><i className={activePresence.has(member.user.id) ? "online" : ""}/><em>{activePresence.has(member.user.id) ? tr("LIVE", "在線") : tr("AWAY", "離線")}</em></article>)}</div>
+        {!members.length && <p className="runtime-empty">{tr("Invite the engineer, designer, finance lead or CEO who owns the next decision.", "邀請負責下一個決定的工程師、設計師、財務或 CEO。")}</p>}
+        <form className="runtime-comment" onSubmit={submitComment}><select aria-label={tr("Mention teammate", "提及同事")} value={mention} onChange={(event) => setMention(event.target.value)}><option value="">{tr("No mention", "不指定人")}</option>{members.map((member) => <option value={member.user.id} key={member.user.id}>@{member.user.name}</option>)}</select><div><input value={comment} onChange={(event) => setComment(event.target.value)} placeholder={tr("Correct, ask or add context…", "修正、提問或補充資訊…")}/><button disabled={busy === "comment" || !comment.trim()} aria-label={tr("Send comment", "送出留言")}>{busy === "comment" ? <span className="loader small"/> : <Send size={16}/>}</button></div></form>
+      </section>
+      <section className="live-agents"><div className="runtime-section-title"><Bot size={16}/><span>{tr("DURABLE AGENTS", "可恢復 AGENT")}</span><em>{agents.length}</em></div>
+        <div className="live-agent-list">{tasks.map((task) => { const agent = agents.find((item) => item.name === task.ownerName); const run = latestRunForTask(task.id); const running = run && ["queued","running","pause_requested","paused","cancel_requested"].includes(run.status); return <article key={task.id} className={run?.status ?? task.status}><span className="agent-avatar"><Bot size={16}/></span><div className="agent-run-main"><small>{task.key} · L{task.riskLevel}</small><b>{task.ownerName}</b><p>{run ? run.phase : localizeDomainText(task.title)}</p>{run && <div className="agent-run-progress"><i style={{width: `${run.progress}%`}}/><span>{run.progress}%</span></div>}</div><div className="agent-run-actions">{!run && <button disabled={busy === task.id || task.status === "completed"} onClick={() => { void perform(task.id, api(`/api/tasks/${task.id}/agent-runs`, { method: "POST", body: JSON.stringify({ agentId: agent?.id }) })); }}><Play size={14}/>{tr("Run", "執行")}</button>}{run?.status === "running" && <button onClick={() => { void perform(run.id, api(`/api/agent-runs/${run.id}/pause`, { method: "POST", body: "{}" })); }}><CircleStop size={14}/>{tr("Pause", "暫停")}</button>}{run?.status === "paused" && <button onClick={() => { void perform(run.id, api(`/api/agent-runs/${run.id}/resume`, { method: "POST", body: "{}" })); }}><Play size={14}/>{tr("Resume", "繼續")}</button>}{running && !["cancel_requested"].includes(run.status) && <button className="danger" onClick={() => { void perform(`cancel-${run.id}`, api(`/api/agent-runs/${run.id}/cancel`, { method: "POST", body: "{}" })); }}><X size={14}/>{tr("Cancel", "取消")}</button>}{run && !running && <StatusPill value={run.status}/>}</div></article>; })}</div>
+        {!tasks.length && <p className="runtime-empty">{tr("Compile the mission to create governed Agent roles.", "編譯 Mission 後就會建立受治理的 Agent 角色。")}</p>}
+      </section>
+      <section className="live-events"><div className="runtime-section-title"><Zap size={16}/><span>{tr("WHAT IS HAPPENING NOW", "現在正在發生什麼")}</span><em>v{collaboration?.revision ?? 1}</em></div>
+        <div className="live-event-list">{(collaboration?.events ?? []).slice(-8).reverse().map((event) => <article key={event.id}><span className={event.actorType}>{event.actorType === "human" ? <UserRound size={13}/> : event.actorType === "agent" ? <Bot size={13}/> : event.actorType === "provider" ? <Link2 size={13}/> : <Blocks size={13}/>}</span><div><b>{event.actorName}</b><p>{localizeDomainText(event.summary)}</p><small>{event.eventType} · {formatDate(event.createdAt, true)}</small></div></article>)}</div>
+        {!(collaboration?.events.length) && <p className="runtime-empty">{tr("The first real human, Agent or provider event will appear here.", "第一筆真實的人類、Agent 或服務事件會顯示在這裡。")}</p>}
+      </section>
+    </div>
+    <form className="runtime-handoff" onSubmit={submitHandoff}><span><RouteIcon size={16}/>{tr("HAND OFF WITH THE CHECKPOINT", "連同 CHECKPOINT 一起交接")}</span><select aria-label={tr("Task to hand off", "要交接的任務")} value={handoffTask} onChange={(event) => setHandoffTask(event.target.value)}><option value="">{tr("Choose task", "選擇任務")}</option>{(mission.currentPlan?.tasks ?? []).map((task) => <option value={task.id} key={task.id}>{task.key} · {localizeDomainText(task.title)}</option>)}</select><select aria-label={tr("Handoff recipient", "交接對象")} value={handoffTo} onChange={(event) => setHandoffTo(event.target.value)}><option value="">{tr("Choose teammate", "選擇同事")}</option>{members.map((member) => <option value={member.user.id} key={member.user.id}>{member.user.name} · {member.user.department}</option>)}</select><input value={handoffReason} onChange={(event) => setHandoffReason(event.target.value)} placeholder={tr("Why and what should happen next?", "為什麼交接？下一步要做什麼？")}/><button disabled={busy === "handoff" || !handoffTask || !handoffTo || handoffReason.trim().length < 3}>{tr("Handoff", "交接")}<ArrowRight size={14}/></button></form>
+    {error && <p className="runtime-error"><AlertOctagon size={15}/>{error}</p>}
+  </section>;
+}
+
 function MissionPage() {
-  const { id = "" } = useParams(); const [params, setParams] = useSearchParams(); const view = params.get("view") || "room";
-  const [mission, setMission] = useState<MissionDetail>(); const [error, setError] = useState(""); const [busy, setBusy] = useState(""); const [notice, setNotice] = useState(""); const [lastSyncedAt, setLastSyncedAt] = useState(""); const [inviteOpen, setInviteOpen] = useState(false); const [inviteUrl, setInviteUrl] = useState(""); const [inviteExpiresAt, setInviteExpiresAt] = useState("");
-  const load = useCallback(async (silent = false) => {
+  const { id = "" } = useParams();
+  const [params, setParams] = useSearchParams();
+  const view = params.get("view") || "room";
+  const [mission, setMission] = useState<MissionDetail>();
+  const [collaboration, setCollaboration] = useState<CollaborationSnapshot>();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("");
+  const [liveState, setLiveState] = useState<"connecting" | "live" | "reconnecting">("connecting");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const connectionId = useRef(globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-0000-4000-8000-000000000000`);
+  const loadMission = useCallback(async (silent = false) => {
     if (!silent) setError("");
     try {
       const response = await api<{ mission: MissionDetail }>(`/api/missions/${id}`);
       setMission(response.mission);
-      setLastSyncedAt(new Date().toISOString());
     } catch (err) {
       if (!silent) setError((err as Error).message);
     }
   }, [id]);
+  const loadCollaboration = useCallback(async () => {
+    const response = await api<{ collaboration: CollaborationSnapshot }>(`/api/missions/${id}/collaboration`);
+    setCollaboration(response.collaboration);
+  }, [id]);
+  const refreshAll = useCallback(async () => { await Promise.all([loadMission(true), loadCollaboration()]); }, [loadMission, loadCollaboration]);
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => { void load(true); }, 10_000);
-    return () => window.clearInterval(timer);
-  }, [load]);
-  const action: MissionAction = async (key, request, message) => { setBusy(key); setNotice(""); setError(""); try { const response = await request as { mission: MissionDetail }; setMission(response.mission); if (message) setNotice(message); return response; } catch (err) { setError((err as Error).message); } finally { setBusy(""); } };
-  const openInvite = async () => {
-    setBusy("share"); setError("");
+    void loadMission().then(() => loadCollaboration()).catch((err) => setError((err as Error).message));
+  }, [loadMission, loadCollaboration]);
+  const searchQuery = params.toString();
+  useEffect(() => {
+    const connectorError = params.get("connector_error");
+    const connectorStatus = params.get("status");
+    if (!connectorError && connectorStatus !== "connected") return;
+    if (connectorError) setError(connectorError);
+    else setNotice(tr("Authorization returned. Verify the live account and resource scope next.", "授權已返回；下一步請驗證真實帳號與資源範圍。"));
+    setParams({ view: "access" });
+    void refreshAll();
+  // The serialized query is the stable trigger; setParams is recreated by the lightweight router.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, refreshAll]);
+  useEffect(() => {
+    if (!mission) return undefined;
+    const stream = new EventSource(`/api/missions/${id}/events`);
+    const receive = (message: MessageEvent) => {
+      setLiveState("live");
+      try {
+        const event = JSON.parse(message.data) as CollaborationSnapshot["events"][number];
+        setCollaboration((current) => current ? { ...current, revision: event.missionRevision, events: [...current.events.filter((item) => item.id !== event.id), event].slice(-100) } : current);
+      } catch { /* a later snapshot repairs malformed client state */ }
+      void refreshAll();
+    };
+    stream.addEventListener("relay", receive as EventListener);
+    stream.onopen = () => setLiveState("live");
+    stream.onerror = () => setLiveState("reconnecting");
+    return () => { stream.removeEventListener("relay", receive as EventListener); stream.close(); };
+  }, [id, mission?.id, refreshAll]);
+  useEffect(() => {
+    if (!mission) return undefined;
+    const heartbeat = () => void api(`/api/missions/${id}/presence`, { method: "PUT", body: JSON.stringify({ connectionId: connectionId.current, state: document.visibilityState === "visible" ? "viewing" : "away", cursorContext: view }) }).catch(() => undefined);
+    heartbeat();
+    const timer = window.setInterval(heartbeat, 15_000);
+    const visibility = () => heartbeat();
+    document.addEventListener("visibilitychange", visibility);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", visibility); };
+  }, [id, mission?.id, view]);
+  const action: MissionAction = async (key, request, message) => {
+    setBusy(key); setNotice(""); setError("");
     try {
-      const response = await api<{ share: { token: string; expiresAt: string; permission: "editor" } }>(`/api/missions/${id}/shares`, { method: "POST", body: JSON.stringify({ permission: "editor" }) });
-      const url = new URL(`/missions/${id}`, window.location.origin);
-      url.searchParams.set("view", "room");
-      url.searchParams.set("share", response.share.token);
-      setInviteUrl(url.toString()); setInviteExpiresAt(response.share.expiresAt); setInviteOpen(true);
+      const response = await request as { mission: MissionDetail };
+      setMission(response.mission);
+      await loadCollaboration();
+      if (message) setNotice(message);
+      return response;
     } catch (err) { setError((err as Error).message); }
     finally { setBusy(""); }
   };
-  const copyRoomLink = async () => {
-    try {
-      if (!inviteUrl) throw new Error("Missing secure link");
-      await navigator.clipboard.writeText(inviteUrl);
-      setNotice(tr("Secure mission link copied. It expires automatically and cannot open other missions.", "安全 Mission 連結已複製；它會自動到期，也無法開啟其他 Mission。"));
-    } catch {
-      setError(tr("Relay could not copy this link. Copy it from the address bar instead.", "Relay 無法自動複製連結，請改從瀏覽器網址列複製。"));
-    }
-  };
-  if (error && !mission) return <AppShell><main className="page"><ErrorBlock error={error} retry={() => { void load(); }} /></main></AppShell>;
+  if (error && !mission) return <AppShell><main className="page"><ErrorBlock error={error} retry={() => { void loadMission(); }} /></main></AppShell>;
   if (!mission) return <AppShell><main className="page"><LoadingBlock label={tr("Loading mission contract…", "正在載入 Mission 合約…")} /></main></AppShell>;
-  const plan = mission.currentPlan; const isStale = plan?.status === "superseded"; const showRunReveal = params.get("new") === "1";
-  const agentRoles = plan?.tasks.filter((task) => task.ownerType === "agent").slice(0, 3) ?? [];
-  return <AppShell><main className={`mission-page view-${view}`}><InviteTeammatesDialog mission={mission} open={inviteOpen} roomUrl={inviteUrl} expiresAt={inviteExpiresAt} onClose={() => setInviteOpen(false)} onCopy={() => { void copyRoomLink(); }} /><header className="mission-header"><div className="mission-topbar"><Link to="/app" className="mission-brand" aria-label={tr("Back to workspace", "返回工作區")}><span>RL</span><b>Relay</b></Link><div className="mission-title-compact" title={localizeDomainText(mission.objective)}><small>MISSION</small><h1>{localizeDomainText(mission.title)}</h1></div><button className="mission-plan-control" onClick={() => setParams({ view: "plan" })}><span>{tr("Plan", "計畫")} v{mission.currentPlanVersion}</span><i className={isStale ? "stale" : ""} /> <small>{isStale ? localizeLabel("superseded") : tr("Active", "有效")}</small><ChevronDown size={14} /></button><div className="mission-header-spacer" /><div className="mission-live-presence" title={lastSyncedAt ? `${tr("Last synced", "上次同步")} ${formatDate(lastSyncedAt, true)}` : undefined}><span className="live-signal"><span />{tr("Shared room · sync 10s", "共用控制室 · 10 秒同步")}</span><div className="presence-avatars"><img src="/assets/relay-jennifer-256.png" alt="Mission owner" />{agentRoles.map((task) => <span key={task.id} title={localizeDomainText(task.ownerName)}>{task.ownerName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>)}</div><small>1 {tr("human", "位人類")} + {agentRoles.length} {tr("agent roles", "個 Agent 角色")}</small></div><LanguageSwitcher compact /><button className="button button-dark button-small mission-share" disabled={busy === "share"} onClick={() => { void openInvite(); }}><UsersRound size={15} /><span>{busy === "share" ? tr("Securing link…", "建立安全連結…") : tr("Invite teammates", "邀請同事")}</span></button><button className="icon-button mission-refresh" onClick={() => { void load(); }} aria-label={tr("Refresh mission", "重新整理 Mission")}><RefreshCw size={17} /></button>{mission.status === "planning" && <button className="button button-primary button-small mission-compile" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: JSON.stringify({}) }), tr("A new active contract was created. Previous approvals were invalidated.", "新的有效合約已建立，舊版核准已失效。"))}><GitBranch size={15} /> {tr("Compile", "編譯")} v{mission.currentPlanVersion + 1}</button>}</div><nav className="mission-tabs" aria-label={tr("Mission views", "Mission 檢視")}>{missionTabs.map(([key, label, labelZh, Icon]) => <button className={view === key ? "active" : ""} key={key} onClick={() => setParams({ view: key })} title={tr(label, labelZh)} aria-label={tr(label, labelZh)}><Icon size={18} /><span className="mission-tab-label">{tr(label, labelZh)}</span>{key === "conflicts" && mission.openConflicts > 0 && <em>{mission.openConflicts}</em>}{key === "approvals" && mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button>)}</nav></header>
+  const plan = mission.currentPlan;
+  const isStale = plan?.status === "superseded";
+  const showRunReveal = params.get("new") === "1";
+  const presentHumans = new Set(collaboration?.presence.map((item) => item.userId)).size;
+  const runningAgents = collaboration?.runs.filter((run) => ["queued","running","pause_requested","cancel_requested"].includes(run.status)).length ?? 0;
+  return <AppShell><main className={`mission-page view-${view}`}>
+    <InviteTeammatesDialog mission={mission} open={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={() => { void loadCollaboration(); }} />
+    <header className="mission-header"><div className="mission-topbar">
+      <Link to="/app" className="mission-brand" aria-label={tr("Back to workspace", "返回工作區")}><span>RL</span><b>Relay</b></Link>
+      <div className="mission-title-compact" title={localizeDomainText(mission.objective)}><small>MISSION</small><h1>{localizeDomainText(mission.title)}</h1></div>
+      <button className="mission-plan-control" onClick={() => setParams({ view: "plan" })}><span>{tr("Plan", "計畫")} v{mission.currentPlanVersion}</span><i className={isStale ? "stale" : ""}/><small>{isStale ? localizeLabel("superseded") : tr("Active", "有效")}</small><ChevronDown size={14}/></button>
+      <div className="mission-header-spacer"/>
+      <div className="mission-live-presence"><span className={`live-signal ${liveState}`}><span/>{liveState === "live" ? tr("LIVE EVENT STREAM", "即時事件流") : tr("RECONNECTING", "重新連線中")}</span><div className="presence-avatars">{(collaboration?.members ?? []).slice(0, 4).map((member) => <span className={collaboration?.presence.some((item) => item.userId === member.user.id) ? "online" : ""} key={member.user.id} title={`${member.user.name} · ${member.user.department}`}>{initials(member.user.name)}</span>)}</div><small>{presentHumans} {tr("human live", "位人類在線")} · {runningAgents} {tr("agents running", "個 Agent 執行中")}</small></div>
+      <LanguageSwitcher compact/>
+      <button className="button button-dark button-small mission-share" onClick={() => setInviteOpen(true)}><UsersRound size={15}/><span>{tr("Invite teammate", "邀請同事")}</span></button>
+      <button className="icon-button mission-refresh" onClick={() => { void refreshAll(); }} aria-label={tr("Refresh mission", "重新整理 Mission")}><RefreshCw size={17}/></button>
+      {mission.status === "planning" && <button className="button button-primary button-small mission-compile" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: "{}" }), tr("A new active contract was created. Previous approvals were invalidated.", "新的有效合約已建立，舊版核准已失效。"))}><GitBranch size={15}/>{tr("Compile", "編譯")} v{mission.currentPlanVersion + 1}</button>}
+    </div><nav className="mission-tabs" aria-label={tr("Mission views", "Mission 檢視")}>{missionTabs.map(([key, label, labelZh, Icon]) => <button className={view === key ? "active" : ""} key={key} onClick={() => setParams({ view: key })} title={tr(label, labelZh)} aria-label={tr(label, labelZh)}><Icon size={18}/><span className="mission-tab-label">{tr(label, labelZh)}</span>{key === "conflicts" && mission.openConflicts > 0 && <em>{mission.openConflicts}</em>}{key === "approvals" && mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button>)}</nav></header>
     {(notice || error) && <div className={`toast-banner ${error ? "error" : ""}`}>{error ? <AlertOctagon size={17} /> : <BadgeCheck size={17} />}<span>{error || notice}</span><button className="icon-button" onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
-    <div className={`mission-content mission-content-${view}`}>{showRunReveal && view === "conflicts" && <MissionRunReceipt mission={mission} onInvite={() => { void openInvite(); }} onOpenRoom={() => setParams({ view: "room" })} />}{view === "room" && <MissionRoom mission={mission} action={action} busy={busy} setView={(next) => setParams({ view: next })} />}{view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy} />}{view === "plan" && <PlanView mission={mission} action={action} busy={busy} />}{view === "access" && <AccessView mission={mission} />}{view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale} />}{view === "evidence" && <EvidenceLedger mission={mission} />}{view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy} />}</div>
+    <div className={`mission-content mission-content-${view}`}>{showRunReveal && view === "room" && <MissionRunReceipt mission={mission} onInvite={() => setInviteOpen(true)} onOpenRoom={() => setParams({ view: "room" })}/>} {view === "room" && <><LiveMissionRuntime mission={mission} collaboration={collaboration} onRefresh={refreshAll} onInvite={() => setInviteOpen(true)}/><MissionRoom mission={mission} action={action} busy={busy} setView={(next) => setParams({ view: next })}/></>}{view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy}/>} {view === "plan" && <PlanView mission={mission} action={action} busy={busy}/>} {view === "access" && <AccessView mission={mission} onRefresh={refreshAll}/>} {view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale}/>} {view === "evidence" && <EvidenceLedger mission={mission}/>} {view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy}/>}</div>
   </main></AppShell>;
 }
 
@@ -681,11 +859,13 @@ function FlowSourceIcon({ type }: { type?: string }) {
 }
 
 function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mission: MissionDetail; action: MissionAction; busy: string; setView: (view: string) => void; readOnly?: boolean }) {
+  const session = useSessionIdentity();
   const openConflicts = mission.conflicts.filter((conflict) => conflict.status === "open");
   const primaryConflict = openConflicts.find((conflict) => conflict.type === "Hard conflict") ?? openConflicts.find((conflict) => conflict.blocking) ?? openConflicts[0];
   const [selectedConflictId, setSelectedConflictId] = useState(primaryConflict?.id ?? "");
   const [correction, setCorrection] = useState("");
   const [correctionAuthor, setCorrectionAuthor] = useState(mission.createdBy);
+  useEffect(() => { if (session?.actorName) setCorrectionAuthor(session.actorName); }, [session?.actorName]);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const plan = mission.currentPlan;
   const selectedConflict = openConflicts.find((conflict) => conflict.id === selectedConflictId) ?? primaryConflict;
@@ -761,7 +941,7 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   const submitCorrection = (event: FormEvent) => {
     event.preventDefault();
     if (readOnly || correction.trim().length < 5) return;
-    action("correction", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/corrections`, { method: "POST", body: JSON.stringify({ statement: correction.trim(), assertionType: "Constraint", author: correctionAuthor.trim() || mission.createdBy }) }), tr("Named correction recorded. The shared room, active contract and prior approvals were updated.", "具名修正已記錄；共同控制室、目前合約與舊有核准已更新。" )).then((result) => { if (result) setCorrection(""); });
+    action("correction", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/corrections`, { method: "POST", body: JSON.stringify({ statement: correction.trim(), assertionType: "Constraint" }) }), tr("Named correction recorded. The shared room, active contract and prior approvals were updated.", "具名修正已記錄；共同控制室、目前合約與舊有核准已更新。" )).then((result) => { if (result) setCorrection(""); });
   };
 
   const recommendedResolution = selectedConflict?.options.find((option) => option.recommended);
@@ -769,7 +949,7 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   return <div className={`flow-canvas-layout ${inspectorOpen ? "" : "inspector-collapsed"}`}>
     <section className="mobile-mission-journey" aria-label={tr("Mobile mission execution story", "手機版 Mission 執行流程")}>
       <div className="mobile-room-hero">
-        <div><span className="mobile-live"><span /> {tr("SAME SAVED MISSION", "同一份已保存任務")}</span><small>{tr(`Plan v${mission.currentPlanVersion} · refreshes every 10s`, `計畫 v${mission.currentPlanVersion} · 每 10 秒同步`)}</small></div>
+        <div><span className="mobile-live"><span /> {tr("SAME LIVE MISSION", "同一份即時 MISSION")}</span><small>{tr(`Plan v${mission.currentPlanVersion} · events stream instantly`, `計畫 v${mission.currentPlanVersion} · 事件即時推送`)}</small></div>
         <h1>{selectedConflict ? tr("Relay paused the risky work. Now one person needs to decide.", "Relay 已先停住風險。現在只需要一個人做決定。") : tr("This mission is ready for the next safe action.", "這個任務已準備好進行下一個安全步驟。")}</h1>
         <p>{selectedConflict ? tr(`Below, see which two instructions conflict, which AI roles are waiting, and who should choose the answer.`, "往下看哪兩句互相矛盾、哪些 AI 正在等待，以及該由誰選擇答案。") : tr("Every AI role is now using the same current plan.", "每個 AI 工作角色現在都依照同一份最新計畫。")}</p>
         <div className="mobile-receipt"><div><b>{mission.sources.length}</b><span>{tr("sources", "個來源")}</span></div><div><b>{mission.assertions.length}</b><span>{tr("instructions", "條指令")}</span></div><div><b>{mission.blockingConflicts}</b><span>{tr("decisions", "項待決定")}</span></div></div>
@@ -790,26 +970,26 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
         <div className="mobile-flow-link"><span /><UserRound size={18} /><span /></div>
 
         <div className="mobile-step-label"><span>03</span><p>{tr("Ask the responsible person to choose", "請負責人選一個答案")}</p></div>
-        <article className="mobile-decision-card"><img src="/assets/relay-jennifer-256.png" alt="Jennifer" /><div><span>{tr("DECISION OWNER", "決策負責人")}</span><b>{localizeDomainText(selectedConflict.decisionOwner)}</b><small>{tr("Approval cannot be delegated to an agent", "核准不能交給 Agent 自行決定")}</small></div><span>{tr("Waiting", "等待中")}</span></article>
+        <article className="mobile-decision-card"><span className="decision-avatar"><UserRound size={20}/></span><div><span>{tr("DECISION OWNER", "決策負責人")}</span><b>{localizeDomainText(selectedConflict.decisionOwner)}</b><small>{tr("Approval cannot be delegated to an agent", "核准不能交給 Agent 自行決定")}</small></div><span>{tr("Waiting", "等待中")}</span></article>
         <article className="mobile-safe-action"><span><Sparkles size={14} /> {tr("RELAY RECOMMENDS", "RELAY 建議")}</span><h2>{tr("Next safe action", "下一步安全行動")}</h2><p>{localizeDomainText(recommendedResolution?.description ?? selectedConflict.consequences)}</p>{readOnly ? <button className="button button-primary button-full" onClick={() => setView("new")}>{tr("Run this on my real launch", "分析我真正的 Launch")} <ArrowRight size={17} /></button> : <button className="button button-primary button-full" onClick={() => setView("conflicts")}><ShieldCheck size={17} /> {tr(`Resolve ${mission.blockingConflicts} conflicts`, `解決 ${mission.blockingConflicts} 項衝突`)}</button>}</article>
-        {!readOnly && <form className="mobile-correction" onSubmit={submitCorrection}><label><UserRound size={14} /><input aria-label={tr("Correction author", "修正者姓名")} value={correctionAuthor} onChange={(event) => setCorrectionAuthor(event.target.value)} /></label><div><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={tr("Add a correction…", "輸入新的限制或修正…")} /><button type="submit" disabled={correction.trim().length < 5 || busy === "correction"}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></div></form>}
+        {!readOnly && <form className="mobile-correction" onSubmit={submitCorrection}><label><UserRound size={14} /><input aria-label={tr("Verified correction author", "已驗證的修正者")} value={correctionAuthor} readOnly /></label><div><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={tr("Add a correction…", "輸入新的限制或修正…")} /><button type="submit" disabled={correction.trim().length < 5 || busy === "correction"}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></div></form>}
       </div> : <div className="mobile-clear-contract"><BadgeCheck size={32} /><h2>{tr("No incompatible instruction remains.", "目前沒有互不相容的指令。")}</h2><p>{tr("Open the execution plan to review preflight checks and continue.", "開啟執行計畫，檢查執行前條件並繼續任務。")}</p><button className="button button-primary button-full" onClick={() => setView("plan")}>{tr("Open execution plan", "開啟執行計畫")} <ArrowRight size={17} /></button></div>}
     </section>
     <section className="flow-canvas" aria-label={tr("Mission execution canvas", "Mission 執行 Canvas")}>
       <div className="flow-stage-labels" aria-hidden="true"><span>{tr("Intent sources", "意圖來源")}<small>{tr("Evidence-backed inputs", "輸入與依據")}</small></span><span>{tr("Conflict / Decision", "衝突／決策")}<small>{tr("What blocks execution", "阻擋執行的關鍵")}</small></span><span>{tr("Human approval", "人工核准")}<small>{tr("Accountable judgment", "具權責的判斷")}</small></span><span>{tr("AI execution", "AI 執行")}<small>{tr("Governed agent work", "受治理的 Agent 任務")}</small></span><span>{tr("Outcome", "成果")}<small>{tr("Verifiable result", "可驗收成果")}</small></span></div>
       <Suspense fallback={<div className="flow-loading"><span className="loader" /><p>{tr("Opening execution canvas…", "正在開啟執行 Canvas…")}</p></div>}><ExecutionFlowCanvas nodes={flowNodes} edges={flowEdges} onConflictSelect={setSelectedConflictId} /></Suspense>
-      <form className="flow-command" onSubmit={submitCorrection}><label className="flow-command-author"><UserRound size={14} /><input aria-label={tr("Correction author", "修正者姓名")} value={correctionAuthor} disabled={readOnly} onChange={(event) => setCorrectionAuthor(event.target.value)} /></label><Zap size={17} /><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} disabled={readOnly} onChange={(event) => setCorrection(event.target.value)} placeholder={readOnly ? tr("Read-only example · create a mission to add corrections", "唯讀範例 · 建立自己的 Mission 後即可修正") : tr("Add an instruction or correction, for example: Set the budget to NT$20,000", "輸入指令或修正，例如：將預算統一為 NT$20,000")} /><kbd>⌘ ↵</kbd><button type="submit" disabled={readOnly || correction.trim().length < 5 || correctionAuthor.trim().length < 1 || busy === "correction"} aria-label={tr("Submit correction and replan", "送出修正並重新規劃")}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></form>
+      <form className="flow-command" onSubmit={submitCorrection}><label className="flow-command-author"><UserRound size={14} /><input aria-label={tr("Verified correction author", "已驗證的修正者")} value={correctionAuthor} readOnly /></label><Zap size={17} /><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} disabled={readOnly} onChange={(event) => setCorrection(event.target.value)} placeholder={readOnly ? tr("Read-only example · create a mission to add corrections", "唯讀範例 · 建立自己的 Mission 後即可修正") : tr("Add an instruction or correction, for example: Set the budget to NT$20,000", "輸入指令或修正，例如：將預算統一為 NT$20,000")} /><kbd>⌘ ↵</kbd><button type="submit" disabled={readOnly || correction.trim().length < 5 || correctionAuthor.trim().length < 1 || busy === "correction"} aria-label={tr("Submit correction and replan", "送出修正並重新規劃")}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></form>
       {!inspectorOpen && <button className="flow-inspector-open" onClick={() => setInspectorOpen(true)} aria-label={tr("Open conflict inspector", "開啟衝突檢視")}><PanelRightOpen size={18} /><span>{mission.blockingConflicts}</span></button>}
     </section>
     {inspectorOpen && <aside className="flow-inspector"><div className="flow-inspector-head"><div><span>{selectedConflict ? tr("SELECTED CONFLICT", "已選取衝突") : tr("CONTRACT STATE", "合約狀態")}</span><h2>{selectedConflict ? tr(`${mission.blockingConflicts} blocking conflicts`, `${mission.blockingConflicts} 項阻擋衝突`) : tr("Execution can proceed", "執行可以繼續")}</h2></div><button className="icon-button" onClick={() => setInspectorOpen(false)} aria-label={tr("Close inspector", "關閉檢視")}><PanelRightClose size={18} /></button></div>
       <div className="compiler-receipt"><span>{tr("COMPILER RECEIPT", "編譯器憑據")}</span><div><b>{mission.sources.length}</b><small>{tr("sources", "個來源")}</small></div><div><b>{mission.assertions.length}</b><small>{tr("assertions", "項主張")}</small></div><div><b>{mission.conflicts.length}</b><small>{tr("conflicts", "項衝突")}</small></div><div><b>{mission.auditEvents.length}</b><small>{tr("audit events", "筆稽核事件")}</small></div><p><FileCheck2 size={13} /> {tr("MVP ruleset · every result links to stored source text", "MVP 規則集 · 每個結果都連回已保存的來源文字")}</p></div>
-      <section className="flow-activity-feed"><div className="flow-activity-title"><span>{tr("SHARED ACTIVITY", "共用活動")}</span><small><span /> {tr("persists · sync 10s", "已保存 · 10 秒同步")}</small></div>{mission.auditEvents.slice(-3).reverse().map((event) => <div className="flow-activity-event" key={event.id}><span className={`activity-actor ${event.actorType}`}>{event.actorType === "human" ? <UserRound size={13} /> : event.actorType === "agent" ? <Bot size={13} /> : <Blocks size={13} />}</span><div><b>{localizeDomainText(event.actorName)}</b><p>{localizeDomainText(event.summary)}</p></div><time>{formatDate(event.createdAt, true)}</time></div>)}{!mission.auditEvents.length && <p className="flow-activity-empty">{tr("The first human or agent event will appear here.", "第一筆人類或 Agent 活動會顯示在這裡。")}</p>}</section>
+      <section className="flow-activity-feed"><div className="flow-activity-title"><span>{tr("AUDIT ACTIVITY", "稽核活動")}</span><small><span /> {tr("persisted lineage", "已保存的 Lineage")}</small></div>{mission.auditEvents.slice(-3).reverse().map((event) => <div className="flow-activity-event" key={event.id}><span className={`activity-actor ${event.actorType}`}>{event.actorType === "human" ? <UserRound size={13} /> : event.actorType === "agent" ? <Bot size={13} /> : <Blocks size={13} />}</span><div><b>{localizeDomainText(event.actorName)}</b><p>{localizeDomainText(event.summary)}</p></div><time>{formatDate(event.createdAt, true)}</time></div>)}{!mission.auditEvents.length && <p className="flow-activity-empty">{tr("The first human or agent event will appear here.", "第一筆人類或 Agent 活動會顯示在這裡。")}</p>}</section>
       {selectedConflict ? <>
         <div className="flow-conflict-switch">{openConflicts.map((conflict, index) => <button className={conflict.id === selectedConflict.id ? "active" : ""} key={conflict.id} onClick={() => setSelectedConflictId(conflict.id)} aria-label={`${tr("Conflict", "衝突")} ${index + 1}`}>{String(index + 1).padStart(2, "0")}</button>)}</div>
         <div className="flow-inspector-summary"><span className={`severity-tag ${selectedConflict.severity}`}>{localizeLabel(selectedConflict.severity)}</span><h3>{localizeDomainText(selectedConflict.title)}</h3><p>{localizeDomainText(selectedConflict.summary)}</p></div>
         <section className="flow-evidence"><span>{tr("SOURCE EVIDENCE", "來源依據")}</span>{sourceEvidence.map((assertion) => { const source = assertion.sourceId ? sourceById.get(assertion.sourceId) : undefined; return <button key={assertion.id} onClick={() => setSelectedConflictId(selectedConflict.id)}><FlowSourceIcon type={source?.type ?? assertion.type} /><div><b>{localizeDomainText(assertion.statement)}</b><small>{source ? `${localizeLabel(source.type)} · ${localizeDomainText(source.author)}` : localizeLabel(assertion.type)}</small></div><ArrowRight size={14} /></button>; })}</section>
         <section className="flow-impact"><span>{tr("IF UNRESOLVED", "若未解決")}</span><p>{localizeDomainText(selectedConflict.consequences)}</p></section>
-        <section className="flow-owner"><span>{tr("DECISION OWNER", "決策負責人")}</span><div><img src="/assets/relay-jennifer-256.png" alt="Jennifer" /><div><b>{localizeDomainText(selectedConflict.decisionOwner)}</b><small>{tr("Mission owner · only decision maker", "Mission 負責人 · 唯一決策者")}</small></div><span>{tr("Waiting", "等待中")}</span></div></section>
+        <section className="flow-owner"><span>{tr("DECISION OWNER", "決策負責人")}</span><div><span className="decision-avatar"><UserRound size={18}/></span><div><b>{localizeDomainText(selectedConflict.decisionOwner)}</b><small>{tr("Named authority · agents cannot self-approve", "具名決策權 · Agent 不可自行核准")}</small></div><span>{tr("Waiting", "等待中")}</span></div></section>
         <div className="flow-safe-action"><span>{tr("NEXT SAFE ACTION", "下一步安全行動")}</span><p>{readOnly ? tr("Use this same flow on a real launch brief from your team.", "把同一套流程用在你團隊真正的 Launch Brief。") : tr("Resolve the contradiction before agents continue downstream execution.", "先解決矛盾，AI Agent 才能繼續後續執行。")}</p><button className="button button-primary button-full" onClick={() => setView(readOnly ? "new" : "conflicts")}><ShieldCheck size={17} /> {readOnly ? tr("Analyze my own launch", "分析我自己的 Launch") : tr(`Resolve ${mission.blockingConflicts} conflicts`, `解決 ${mission.blockingConflicts} 項衝突`)} <ArrowRight size={17} /></button></div>
       </> : <div className="flow-clear-state"><BadgeCheck size={32} /><h3>{tr("The active plan is internally consistent.", "目前有效計畫沒有內部衝突。")}</h3><p>{tr("Open the plan to review preflight checks and safely continue execution.", "開啟計畫檢查執行前條件，並安全繼續任務。")}</p><button className="button button-primary button-full" onClick={() => setView("plan")}><Maximize2 size={17} />{tr("Open execution plan", "開啟執行計畫")}</button></div>}
     </aside>}
@@ -826,8 +1006,8 @@ function ConflictInbox({ mission, action, busy }: { mission: MissionDetail; acti
   const [selected, setSelected] = useState<Record<string, string>>({}); const [reasons, setReasons] = useState<Record<string, string>>({});
   const open = mission.conflicts.filter((conflict) => conflict.status === "open"); const resolved = mission.conflicts.filter((conflict) => conflict.status === "resolved");
   return <div className="content-stack"><div className="view-heading"><div><span className="page-kicker">{tr("CONFLICT COMPILER", "衝突編譯器")}</span><h2>{open.length ? tr(`${open.length} contradictions need a decision`, `${open.length} 項矛盾需要決策`) : tr("Organizational intent is resolved", "組織意圖衝突已解決")}</h2><p>{tr("Blocking conflicts stop only the affected execution path. Every resolution becomes part of the next contract.", "阻擋性衝突只會停止受影響的執行路徑；每項解法都會成為下一版合約的一部分。")}</p></div><div className="conflict-summary"><span><AlertOctagon />{mission.blockingConflicts} {tr("blocking", "項阻擋")}</span><span><Scale />{open.length} {tr("open", "項待處理")}</span><span><Check />{resolved.length} {tr("resolved", "項已解決")}</span></div></div>
-    {open.map((conflict, index) => <article className={`conflict-card ${conflict.blocking ? "blocking" : ""}`} key={conflict.id}><div className="conflict-number">C-{String(index + 1).padStart(2, "0")}</div><div className="conflict-card-main"><div className="conflict-head"><div><div className="conflict-tags"><span className={`severity-tag ${conflict.severity}`}>{localizeLabel(conflict.severity)}</span><span>{localizeLabel(conflict.type)}</span>{conflict.blocking && <span className="blocking-tag"><CircleStop size={13} /> {tr("Blocks execution", "阻擋執行")}</span>}</div><h3>{localizeDomainText(conflict.title)}</h3><p>{localizeDomainText(conflict.summary)}</p></div><div className="decision-owner"><span>{tr("DECISION OWNER", "決策負責人")}</span><b><UserRound size={15} />{localizeDomainText(conflict.decisionOwner)}</b>{conflict.decisionDueAt && <small>{tr("Due", "期限")} {conflict.decisionDueAt}</small>}</div></div><ConflictSourceProof mission={mission} conflict={conflict} /><div className="consequence"><Ban size={17} /><div><span>{tr("IF UNRESOLVED", "若未解決")}</span><p>{localizeDomainText(conflict.consequences)}</p></div></div><div className="resolution-options">{conflict.options.map((option) => <label className={`resolution-option ${selected[conflict.id] === option.id ? "selected" : ""} ${option.recommended ? "recommended" : ""}`} key={option.id}><input type="radio" name={conflict.id} value={option.id} checked={selected[conflict.id] === option.id} onChange={() => setSelected({ ...selected, [conflict.id]: option.id })} /><div className="option-top"><b>{localizeDomainText(option.label)}</b>{option.recommended && <span><Sparkles size={13} /> {tr("Relay recommends", "Relay 建議")}</span>}</div><p>{localizeDomainText(option.description)}</p><div className="option-impact"><span><Clock3 />{localizeDomainText(option.timeImpact)}</span><span><CircleDollarSign />{localizeDomainText(option.budgetImpact)}</span><span><ShieldCheck />{localizeDomainText(option.risk)}</span></div></label>)}</div>{selected[conflict.id] && <div className="resolution-submit"><textarea placeholder={tr("Why is this the right decision? This becomes permanent evidence.", "為什麼這是正確決策？這段理由會成為永久證據。")} value={reasons[conflict.id] ?? ""} onChange={(event) => setReasons({ ...reasons, [conflict.id]: event.target.value })} rows={2} /><button className="button button-primary" disabled={(reasons[conflict.id]?.length ?? 0) < 3 || busy === conflict.id} onClick={() => action(conflict.id, api<{ mission: MissionDetail }>(`/api/conflicts/${conflict.id}/resolve`, { method: "POST", body: JSON.stringify({ optionId: selected[conflict.id], reason: reasons[conflict.id], decidedBy: "Jennifer" }) }), tr("Decision recorded. Resolve remaining blockers, then compile the next plan version.", "決策已記錄。請解決其餘阻擋項目，再編譯下一版計畫。"))}><Check size={16} /> {tr("Record decision", "記錄決策")}</button></div>}</div></article>)}
-    {!open.length && <div className="resolved-celebration"><BadgeCheck /><div><h3>{tr("All conflicts have an explicit decision.", "所有衝突都已有明確決策。")}</h3><p>{tr("Compile the next plan version to convert those decisions into task constraints, invalidate stale approvals and activate execution.", "編譯下一版計畫，把這些決策轉為任務限制、使過期核准失效並啟用執行。")}</p></div>{mission.status === "planning" && <button className="button button-primary" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: JSON.stringify({ actor: "Jennifer" }) }), tr("Plan activated.", "計畫已啟用。"))}><GitBranch size={17} /> {tr("Compile Plan", "編譯計畫")} v{mission.currentPlanVersion + 1}</button>}</div>}
+    {open.map((conflict, index) => <article className={`conflict-card ${conflict.blocking ? "blocking" : ""}`} key={conflict.id}><div className="conflict-number">C-{String(index + 1).padStart(2, "0")}</div><div className="conflict-card-main"><div className="conflict-head"><div><div className="conflict-tags"><span className={`severity-tag ${conflict.severity}`}>{localizeLabel(conflict.severity)}</span><span>{localizeLabel(conflict.type)}</span>{conflict.blocking && <span className="blocking-tag"><CircleStop size={13} /> {tr("Blocks execution", "阻擋執行")}</span>}</div><h3>{localizeDomainText(conflict.title)}</h3><p>{localizeDomainText(conflict.summary)}</p></div><div className="decision-owner"><span>{tr("DECISION OWNER", "決策負責人")}</span><b><UserRound size={15} />{localizeDomainText(conflict.decisionOwner)}</b>{conflict.decisionDueAt && <small>{tr("Due", "期限")} {conflict.decisionDueAt}</small>}</div></div><ConflictSourceProof mission={mission} conflict={conflict} /><div className="consequence"><Ban size={17} /><div><span>{tr("IF UNRESOLVED", "若未解決")}</span><p>{localizeDomainText(conflict.consequences)}</p></div></div><div className="resolution-options">{conflict.options.map((option) => <label className={`resolution-option ${selected[conflict.id] === option.id ? "selected" : ""} ${option.recommended ? "recommended" : ""}`} key={option.id}><input type="radio" name={conflict.id} value={option.id} checked={selected[conflict.id] === option.id} onChange={() => setSelected({ ...selected, [conflict.id]: option.id })} /><div className="option-top"><b>{localizeDomainText(option.label)}</b>{option.recommended && <span><Sparkles size={13} /> {tr("Relay recommends", "Relay 建議")}</span>}</div><p>{localizeDomainText(option.description)}</p><div className="option-impact"><span><Clock3 />{localizeDomainText(option.timeImpact)}</span><span><CircleDollarSign />{localizeDomainText(option.budgetImpact)}</span><span><ShieldCheck />{localizeDomainText(option.risk)}</span></div></label>)}</div>{selected[conflict.id] && <div className="resolution-submit"><textarea placeholder={tr("Why is this the right decision? This becomes permanent evidence.", "為什麼這是正確決策？這段理由會成為永久證據。")} value={reasons[conflict.id] ?? ""} onChange={(event) => setReasons({ ...reasons, [conflict.id]: event.target.value })} rows={2} /><button className="button button-primary" disabled={(reasons[conflict.id]?.length ?? 0) < 3 || busy === conflict.id} onClick={() => action(conflict.id, api<{ mission: MissionDetail }>(`/api/conflicts/${conflict.id}/resolve`, { method: "POST", body: JSON.stringify({ optionId: selected[conflict.id], reason: reasons[conflict.id] }) }), tr("Decision recorded. Resolve remaining blockers, then compile the next plan version.", "決策已記錄。請解決其餘阻擋項目，再編譯下一版計畫。"))}><Check size={16} /> {tr("Record decision", "記錄決策")}</button></div>}</div></article>)}
+    {!open.length && <div className="resolved-celebration"><BadgeCheck /><div><h3>{tr("All conflicts have an explicit decision.", "所有衝突都已有明確決策。")}</h3><p>{tr("Compile the next plan version to convert those decisions into task constraints, invalidate stale approvals and activate execution.", "編譯下一版計畫，把這些決策轉為任務限制、使過期核准失效並啟用執行。")}</p></div>{mission.status === "planning" && <button className="button button-primary" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: "{}" }), tr("Plan activated.", "計畫已啟用。"))}><GitBranch size={17} /> {tr("Compile Plan", "編譯計畫")} v{mission.currentPlanVersion + 1}</button>}</div>}
     {resolved.length > 0 && <section className="resolved-list"><div className="panel-heading"><div><span>{tr("DECISION HISTORY", "決策歷史")}</span><h2>{tr("Resolved conflicts", "已解決衝突")}</h2></div></div>{resolved.map((conflict) => <div className="resolved-item" key={conflict.id}><Check size={17} /><div><b>{localizeDomainText(conflict.title)}</b><p>{localizeDomainText(conflict.resolution?.decision)}</p><small>{conflict.resolution?.decidedBy} · {formatDate(conflict.resolution?.createdAt, true)}</small></div></div>)}</section>}
   </div>;
 }
@@ -841,28 +1021,71 @@ function PlanView({ mission, action, busy }: { mission: MissionDetail; action: M
   return <div className="content-stack"><div className="view-heading"><div><span className="page-kicker">{tr("VERSIONED EXECUTION CONTRACT", "版本化執行合約")}</span><h2>{tr("Plan", "計畫")} v{plan.version} · {localizeLabel(plan.status)}</h2><p>{localizeDomainText(plan.changeSummary)}</p></div><div className="version-picker"><span>{tr("Version", "版本")}</span><select value={selectedVersion} onChange={(event) => setSelectedVersion(Number(event.target.value))}>{[...mission.planVersions].reverse().map((item) => <option key={item.id} value={item.version}>{tr("Plan", "計畫")} v{item.version} · {localizeLabel(item.status)}</option>)}</select></div></div>
     <section className="contract-invariants"><div><Fingerprint /><span>{tr("CONTRACT INVARIANTS", "合約不變條件")}</span></div>{plan.contract.invariants.map((item) => <p key={item}><LockKeyhole size={14} />{localizeDomainText(item)}</p>)}</section>
     {plan.diff.length > 0 && <section className="panel diff-panel"><div className="panel-heading"><div><span>{tr("VERSION DIFF", "版本差異")}</span><h2>{tr("What changed", "變更內容")}</h2></div><GitBranch size={20} /></div><div className="diff-list">{plan.diff.map((item, index) => <div className={`diff-item ${item.kind}`} key={index}><span>{item.kind === "added" ? "+" : item.kind === "invalidated" ? "×" : "~"}</span><div><b>{localizeDomainText(item.label)}</b><p>{localizeDomainText(item.detail)}</p></div></div>)}</div></section>}
-    <section className="task-graph"><div className="task-graph-head"><span>{tr("TASK GRAPH", "任務圖")}</span><div><span><Bot size={14} /> {tr("Agent owner", "Agent 負責")}</span><span><UserRound size={14} /> {tr("Human owner", "人員負責")}</span></div></div>{plan.tasks.map((task) => <article className={`task-card ${openTask === task.id ? "open" : ""}`} key={task.id}><button className="task-summary" onClick={() => setOpenTask(openTask === task.id ? "" : task.id)}><span className={`task-state large ${task.status}`}>{task.status === "completed" ? <Check size={17} /> : task.status === "blocked" ? <CircleStop size={17} /> : task.status === "running" ? <Activity size={17} /> : <span />}</span><div className="task-key"><b>{task.key}</b><small>{task.dependencies.length ? tr(`after ${task.dependencies.join(", ")}`, `接續於 ${task.dependencies.join("、")}`) : tr("root task", "起始任務")}</small></div><div className="task-title"><b>{localizeDomainText(task.title)}</b><small>{localizeDomainText(task.goal)}</small></div><span className="task-owner">{task.ownerType === "agent" ? <Bot size={15} /> : <UserRound size={15} />}{localizeDomainText(task.ownerName)}</span><RiskBadge level={task.riskLevel} /><StatusPill value={task.status} /><ChevronDown size={18} /></button>{openTask === task.id && <div className="task-details"><div className="task-detail-grid"><TaskDetail label={tr("Definition of done", "完成定義")} value={task.definitionOfDone} icon={BadgeCheck} /><TaskDetail label={tr("Approval policy", "核准政策")} value={task.approvalPolicy} icon={ShieldCheck} /><TaskDetail label={tr("Stop condition", "停止條件")} value={task.stopCondition} icon={CircleStop} /><TaskDetail label={tr("Rollback", "回滾策略")} value={task.rollbackStrategy} icon={TimerReset} /></div><div className="task-lists"><div><span>{tr("REQUIRED CAPABILITIES", "必要能力")}</span>{task.requiredCapabilities.length ? task.requiredCapabilities.map((item) => <p key={item}><KeyRound />{localizeDomainText(item)}</p>) : <p><Check />{tr("No external capability", "不需要外部能力")}</p>}</div><div><span>{tr("FORBIDDEN ACTIONS", "禁止操作")}</span>{task.forbiddenActions.map((item) => <p key={item}><Ban />{localizeDomainText(item)}</p>)}</div><div><span>{tr("REQUIRED EVIDENCE", "必要證據")}</span>{task.requiredEvidence.map((item) => <p key={item}><FileCheck2 />{localizeDomainText(item)}</p>)}</div></div>{task.preflight && <PreflightPanel result={task.preflight} />}{mission.executionReceipts.filter((receipt) => receipt.taskId === task.id).slice(0, 1).map((receipt) => <div className={`execution-receipt ${receipt.status}`} key={receipt.id}><Fingerprint size={17} /><div><span>{tr("EXECUTION RECEIPT", "執行憑據")} · {localizeLabel(receipt.status)}</span><b>{localizeDomainText(receipt.summary)}</b><code>{receipt.artifactHash ?? receipt.idempotencyKey}</code></div></div>)}{plan.version === mission.currentPlanVersion && task.ownerType === "agent" && !["completed", "failed"].includes(task.status) && task.key !== "T-06" && <div className="task-run"><div><b>{tr("Run a verified executor", "執行已驗證的 Executor")}</b><p>{tr("Completion requires an artifact and immutable receipt. Missing provider executors stop here.", "只有產生 Artifact 與不可變憑據才算完成；缺少 Provider Executor 時會在此停止。")}</p></div><button className="button button-dark" disabled={busy === task.id} onClick={() => action(task.id, api<{ mission: MissionDetail }>(`/api/tasks/${task.id}/run`, { method: "POST", body: JSON.stringify({}) }), tr("Execution finished. Open the receipt below to verify whether it produced an artifact or was blocked.", "執行已結束；請查看下方憑據，確認它產生 Artifact 或已被阻擋。"))}><Play size={16} /> {tr("Preflight & execute", "檢查並執行")}</button></div>}</div>}</article>)}</section>
+    <section className="task-graph"><div className="task-graph-head"><span>{tr("TASK GRAPH", "任務圖")}</span><div><span><Bot size={14} /> {tr("Agent owner", "Agent 負責")}</span><span><UserRound size={14} /> {tr("Human owner", "人員負責")}</span></div></div>{plan.tasks.map((task) => <article className={`task-card ${openTask === task.id ? "open" : ""}`} key={task.id}><button className="task-summary" onClick={() => setOpenTask(openTask === task.id ? "" : task.id)}><span className={`task-state large ${task.status}`}>{task.status === "completed" ? <Check size={17} /> : task.status === "blocked" ? <CircleStop size={17} /> : task.status === "running" ? <Activity size={17} /> : <span />}</span><div className="task-key"><b>{task.key}</b><small>{task.dependencies.length ? tr(`after ${task.dependencies.join(", ")}`, `接續於 ${task.dependencies.join("、")}`) : tr("root task", "起始任務")}</small></div><div className="task-title"><b>{localizeDomainText(task.title)}</b><small>{localizeDomainText(task.goal)}</small></div><span className="task-owner">{task.ownerType === "agent" ? <Bot size={15} /> : <UserRound size={15} />}{localizeDomainText(task.ownerName)}</span><RiskBadge level={task.riskLevel} /><StatusPill value={task.status} /><ChevronDown size={18} /></button>{openTask === task.id && <div className="task-details"><div className="task-detail-grid"><TaskDetail label={tr("Definition of done", "完成定義")} value={task.definitionOfDone} icon={BadgeCheck} /><TaskDetail label={tr("Approval policy", "核准政策")} value={task.approvalPolicy} icon={ShieldCheck} /><TaskDetail label={tr("Stop condition", "停止條件")} value={task.stopCondition} icon={CircleStop} /><TaskDetail label={tr("Rollback", "回滾策略")} value={task.rollbackStrategy} icon={TimerReset} /></div><div className="task-lists"><div><span>{tr("REQUIRED CAPABILITIES", "必要能力")}</span>{task.requiredCapabilities.length ? task.requiredCapabilities.map((item) => <p key={item}><KeyRound />{localizeDomainText(item)}</p>) : <p><Check />{tr("No external capability", "不需要外部能力")}</p>}</div><div><span>{tr("FORBIDDEN ACTIONS", "禁止操作")}</span>{task.forbiddenActions.map((item) => <p key={item}><Ban />{localizeDomainText(item)}</p>)}</div><div><span>{tr("REQUIRED EVIDENCE", "必要證據")}</span>{task.requiredEvidence.map((item) => <p key={item}><FileCheck2 />{localizeDomainText(item)}</p>)}</div></div>{task.preflight && <PreflightPanel result={task.preflight} />}{mission.executionReceipts.filter((receipt) => receipt.taskId === task.id).slice(0, 1).map((receipt) => <div className={`execution-receipt ${receipt.status}`} key={receipt.id}><Fingerprint size={17} /><div><span>{tr("EXECUTION RECEIPT", "執行憑據")} · {localizeLabel(receipt.status)}</span><b>{localizeDomainText(receipt.summary)}</b><code>{receipt.artifactHash ?? receipt.idempotencyKey}</code></div></div>)}{plan.version === mission.currentPlanVersion && task.ownerType === "agent" && !["completed", "failed"].includes(task.status) && task.key !== "T-06" && <div className="task-run"><div><b>{tr("Queue a durable Agent run", "加入 Durable Agent Queue")}</b><p>{tr("The run keeps checkpoints and can be paused, resumed or cancelled from the live room. Missing permissions stop before any side effect.", "執行會保存 Checkpoint，並可在即時 Room 暫停、繼續或取消；缺少權限時會在產生副作用前停止。")}</p></div><button className="button button-dark" disabled={busy === task.id} onClick={() => action(task.id, api(`/api/tasks/${task.id}/agent-runs`, { method: "POST", body: "{}" }).then(() => api<{ mission: MissionDetail }>(`/api/missions/${mission.id}`)), tr("Agent run queued. Open Now to watch checkpoints and control it.", "Agent Run 已進入佇列；到「現在」頁查看 Checkpoint 並控制執行。"))}><Play size={16} /> {tr("Queue Agent run", "啟動 Agent Run")}</button></div>}</div>}</article>)}</section>
   </div>;
 }
 
 function TaskDetail({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Check }) { return <div className="task-detail"><Icon size={17} /><div><span>{label}</span><p>{localizeDomainText(value)}</p></div></div>; }
 function PreflightPanel({ result }: { result: NonNullable<ExecutionTask["preflight"]> }) { return <div className={`preflight-panel ${result.canRun ? "pass" : "fail"}`}><div className="preflight-head">{result.canRun ? <BadgeCheck /> : <CircleStop />}<div><span>{tr("PREFLIGHT", "執行前檢查")} {result.canRun ? tr("PASSED", "通過") : tr("BLOCKED", "已阻擋")}</span><b>{result.canRun ? tr("All execution conditions are valid", "所有執行條件皆有效") : tr("Relay stopped this task safely", "Relay 已安全停止此任務")}</b></div><small>{formatDate(result.checkedAt, true)}</small></div><div className="check-list">{result.checks.map((check) => <div className={check.passed ? "passed" : "failed"} key={check.name}>{check.passed ? <Check /> : <X />}<div><b>{localizeDomainText(check.name)}</b><p>{localizeDomainText(check.detail)}</p>{check.nextAction && <small>{tr("Next", "下一步")}：{localizeDomainText(check.nextAction)}</small>}</div></div>)}</div></div>; }
 
-function AccessView({ mission }: { mission: MissionDetail }) {
-  const plan = mission.currentPlan; const [ceremony, setCeremony] = useState(false);
+function GmailDraftAction({ mission, connectionId, onComplete }: { mission: MissionDetail; connectionId: string; onComplete: () => Promise<void> }) {
+  const task = mission.currentPlan?.tasks.find((item) => item.key === "T-03" && item.requiredCapabilities.includes("Gmail: create draft"));
+  const [form, setForm] = useState({ to: "", subject: `[Draft] ${mission.title}`, body: `${mission.objective}\n\nSuccess: ${mission.successMetric}` });
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [receipt, setReceipt] = useState<{ id: string; resultHash: string; providerId?: string }>();
+  if (!task) return null;
+  const blocked = mission.blockingConflicts > 0 || task.status === "blocked" || mission.currentPlan?.status !== "active";
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const queued = await api<{ run: AgentRun }>(`/api/tasks/${task.id}/agent-runs`, { method: "POST", body: "{}" });
+      const response = await api<{ toolCall: { id: string; resultHash: string; summary: { providerId?: string } } }>(`/api/missions/${mission.id}/agent-runs/${queued.run.id}/tool-calls`, { method: "POST", body: JSON.stringify({ connectionId, operation: "gmail.create_draft", resourceId: `mission:${mission.id}:drafts`, payload: form }) });
+      setReceipt({ id: response.toolCall.id, resultHash: response.toolCall.resultHash, providerId: response.toolCall.summary.providerId });
+      await onComplete();
+    } catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
+  };
+  return <form className="live-provider-action" onSubmit={submit}><div className="live-provider-action-head"><span><Zap size={15}/>{tr("REAL PROVIDER ACTION · DRAFT ONLY", "真實服務操作 · 只建立草稿")}</span><b>{tr("Let the Planning Agent create a real Gmail draft", "讓 Planning Agent 建立一封真實 Gmail 草稿")}</b><p>{tr("Relay sends this only to Gmail Drafts through the encrypted Tool Gateway. It cannot send the email.", "Relay 只會透過加密 Tool Gateway 寫入 Gmail 草稿匣，無法寄出信件。")}</p></div><div className="form-grid"><label>{tr("Draft recipient", "草稿收件人")}<input type="email" required value={form.to} onChange={(event) => setForm({...form, to: event.target.value})} placeholder="client@company.com"/></label><label>{tr("Subject", "主旨")}<input required value={form.subject} onChange={(event) => setForm({...form, subject: event.target.value})}/></label></div><label>{tr("Draft body", "草稿內容")}<textarea rows={4} required value={form.body} onChange={(event) => setForm({...form, body: event.target.value})}/></label>{blocked && <p className="provider-action-blocked"><CircleStop size={14}/>{tr("Resolve blocking decisions and activate the next Plan before Gmail can be touched.", "先解決阻擋決策並啟用下一版 Plan，Relay 才能碰 Gmail。")}</p>}{error && <p className="form-error">{error}</p>}{receipt ? <div className="provider-action-receipt"><BadgeCheck size={17}/><div><b>{tr("Gmail returned a real draft receipt", "Gmail 已回傳真實草稿憑據")}</b><code>{receipt.providerId || receipt.id} · {receipt.resultHash}</code></div></div> : <button className="button button-dark" disabled={busy || blocked}>{busy ? <><span className="loader small"/>{tr("Calling Gmail through Relay…", "正在透過 Relay 呼叫 Gmail…")}</> : <><Mail size={15}/>{tr("Create real Gmail draft", "建立真實 Gmail 草稿")}</>}</button>}</form>;
+}
+
+function AccessView({ mission, onRefresh }: { mission: MissionDetail; onRefresh: () => Promise<void> }) {
+  const plan = mission.currentPlan;
+  const [ceremony, setCeremony] = useState(false);
+  const [connectors, setConnectors] = useState<ConnectorDescriptor[]>([]);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    try { const response = await api<{ connectors: ConnectorDescriptor[] }>("/api/connectors"); setConnectors(response.connectors); }
+    catch (err) { setError((err as Error).message); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const providerKey = (name: string) => ["Gmail","Google Drive","Google Calendar"].includes(name) ? "google" : name.toLowerCase().replaceAll(" ", "");
+  const connect = async (key: string) => {
+    setBusy(key); setError("");
+    try {
+      const response = await api<{ authorizeUrl: string }>(`/api/connectors/${key}/oauth/start`, { method: "POST", body: JSON.stringify({ missionId: mission.id, redirectAfter: `${window.location.pathname}?view=access` }) });
+      window.location.assign(response.authorizeUrl);
+    } catch (err) { setError((err as Error).message); setBusy(""); }
+  };
+  const verify = async (connectionId: string) => {
+    setBusy(connectionId); setError("");
+    try { await api(`/api/connectors/${connectionId}/verify`, { method: "POST", body: JSON.stringify({ missionId: mission.id }) }); await Promise.all([load(), onRefresh()]); }
+    catch (err) { setError((err as Error).message); }
+    finally { setBusy(""); }
+  };
   if (!plan) return null;
   return <div className="content-stack"><div className="view-heading"><div><span className="page-kicker">{tr("ONE MISSION · ONE ACCESS BLUEPRINT", "一個 MISSION · 一份存取藍圖")}</span><h2>{tr("Connect only what this plan needs.", "只連接這份計畫真正需要的資料。")}</h2><p>{tr("Relay derived these capabilities from task requirements. No provider is called “connected” until a real resource-level verification passes.", "Relay 依任務需求推導必要能力；在真實資源層級驗證通過前，任何服務都不會被標示為「已連線」。")}</p></div><button className="button button-primary" onClick={() => setCeremony(true)}><Link2 size={17} /> {tr("Connect this mission", "連接此 Mission")}</button></div>
     <div className="access-summary"><div><Network /><span>{plan.accessBlueprint.length}</span><small>{tr("providers required", "個必要服務")}</small></div><div><KeyRound /><span>{plan.accessBlueprint.reduce((sum, item) => sum + item.capabilities.length, 0)}</span><small>{tr("scoped capabilities", "項範圍化能力")}</small></div><div><BadgeCheck /><span>{plan.accessBlueprint.filter((item) => item.status === "verified").length}</span><small>{tr("verified grants", "項已驗證授權")}</small></div><div><Clock3 /><span>v{plan.version}</span><small>{tr("manifest version", "Manifest 版本")}</small></div></div>
-    <div className="access-grid">{plan.accessBlueprint.map((access) => <article className="access-card" key={access.id}><div className="access-head"><span className={`provider-icon ${sourceColors[access.provider] ?? "lime"}`}>{access.provider.slice(0, 2).toUpperCase()}</span><div><h3>{access.provider}</h3><StatusPill value={access.status} /></div><span className={`access-level level-${access.accessLevel}`}>{localizeLabel(access.accessLevel)}</span></div><div className="access-why"><span>{tr("WHY NEEDED", "需要原因")}</span><p>{localizeDomainText(access.whyNeeded)}</p></div><div className="capability-list">{access.capabilities.map((item) => <p key={item}><Check />{localizeDomainText(item)}</p>)}</div><div className="scope-box"><LockKeyhole size={16} /><div><span>{tr("RESOURCE SCOPE", "資源範圍")}</span><p>{localizeDomainText(access.resourceScope)}</p></div></div><div className="access-footer"><span>{tr("Tasks", "任務")}：{access.taskKeys.join(", ")}</span><span>{access.expiration ? `${tr("Expires", "到期於")} ${formatDate(access.expiration)}` : tr("No grant issued", "尚未核發授權")}</span></div></article>)}</div>
-    <section className="truth-banner"><ShieldCheck /><div><b>{tr("Truthful connector state", "真實連接器狀態")}</b><p>{tr("This MVP has not issued OAuth grants. These cards are a compiled Access Blueprint—not simulated provider connections. Production OAuth verification will be added provider by provider.", "此版本尚未核發 OAuth 授權。這些卡片是編譯後的存取藍圖，不是假裝已連線的服務；正式 OAuth 驗證會逐一依服務完成。")}</p></div></section>
-    {ceremony && <div className="modal-scrim" onClick={() => setCeremony(false)}><div className="modal" onClick={(event) => event.stopPropagation()}><button className="icon-button modal-close" onClick={() => setCeremony(false)} aria-label={tr("Close", "關閉")}><X /></button><div className="modal-icon"><KeyRound /></div><span className="page-kicker">{tr("CONNECTION CEREMONY", "連線引導流程")}</span><h2>{tr("Access queue compiled.", "存取佇列已編譯。")}</h2><p>{tr(`Relay will request each provider independently, verify the exact resource scope, then create an immutable Access Manifest for Plan v${plan.version}.`, `Relay 會個別向每項服務要求授權、驗證精確資源範圍，再為計畫 v${plan.version} 建立不可變的 Access Manifest。`)}</p><div className="ceremony-list">{plan.accessBlueprint.map((item, index) => <div key={item.id}><span>{String(index + 1).padStart(2, "0")}</span><b>{item.provider}</b><small>{localizeLabel(item.accessLevel)} · {localizeLabel(item.status)}</small></div>)}</div><div className="modal-warning"><AlertOctagon /><p>{tr("OAuth is intentionally not simulated. Provider authorization remains unavailable until its real callback, vault storage and verification check are configured.", "Relay 刻意不模擬 OAuth。每項服務必須完成真實 callback、加密憑證儲存與驗證檢查後，才會開放授權。")}</p></div><button className="button button-dark button-full" onClick={() => setCeremony(false)}>{tr("Return to access blueprint", "返回存取藍圖")}</button></div></div>}
+    <div className="access-grid">{plan.accessBlueprint.map((access) => { const descriptor = connectors.find((item) => item.provider === providerKey(access.provider)); const connection = descriptor?.connections.find((item) => item.status === "verified") ?? descriptor?.connections[0]; return <article className="access-card" key={access.id}><div className="access-head"><span className={`provider-icon ${sourceColors[access.provider] ?? "lime"}`}>{access.provider.slice(0, 2).toUpperCase()}</span><div><h3>{access.provider}</h3><StatusPill value={connection?.status ?? access.status} /></div><span className={`access-level level-${access.accessLevel}`}>{localizeLabel(access.accessLevel)}</span></div><div className="access-why"><span>{tr("WHY NEEDED", "需要原因")}</span><p>{localizeDomainText(access.whyNeeded)}</p></div><div className="capability-list">{access.capabilities.map((item) => <p key={item}><Check />{localizeDomainText(item)}</p>)}</div><div className="scope-box"><LockKeyhole size={16} /><div><span>{tr("RESOURCE SCOPE", "資源範圍")}</span><p>{localizeDomainText(access.resourceScope)}</p></div></div>{!descriptor ? <p className="connector-unavailable"><Ban size={14}/>{tr("No production adapter exists for this provider yet.", "此服務目前尚無正式 Adapter。")}</p> : !descriptor.configured ? <p className="connector-unavailable"><AlertOctagon size={14}/>{tr("OAuth app secrets are not configured on this deployment.", "此部署環境尚未設定 OAuth App Secret。")}</p> : !connection ? <button className="button button-dark button-full" disabled={busy === descriptor.provider} onClick={() => { void connect(descriptor.provider); }}><Link2 size={15}/>{busy === descriptor.provider ? tr("Opening provider…", "正在開啟服務…") : tr(`Connect ${descriptor.label}`, `連接 ${descriptor.label}`)}</button> : connection.status !== "verified" ? <button className="button button-primary button-full" disabled={busy === connection.id} onClick={() => { void verify(connection.id); }}><BadgeCheck size={15}/>{busy === connection.id ? tr("Verifying live access…", "正在驗證真實權限…") : tr("Verify identity and resources", "驗證身分與資源")}</button> : <div className="connector-verified"><BadgeCheck size={16}/><p><b>{connection.accountLabel}</b><small>{tr("Identity checked · Manifest bound to this plan", "身分已檢查 · Manifest 已綁定此 Plan")}</small></p></div>}<div className="access-footer"><span>{tr("Tasks", "任務")}：{access.taskKeys.join(", ")}</span><span>{access.expiration ? `${tr("Expires", "到期於")} ${formatDate(access.expiration)}` : tr("No grant issued", "尚未核發授權")}</span></div>{access.provider === "Gmail" && connection?.status === "verified" && <GmailDraftAction mission={mission} connectionId={connection.id} onComplete={onRefresh}/>}</article>; })}</div>
+    {error && <section className="truth-banner error"><AlertOctagon/><div><b>{tr("Connection did not pass", "連線尚未通過")}</b><p>{error}</p></div></section>}
+    <section className="truth-banner"><ShieldCheck /><div><b>{tr("Truthful connector state", "真實連接器狀態")}</b><p>{tr("OAuth tokens are encrypted in Relay's vault and never enter model context. Connected means authorization returned; Verified means Relay called the provider, checked the account, and issued a plan-bound Access Manifest.", "OAuth Token 會加密保存在 Relay Vault，永遠不進模型 Context。Connected 只代表完成授權；Verified 代表 Relay 已實際呼叫服務、確認帳號，並核發綁定此 Plan 的 Access Manifest。")}</p></div></section>
+    {ceremony && <div className="modal-scrim" onClick={() => setCeremony(false)}><div className="modal connector-ceremony" onClick={(event) => event.stopPropagation()}><button className="icon-button modal-close" onClick={() => setCeremony(false)} aria-label={tr("Close", "關閉")}><X /></button><div className="modal-icon"><KeyRound /></div><span className="page-kicker">{tr("CONNECTION CEREMONY", "連線引導流程")}</span><h2>{tr("One queue. Each provider still asks for its own consent.", "一個引導流程；每項服務仍各自取得同意。")}</h2><p>{tr(`Relay derived the minimum queue for Plan v${plan.version}. Authorize one service, return here, verify the account and resource, then continue to the next.`, `Relay 已為 Plan v${plan.version} 推導最小權限佇列。每次授權一項服務、回到這裡驗證帳號與資源，再繼續下一項。`)}</p><div className="ceremony-list">{[...new Map(plan.accessBlueprint.map((item) => [providerKey(item.provider), item])).values()].map((item, index) => { const descriptor = connectors.find((entry) => entry.provider === providerKey(item.provider)); const connection = descriptor?.connections[0]; return <div key={item.id}><span>{String(index + 1).padStart(2, "0")}</span><p><b>{descriptor?.label ?? item.provider}</b><small>{localizeLabel(item.accessLevel)} · {connection ? localizeLabel(connection.status) : descriptor?.configured ? tr("ready to connect", "可開始連線") : tr("not configured", "尚未設定")}</small></p>{descriptor?.configured && !connection && <button onClick={() => { void connect(descriptor.provider); }}>{tr("Connect", "連接")}</button>}{connection?.status === "connected" && <button onClick={() => { void verify(connection.id); }}>{tr("Verify", "驗證")}</button>}{connection?.status === "verified" && <BadgeCheck size={18}/>}</div>; })}</div><button className="button button-dark button-full" onClick={() => setCeremony(false)}>{tr("Return to mission", "返回 Mission")}</button></div></div>}
   </div>;
 }
 
 function ApprovalCenter({ mission, action, busy, isStale }: { mission: MissionDetail; action: MissionAction; busy: string; isStale: boolean }) {
   const plan = mission.currentPlan; if (!plan) return null;
   return <div className="content-stack"><div className="view-heading"><div><span className="page-kicker">{tr("EXACT APPROVAL CENTER", "精確核准中心")}</span><h2>{tr("Approve the action—not the idea.", "核准的是精確操作，不是模糊概念。")}</h2><p>{tr("Every decision is locked to one plan version, exact payload, audience, budget, stop condition and expiration.", "每項決策都綁定一個計畫版本、精確內容、受眾、預算、停止條件與到期時間。")}</p></div><div className="approval-stats"><span>{plan.approvals.filter((item) => item.status === "pending").length} {tr("pending", "項等待中")}</span><span>{plan.approvals.filter((item) => item.status === "approved").length} {tr("approved", "項已核准")}</span></div></div>
-    {plan.approvals.map((approval) => <article className={`approval-card ${approval.status}`} key={approval.id}><div className="approval-top"><div className="approval-icon"><ShieldCheck /></div><div><div className="approval-label"><span>{tr("RISK LEVEL 3 · EXTERNAL ACTION", "風險等級 3 · 對外操作")}</span><StatusPill value={approval.status} /></div><h3>{localizeDomainText(approval.action)}</h3><p>{tr("Requested by", "申請人")} {localizeDomainText(approval.requester)} · {tr("Plan", "計畫")} v{plan.version}</p></div><div className="approval-expiry"><Clock3 /><span>{tr("EXPIRES", "到期時間")}</span><b>{formatDate(approval.expiresAt, true)}</b></div></div><div className="payload-grid">{Object.entries(approval.exactPayload).map(([key, value]) => <div key={key}><span>{localizePayloadKey(key)}</span><b>{typeof value === "number" && key.toLowerCase().includes("budget") ? formatMoney(value) : localizeDomainText(String(value))}</b></div>)}</div><div className="payload-hash"><Fingerprint /><div><span>{tr("PAYLOAD HASH", "內容雜湊")}</span><code>{approval.payloadHash}</code></div><LockKeyhole size={16} /></div><div className="approval-guard"><CircleStop /><div><b>{tr("Automatic stop condition", "自動停止條件")}</b><p>{localizeDomainText(approval.stopCondition)}</p></div></div>{approval.reason && <div className="decision-reason"><b>{tr("Decision evidence", "決策證據")}</b><p>{localizeDomainText(approval.reason)}</p><small>{localizeDomainText(approval.approver)} · {formatDate(approval.decidedAt, true)}</small></div>}{approval.status === "pending" && <div className="approval-actions"><div>{isStale || mission.blockingConflicts ? <p className="danger-text"><Ban size={15} /> {tr("Approval disabled", "核准已停用")}：{isStale ? tr("plan is superseded", "計畫已被新版取代") : tr("blocking conflicts remain", "仍有阻擋性衝突")}。</p> : <p><BadgeCheck size={15} /> {tr("This payload matches the active contract.", "這份內容與目前有效合約一致。")}</p>}</div><button className="button button-ghost" disabled={busy === approval.id || isStale} onClick={() => action(approval.id, api(`/api/approvals/${approval.id}/decide`, { method: "POST", body: JSON.stringify({ decision: "rejected", decidedBy: "Jennifer", reason: tr("Rejected after exact payload review.", "完成精確內容審查後拒絕。") }) }), tr("Approval rejected and evidence recorded.", "核准已拒絕，證據已記錄。"))}><X size={16} /> {tr("Reject", "拒絕")}</button><button className="button button-primary" disabled={busy === approval.id || isStale || mission.blockingConflicts > 0} onClick={() => action(approval.id, api(`/api/approvals/${approval.id}/decide`, { method: "POST", body: JSON.stringify({ decision: "approved", decidedBy: "Jennifer", reason: tr("Exact payload, audience, budget and stop condition reviewed and approved.", "精確內容、受眾、預算與停止條件皆已審查並核准。") }) }), tr("Exact approval recorded for this plan version and payload hash.", "此計畫版本與內容雜湊的精確核准已記錄。"))}><ShieldCheck size={16} /> {tr("Approve exact payload", "核准精確內容")}</button></div>}</article>)}
+    {plan.approvals.map((approval) => <article className={`approval-card ${approval.status}`} key={approval.id}><div className="approval-top"><div className="approval-icon"><ShieldCheck /></div><div><div className="approval-label"><span>{tr("RISK LEVEL 3 · EXTERNAL ACTION", "風險等級 3 · 對外操作")}</span><StatusPill value={approval.status} /></div><h3>{localizeDomainText(approval.action)}</h3><p>{tr("Requested by", "申請人")} {localizeDomainText(approval.requester)} · {tr("Plan", "計畫")} v{plan.version}</p></div><div className="approval-expiry"><Clock3 /><span>{tr("EXPIRES", "到期時間")}</span><b>{formatDate(approval.expiresAt, true)}</b></div></div><div className="payload-grid">{Object.entries(approval.exactPayload).map(([key, value]) => <div key={key}><span>{localizePayloadKey(key)}</span><b>{typeof value === "number" && key.toLowerCase().includes("budget") ? formatMoney(value) : localizeDomainText(String(value))}</b></div>)}</div><div className="payload-hash"><Fingerprint /><div><span>{tr("PAYLOAD HASH", "內容雜湊")}</span><code>{approval.payloadHash}</code></div><LockKeyhole size={16} /></div><div className="approval-guard"><CircleStop /><div><b>{tr("Automatic stop condition", "自動停止條件")}</b><p>{localizeDomainText(approval.stopCondition)}</p></div></div>{approval.reason && <div className="decision-reason"><b>{tr("Decision evidence", "決策證據")}</b><p>{localizeDomainText(approval.reason)}</p><small>{localizeDomainText(approval.approver)} · {formatDate(approval.decidedAt, true)}</small></div>}{approval.status === "pending" && <div className="approval-actions"><div>{isStale || mission.blockingConflicts ? <p className="danger-text"><Ban size={15} /> {tr("Approval disabled", "核准已停用")}：{isStale ? tr("plan is superseded", "計畫已被新版取代") : tr("blocking conflicts remain", "仍有阻擋性衝突")}。</p> : <p><BadgeCheck size={15} /> {tr("This payload matches the active contract.", "這份內容與目前有效合約一致。")}</p>}</div><button className="button button-ghost" disabled={busy === approval.id || isStale} onClick={() => action(approval.id, api(`/api/approvals/${approval.id}/decide`, { method: "POST", body: JSON.stringify({ decision: "rejected", reason: tr("Rejected after exact payload review.", "完成精確內容審查後拒絕。") }) }), tr("Approval rejected and evidence recorded.", "核准已拒絕，證據已記錄。"))}><X size={16} /> {tr("Reject", "拒絕")}</button><button className="button button-primary" disabled={busy === approval.id || isStale || mission.blockingConflicts > 0} onClick={() => action(approval.id, api(`/api/approvals/${approval.id}/decide`, { method: "POST", body: JSON.stringify({ decision: "approved", reason: tr("Exact payload, audience, budget and stop condition reviewed and approved.", "精確內容、受眾、預算與停止條件皆已審查並核准。") }) }), tr("Exact approval recorded for this plan version and payload hash.", "此計畫版本與內容雜湊的精確核准已記錄。"))}><ShieldCheck size={16} /> {tr("Approve exact payload", "核准精確內容")}</button></div>}</article>)}
   </div>;
 }
 
@@ -884,31 +1107,24 @@ function OutcomeView({ mission, action, busy }: { mission: MissionDetail; action
 
 function DemoPage() {
   const navigate = useNavigate();
-  const { locale } = useLocale();
-  const [mission, setMission] = useState<MissionDetail>();
+  return <div className="landing demo-live-page"><PublicHeader/><main>
+    <section className="demo-live-hero"><div><span className="eyebrow"><span className="pulse-dot"/>{tr("NOT A VIDEO · YOU TRIGGER THE RUN", "不是影片 · 由你親手觸發")}</span><h1>{tr("Paste a messy launch. Watch Relay stop the wrong Agent path.", "貼上一份混亂 Launch，親眼看 Relay 停住錯誤的 Agent 路徑。")}</h1><p>{tr("Nothing below starts by itself. Load the example or paste your own instructions, press Run, inspect the exact source collision, then save it into a realtime Mission Room.", "下方不會自動播放。你可以載入範例或貼自己的指令，按下 Run、查看互相衝突的原句，再把結果保存成即時 Mission Room。")}</p><div className="demo-live-steps"><span><b>1</b>{tr("Paste", "貼上")}</span><ArrowRight size={15}/><span><b>2</b>{tr("Run", "執行")}</span><ArrowRight size={15}/><span><b>3</b>{tr("Invite + execute", "邀人 + 執行")}</span></div></div><RuntimePromiseCard/></section>
+    <section className="section live-proof-section demo-compiler"><div className="live-proof-copy"><span className="section-index">01 / {tr("YOUR TURN", "換你操作")}</span><h2>{tr("The magic moment only counts when your input causes it.", "只有你的輸入真的觸發結果，才算 Magic Moment。")}</h2><p>{tr("The compiler response below comes from the live API. Saving it creates real persisted events, named team invites and durable Agent runs.", "下方結果來自真實 API；保存後會建立可持久化事件、具名團隊邀請與 Durable Agent Run。")}</p></div><LandingMagicCompiler onOpenFullMission={(brief) => { sessionStorage.setItem("relay_mission_draft", brief); navigate("/missions/new?draft=1"); }}/></section>
+  </main></div>;
+}
+
+function JoinMissionPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const token = decodeURIComponent(location.pathname.split("/").pop() ?? "");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
-    let active = true;
-    api<{ mission: MissionDetail; readOnly: true }>("/api/demo")
-      .then((response) => { if (active) setMission(response.mission); })
-      .catch((err) => { if (active) setError((err as Error).message); });
-    return () => { active = false; };
-  }, [navigate]);
-  const noAction: MissionAction = async () => undefined;
-  if (error) return <main className="demo-loading"><Logo /><ErrorBlock error={error} retry={() => window.location.reload()} /><Link to="/missions/new?sample=1" className="button button-primary">{tr("Analyze my launch instead", "改為分析我的 Launch")}</Link></main>;
-  if (!mission) return <main className="demo-loading"><Logo /><LoadingBlock label={tr("Opening the read-only execution example…", "正在開啟唯讀執行範例…")} /></main>;
-  return <main className="mission-page demo-page">
-    <header className="mission-header"><div className="mission-topbar"><Logo compact /><span className="demo-badge"><FileCheck2 size={14} /> {tr("GUIDED MISSION REPLAY", "引導式 MISSION 重播")}</span><div className="demo-actors"><UsersRound size={15} /><span>3 {tr("humans", "位人類")} + 6 {tr("AI agents", "個 AI Agent")}</span><small>{tr("three mission scenarios", "三種 Mission 情境")}</small></div><div className="mission-header-spacer" /><LanguageSwitcher compact /><Link to="/missions/new?sample=1" className="button button-primary button-small">{tr("Analyze my launch", "分析我的 Launch")} <ArrowRight size={15} /></Link></div></header>
-    <section className="demo-replay-section">
-      <div className="demo-replay-heading"><span className="page-kicker">01 / {tr("HUMANS + AI IN ACTION", "人類 + AI 實際協作")}</span><h1>{locale === "zh-TW" ? <><span>3 位人類 + 6 個 AI Agent</span><span>找衝突、問對的人，</span><span>按同一份安全計畫執行。</span></> : <><span>Watch 3 humans + 6 AI agents</span><span>find the conflict, ask the right person,</span><span>then resume from one safe plan.</span></>}</h1><p>{tr("Switch between a launch, a customer crisis and a hiring decision. Every message changes who can act next.", "切換 Launch、客訴危機與招募決策；每一段溝通都會改變下一步誰能動手。")}</p></div>
-      <CoworkReplay variant="demo" />
-      <a className="demo-contract-jump" href="#execution-contract"><span>{tr("See the real source-backed execution contract below", "往下看真實、有來源依據的 Execution Contract")}</span><ArrowRight size={17} /></a>
-    </section>
-    <section className="demo-contract-section" id="execution-contract">
-      <div className="demo-contract-heading"><span className="page-kicker">02 / {tr("UNDER THE REPLAY", "動畫背後的真實資料")}</span><h2>{tr("Inspect the saved sources, blockers and execution gates.", "檢查已保存的來源、阻擋項目與執行關卡。")}</h2><p>{tr("The replay explains the workflow. This read-only mission below shows the actual persisted demo state and never pretends an external provider is connected.", "上方重播負責說明流程；下方唯讀 Mission 顯示真實保存的示範狀態，也不會假裝外部服務已連線。")}</p></div>
-      <div className="mission-content mission-content-room demo-contract-room"><MissionRoom mission={mission} action={noAction} busy="" readOnly setView={() => navigate("/missions/new?sample=1")} /></div>
-    </section>
-  </main>;
+  const accept = async () => {
+    setBusy(true); setError("");
+    try { const response = await api<{ missionId: string }>(`/api/invites/${token}/accept`, { method: "POST", body: "{}" }); navigate(`/missions/${response.missionId}?view=room`); }
+    catch (err) { setError((err as Error).message); setBusy(false); }
+  };
+  return <main className="join-page"><Logo/><section><span><Fingerprint size={18}/>{tr("INDIVIDUAL MISSION INVITE", "個人 MISSION 邀請")}</span><h1>{tr("Join with your own identity—not as “Shared collaborator.”", "用你自己的身分加入，不再叫做「Shared collaborator」。")}</h1><p>{tr("Accepting creates your named role inside one Mission. It does not grant access to other workspaces or missions.", "接受後只會在這一個 Mission 建立你的具名角色，不會開放其他 Workspace 或 Mission。")}</p>{error && <p className="form-error">{error}</p>}<button className="button button-primary button-large button-full" disabled={busy} onClick={() => { void accept(); }}>{busy ? <><span className="loader small"/>{tr("Verifying invite…", "正在驗證邀請…")}</> : <><UsersRound size={17}/>{tr("Accept and enter live room", "接受並進入即時 Room")}</>}</button><small><ShieldCheck size={13}/>{tr("Single-use · expires automatically · fully auditable", "一次性 · 自動到期 · 完整可稽核")}</small></section></main>;
 }
 
 function PublicReportPage() {
@@ -945,6 +1161,7 @@ export default function App() {
   if (location.pathname === "/demo") return <DemoPage />;
   if (location.pathname === "/app") return <DashboardPage />;
   if (location.pathname === "/missions/new") return <MissionIntakePage />;
+  if (/^\/join\/[^/]+$/.test(location.pathname)) return <JoinMissionPage />;
   if (/^\/reports\/[^/]+$/.test(location.pathname)) return <PublicReportPage />;
   if (/^\/missions\/[^/]+$/.test(location.pathname)) return <MissionPage />;
   return <NotFound />;

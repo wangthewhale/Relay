@@ -2,11 +2,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApp } from "./app";
 import { store } from "./store";
+import { startAgentRuntime } from "./agentRuntime";
 
 const app = createApp();
 const isProduction = process.env.NODE_ENV === "production";
 
 await store.seedDemo();
+await startAgentRuntime();
 
 if (isProduction) {
   const root = path.dirname(fileURLToPath(import.meta.url));

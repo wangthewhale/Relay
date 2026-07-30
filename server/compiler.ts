@@ -499,32 +499,11 @@ export function detectConflicts(assertions: IntentAssertion[]): Conflict[] {
     );
   }
 
-  if (conflicts.length === 0 && assertions.length >= 2) {
-    const lowAuthority = [...assertions].sort((a, b) => a.authorityLevel - b.authorityLevel)[0];
-    conflicts.push(
-      conflictBase({
-        type: "Authority conflict",
-        title: "Source authority has not been established",
-        summary: "Relay found multiple actionable assertions, but no source hierarchy explains which instruction wins when the mission changes.",
-        severity: "medium",
-        blocking: false,
-        sourceAssertionIds: [lowAuthority.id],
-        decisionOwner: "Mission owner",
-        consequences: "A later correction could silently override a higher-authority policy.",
-        options: optionSet(
-          "Confirm a source authority order for this mission before activating external tasks.",
-          "Treat all sources as equal and require a human decision on every conflict.",
-          "Limit the plan to read and draft actions only.",
-        ),
-      }),
-    );
-  }
-
   return conflicts;
 }
 
 function providerForSource(source: StoredSource): string | undefined {
-  if (["Gmail", "Google Drive", "Slack", "Notion", "Google Calendar"].includes(source.type)) return source.type;
+  if (["Gmail", "Google Drive", "Slack", "Notion", "Google Calendar", "GitHub", "Figma"].includes(source.type)) return source.type;
   if (source.type === "Email") return "Gmail";
   if (source.type === "Calendar") return "Google Calendar";
   if (source.type === "Ads" || /Meta|Facebook|Instagram/i.test(source.content)) return "Meta Ads";
@@ -539,16 +518,28 @@ function buildAccessBlueprint(sources: StoredSource[]): AccessRequirement[] {
     if (!provider) continue;
     providers.set(provider, [...(providers.get(provider) ?? []), source]);
   }
-  return [...providers.entries()].map(([provider, linkedSources], index) => {
-    const publish = provider === "Meta Ads";
+  return [...providers.entries()].map(([provider, linkedSources]) => {
+    const capabilityMap: Record<string, string[]> = {
+      Gmail: ["read selected threads", "create draft"],
+      "Google Drive": ["read selected files"],
+      "Google Calendar": ["read events", "create review event"],
+      Slack: ["read selected channels", "post internal update"],
+      Notion: ["read user-selected pages", "update mission page"],
+      GitHub: ["read mission repositories", "create issue", "comment on pull request"],
+      Figma: ["read mission files", "read comments", "post review comment"],
+      "Meta Ads": ["read account status", "create campaign draft"],
+      CRM: ["read audience", "write mission-scoped segment"],
+    };
+    const capabilities = capabilityMap[provider] ?? ["read selected resources"];
+    const writesDraft = capabilities.some((capability) => /create|post|update|write/i.test(capability));
     return {
       id: uid(),
       provider,
-      capabilities: publish ? ["read account status", "create campaign draft"] : ["read selected resources"],
+      capabilities,
       whyNeeded: `Tasks use evidence from ${linkedSources.map((source) => source.title).join(", ")}.`,
-      taskKeys: publish ? ["T-05", "T-07"] : ["T-01", "T-03"],
-      resourceScope: publish ? "One named ad account; draft only until exact approval" : "Only the resources attached to this mission",
-      accessLevel: publish ? "draft" : "read",
+      taskKeys: provider === "Meta Ads" ? ["T-05", "T-07"] : writesDraft ? ["T-01", "T-03", "T-05"] : ["T-01", "T-03"],
+      resourceScope: provider === "Meta Ads" ? "One named ad account; draft only until exact approval" : "Only the resources attached to this mission and Relay-created drafts",
+      accessLevel: writesDraft ? "draft" : "read",
       status: "not_connected",
       expiration: undefined,
     } satisfies AccessRequirement;
@@ -684,7 +675,7 @@ export const demoMissionInput: CreateMissionInput = {
   title: "Launch Kaohsiung campaign",
   objective: "Launch the Kaohsiung event campaign by July 29 with a maximum approved budget and no promotion to existing members.",
   successMetric: "Acquire 24 paid registrations while keeping CPA at or below NT$1,250.",
-  createdBy: "Jennifer",
+  createdBy: "Mission owner",
   sources: [
     { type: "Slack", title: "#kaohsiung-launch", author: "Growth lead", content: "We must launch on 7月29日. Target is 24 paid registrations. Do not promote to existing members.", authorityLevel: 4 },
     { type: "Email", title: "Client brand review", author: "Client", content: "All creative requires client brand approval before public release.", authorityLevel: 5 },

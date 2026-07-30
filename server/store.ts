@@ -4,7 +4,7 @@ import { compilePlan, demoMissionInput } from "./compiler";
 import { compileIntent, fallbackCompilerReceipt } from "./intelligence";
 import { pool } from "./db";
 import { executeBuiltIn, verifiedExecutorFor } from "./execution";
-import { assertMissionAccess, systemScope, type StoreScope } from "./security";
+import { assertMissionAccess, canAccessMission, systemScope, type StoreScope } from "./security";
 import type {
   ApprovalRequest,
   Artifact,
@@ -49,6 +49,8 @@ class ConflictError extends Error {
 export interface RelayStore {
   listMissions(scope: StoreScope): Promise<MissionSummary[]>;
   getMission(id: string, scope: StoreScope): Promise<MissionDetail>;
+  getMissionByConflictId(conflictId: string, scope: StoreScope): Promise<MissionDetail>;
+  getMissionByApprovalId(approvalId: string, scope: StoreScope): Promise<MissionDetail>;
   createMission(input: CreateMissionInput, scope: StoreScope): Promise<MissionDetail>;
   compileMission(id: string, scope: StoreScope): Promise<MissionDetail>;
   resolveConflict(conflictId: string, input: { optionId: string; reason: string; decidedBy: string }, scope: StoreScope): Promise<MissionDetail>;
@@ -269,9 +271,7 @@ class MemoryRelayStore implements RelayStore {
   }
 
   async listMissions(scope: StoreScope) {
-    const missions = [...this.missions.values()].filter((mission) => scope.kind === "system"
-      || (scope.kind === "session" && mission.workspaceId === scope.workspaceId)
-      || (scope.kind === "share" && mission.id === scope.missionId));
+    const missions = [...this.missions.values()].filter((mission) => canAccessMission(scope, mission.id, mission.workspaceId));
     return missions.map(summaryFromMission).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
@@ -279,8 +279,17 @@ class MemoryRelayStore implements RelayStore {
     return detailFromMission(this.missionFor(id, scope));
   }
 
+  async getMissionByConflictId(conflictId: string, scope: StoreScope) {
+    return detailFromMission(this.missionByChild(scope, (item) => item.conflicts.some((conflict) => conflict.id === conflictId), "Conflict not found."));
+  }
+
+  async getMissionByApprovalId(approvalId: string, scope: StoreScope) {
+    return detailFromMission(this.missionByChild(scope, (item) => item.planVersions.some((plan) => plan.approvals.some((approval) => approval.id === approvalId)), "Approval not found."));
+  }
+
   async createMission(input: CreateMissionInput, scope: StoreScope) {
     if (scope.kind === "share") throw new ConflictError("A shared mission link cannot create workspace missions.");
+    if (scope.kind === "session" && !["owner", "admin"].includes(scope.workspaceRole)) throw Object.assign(new Error("Only a Workspace owner or admin can create a Mission."), { status: 403 });
     const createdAt = now();
     const mission: InternalMission = {
       id: uid(), workspaceId: scope.kind === "session" ? scope.workspaceId : DEMO_WORKSPACE_ID, workspaceName: scope.kind === "session" ? "Private launch workspace" : "Relay Demo",
@@ -508,8 +517,17 @@ class PostgresRelayStore implements RelayStore {
   }
 
   async listMissions(scope: StoreScope) {
-    const where = scope.kind === "session" ? "WHERE m.workspace_id = $1" : scope.kind === "share" ? "WHERE m.id = $1" : "";
-    const values = scope.kind === "session" ? [scope.workspaceId] : scope.kind === "share" ? [scope.missionId] : [];
+    const unrestrictedSession = scope.kind === "session" && ["owner", "admin"].includes(scope.workspaceRole);
+    const where = unrestrictedSession
+      ? "WHERE m.workspace_id = $1"
+      : scope.kind === "session"
+        ? "WHERE m.workspace_id = $1 AND m.id = ANY($2::uuid[])"
+        : scope.kind === "share" ? "WHERE m.id = $1" : "";
+    const values = unrestrictedSession
+      ? [scope.workspaceId]
+      : scope.kind === "session"
+        ? [scope.workspaceId, scope.allowedMissionIds]
+        : scope.kind === "share" ? [scope.missionId] : [];
     const result = await pool!.query(`
       SELECT m.*,
         COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'open')::int AS open_conflicts,
@@ -589,8 +607,21 @@ class PostgresRelayStore implements RelayStore {
     } satisfies MissionDetail;
   }
 
+  async getMissionByConflictId(conflictId: string, scope: StoreScope) {
+    const result = await pool!.query("SELECT mission_id FROM conflicts WHERE id=$1", [conflictId]);
+    if (!result.rowCount) throw new NotFoundError("Conflict not found.");
+    return this.getMission(result.rows[0].mission_id, scope);
+  }
+
+  async getMissionByApprovalId(approvalId: string, scope: StoreScope) {
+    const result = await pool!.query("SELECT mission_id FROM approvals WHERE id=$1", [approvalId]);
+    if (!result.rowCount) throw new NotFoundError("Approval not found.");
+    return this.getMission(result.rows[0].mission_id, scope);
+  }
+
   async createMission(input: CreateMissionInput, scope: StoreScope) {
     if (scope.kind === "share") throw new ConflictError("A shared mission link cannot create workspace missions.");
+    if (scope.kind === "session" && !["owner", "admin"].includes(scope.workspaceRole)) throw Object.assign(new Error("Only a Workspace owner or admin can create a Mission."), { status: 403 });
     const client = await pool!.connect();
     const missionId = uid();
     const workspaceId = scope.kind === "session" ? scope.workspaceId : DEMO_WORKSPACE_ID;

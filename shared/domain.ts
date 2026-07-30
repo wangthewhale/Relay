@@ -10,7 +10,13 @@ export const sourceTypes = [
   "Ads",
   "Meeting note",
   "Manual",
+  "GitHub",
+  "Figma",
 ] as const;
+
+export const departments = ["Executive", "Product", "Engineering", "Design", "Finance", "People", "Growth", "Operations", "Other"] as const;
+export const missionRoles = ["owner", "decision_maker", "contributor", "observer"] as const;
+export const agentRunStatuses = ["queued", "running", "pause_requested", "paused", "cancel_requested", "cancelled", "succeeded", "failed", "blocked"] as const;
 
 export const assertionTypes = [
   "Goal",
@@ -51,7 +57,7 @@ export const createMissionSchema = z.object({
   title: z.string().min(3).max(160),
   objective: z.string().min(10).max(5_000),
   successMetric: z.string().min(3).max(500),
-  createdBy: z.string().min(1).max(120).default("Jennifer"),
+  createdBy: z.string().min(1).max(120).default("Mission owner"),
   sources: z.array(sourceInputSchema).min(2).max(20),
 });
 
@@ -84,11 +90,212 @@ export const outcomeSchema = z.object({
   recommendation: z.string().max(2_000).default(""),
 });
 
+export const inviteMemberSchema = z.object({
+  email: z.string().email().max(320),
+  name: z.string().min(1).max(120),
+  title: z.string().max(120).default(""),
+  department: z.enum(departments).default("Other"),
+  workspaceRole: z.enum(["admin", "member", "viewer"]).default("member"),
+  missionRole: z.enum(missionRoles).default("contributor"),
+});
+
+export const presenceSchema = z.object({
+  connectionId: z.string().uuid(),
+  state: z.enum(["viewing", "editing", "deciding", "away"]).default("viewing"),
+  cursorContext: z.string().max(240).default("mission_room"),
+});
+
+export const commentSchema = z.object({
+  body: z.string().min(1).max(5_000),
+  mentions: z.array(z.string().uuid()).max(25).default([]),
+  taskId: z.string().uuid().optional(),
+  conflictId: z.string().uuid().optional(),
+  parentId: z.string().uuid().optional(),
+});
+
+export const handoffSchema = z.object({
+  taskId: z.string().uuid(),
+  toUserId: z.string().uuid().optional(),
+  toAgentId: z.string().uuid().optional(),
+  reason: z.string().min(3).max(2_000),
+  checkpoint: z.record(z.unknown()).default({}),
+}).refine((value) => Boolean(value.toUserId) !== Boolean(value.toAgentId), "Choose exactly one human or agent recipient.");
+
+export const createAgentRunSchema = z.object({
+  agentId: z.string().uuid().optional(),
+});
+
+export const createRuntimeKeySchema = z.object({
+  name: z.string().min(2).max(120),
+  missionIds: z.array(z.string().uuid()).min(1).max(50),
+  capabilities: z.array(z.enum(["runtime:control", "tool:call", "mission:correct", "mission:comment", "mission:handoff"])).min(1).max(5),
+  expiresInDays: z.number().int().min(1).max(90).default(30),
+});
+
+export const sessionProfileSchema = z.object({
+  name: z.string().min(1).max(120),
+  email: z.string().email().max(320).optional().or(z.literal("")),
+  title: z.string().max(120).default(""),
+  department: z.enum(departments).default("Other"),
+});
+
 export type SourceType = (typeof sourceTypes)[number];
 export type AssertionType = (typeof assertionTypes)[number];
 export type ConflictType = (typeof conflictTypes)[number];
 export type SourceInput = z.infer<typeof sourceInputSchema>;
 export type CreateMissionInput = z.infer<typeof createMissionSchema>;
+export type Department = (typeof departments)[number];
+export type MissionRole = (typeof missionRoles)[number];
+export type AgentRunStatus = (typeof agentRunStatuses)[number];
+
+export interface RelayUser {
+  id: string;
+  name: string;
+  email: string;
+  title?: string;
+  department?: Department | string;
+  identitySource: "relay_session" | "invite" | "google" | "microsoft" | string;
+  identityVerified: boolean;
+}
+
+export interface MissionMember {
+  user: RelayUser;
+  role: MissionRole;
+  responsibility: string;
+  joinedAt: string;
+}
+
+export interface Presence {
+  userId: string;
+  connectionId: string;
+  state: "viewing" | "editing" | "deciding" | "away";
+  cursorContext?: string;
+  lastSeenAt: string;
+}
+
+export interface CollaborationEvent {
+  sequence: number;
+  id: string;
+  missionId: string;
+  planVersion?: number;
+  missionRevision: number;
+  actorType: "human" | "agent" | "system" | "provider";
+  actorId?: string;
+  actorName: string;
+  eventType: string;
+  entityType: string;
+  entityId?: string;
+  summary: string;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface MissionComment {
+  id: string;
+  missionId: string;
+  author: RelayUser;
+  body: string;
+  mentions: string[];
+  taskId?: string;
+  conflictId?: string;
+  parentId?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentDefinition {
+  id: string;
+  name: string;
+  purpose: string;
+  modelProvider: string;
+  modelName: string;
+  capabilities: string[];
+  riskCeiling: 0 | 1 | 2 | 3 | 4;
+  status: "idle" | "running" | "paused" | "offline";
+}
+
+export interface AgentRun {
+  id: string;
+  missionId: string;
+  planVersionId: string;
+  taskId: string;
+  agentId: string;
+  agentName: string;
+  taskKey: string;
+  taskTitle: string;
+  status: AgentRunStatus;
+  attempt: number;
+  progress: number;
+  phase: string;
+  checkpoint: Record<string, unknown>;
+  heartbeatAt?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskHandoff {
+  id: string;
+  taskId: string;
+  fromUserId?: string;
+  fromAgentId?: string;
+  toUserId?: string;
+  toAgentId?: string;
+  reason: string;
+  checkpoint: Record<string, unknown>;
+  status: "offered" | "accepted" | "declined" | "cancelled";
+  createdAt: string;
+}
+
+export interface ConnectorConnection {
+  id: string;
+  provider: string;
+  accountId: string;
+  accountLabel: string;
+  status: "pending" | "connected" | "verified" | "expired" | "revoked" | "error";
+  grantedScopes: string[];
+  expiresAt?: string;
+  verifiedAt?: string;
+  lastError?: string;
+}
+
+export interface ConnectorDescriptor {
+  provider: string;
+  label: string;
+  configured: boolean;
+  capabilities: string[];
+  connections: ConnectorConnection[];
+  configurationHint?: string;
+}
+
+export interface AuthorityEdge {
+  id: string;
+  subjectUserId: string;
+  subjectName: string;
+  scopeType: "workspace" | "department" | "mission" | "capability" | "budget";
+  scopeValue: string;
+  authorityLevel: number;
+  canApproveRisk: number;
+  budgetCeiling?: number;
+  validFrom: string;
+  validUntil?: string;
+}
+
+export interface CollaborationSnapshot {
+  revision: number;
+  members: MissionMember[];
+  presence: Presence[];
+  agents: AgentDefinition[];
+  runs: AgentRun[];
+  comments: MissionComment[];
+  handoffs: TaskHandoff[];
+  events: CollaborationEvent[];
+  authorityGraph: AuthorityEdge[];
+}
 
 export interface IntentAssertion {
   id: string;

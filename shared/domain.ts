@@ -57,6 +57,7 @@ export const createMissionSchema = z.object({
   title: z.string().min(3).max(160),
   objective: z.string().min(10).max(5_000),
   successMetric: z.string().min(3).max(500),
+  executionMode: z.enum(["launch_readiness", "live_launch"]).default("launch_readiness"),
   createdBy: z.string().min(1).max(120).default("Mission owner"),
   sources: z.array(sourceInputSchema).min(2).max(20),
 });
@@ -87,6 +88,10 @@ export const outcomeSchema = z.object({
   cost: z.number().min(0).default(0),
   durationMinutes: z.number().int().min(0).default(0),
   humanInterventions: z.number().int().min(0).default(0),
+  teamSize: z.number().int().min(1).max(500).default(1),
+  baselineMeetings: z.number().int().min(0).max(100).default(0),
+  actualMeetings: z.number().int().min(0).max(100).default(0),
+  meetingMinutes: z.number().int().min(0).max(480).default(0),
   recommendation: z.string().max(2_000).default(""),
 });
 
@@ -143,7 +148,8 @@ export type SourceType = (typeof sourceTypes)[number];
 export type AssertionType = (typeof assertionTypes)[number];
 export type ConflictType = (typeof conflictTypes)[number];
 export type SourceInput = z.infer<typeof sourceInputSchema>;
-export type CreateMissionInput = z.infer<typeof createMissionSchema>;
+type ParsedCreateMissionInput = z.infer<typeof createMissionSchema>;
+export type CreateMissionInput = Omit<ParsedCreateMissionInput, "executionMode"> & { executionMode?: ParsedCreateMissionInput["executionMode"] };
 export type Department = (typeof departments)[number];
 export type MissionRole = (typeof missionRoles)[number];
 export type AgentRunStatus = (typeof agentRunStatuses)[number];
@@ -380,7 +386,7 @@ export interface Artifact {
   id: string;
   taskId: string;
   planVersion: number;
-  type: "evidence_manifest" | "execution_brief" | "outcome_report";
+  type: "evidence_manifest" | "execution_brief" | "audience_guardrail" | "launch_draft_bundle" | "launch_handoff" | "outcome_report";
   title: string;
   content: Record<string, unknown>;
   contentHash: string;
@@ -528,6 +534,10 @@ export interface Outcome {
   cost: number;
   durationMinutes: number;
   humanInterventions: number;
+  teamSize: number;
+  baselineMeetings: number;
+  actualMeetings: number;
+  meetingMinutes: number;
   blockers: string[];
   recommendation: string;
   updatedAt: string;
@@ -537,6 +547,7 @@ export interface MissionSummary {
   id: string;
   title: string;
   objective: string;
+  executionMode: "launch_readiness" | "live_launch";
   status: "intake" | "conflicts" | "planning" | "active" | "completed";
   currentPlanVersion: number;
   openConflicts: number;
@@ -545,6 +556,17 @@ export interface MissionSummary {
   completedTasks: number;
   totalTasks: number;
   updatedAt: string;
+}
+
+export interface MissionImpact {
+  sourcesReconciled: number;
+  conflictsResolved: number;
+  agentTasksCompleted: number;
+  artifactsCreated: number;
+  executionReceipts: number;
+  humanDecisions: number;
+  meetingsAvoided: number;
+  peopleHoursAvoided: number;
 }
 
 export interface MissionDetail extends MissionSummary {
@@ -561,5 +583,6 @@ export interface MissionDetail extends MissionSummary {
   executionReceipts: ExecutionReceipt[];
   compilerReceipt?: CompilerReceipt;
   outcome?: Outcome;
+  impact: MissionImpact;
   createdAt: string;
 }

@@ -551,7 +551,7 @@ function stablePayloadHash(payload: Record<string, unknown>) {
 }
 
 export function compilePlan(args: {
-  input: Pick<CreateMissionInput, "objective" | "successMetric" | "createdBy">;
+  input: Pick<CreateMissionInput, "objective" | "successMetric" | "createdBy" | "executionMode">;
   sources: StoredSource[];
   conflicts: Conflict[];
   version: number;
@@ -562,6 +562,7 @@ export function compilePlan(args: {
   const accessBlueprint = buildAccessBlueprint(sources);
   const capabilities = accessBlueprint.flatMap((item) => item.capabilities.map((capability) => `${item.provider}: ${capability}`));
   const blocked = unresolvedBlocking.length > 0;
+  const readiness = input.executionMode !== "live_launch";
   const tasks: ExecutionTask[] = [
     {
       id: uid(), key: "T-01", title: "Validate mission evidence", goal: "Confirm every assertion has a source and current timestamp.",
@@ -588,35 +589,35 @@ export function compilePlan(args: {
       rollbackStrategy: "Archive the draft under the superseded plan version.", requiredEvidence: ["Plan version", "Source links", "Generated artifact"], outcomeMetric: "Brief passes all contract invariants",
     },
     {
-      id: uid(), key: "T-04", title: "Prepare verified audience and internal records", goal: "Apply exclusions and prepare internal launch records.",
-      ownerType: "agent", ownerName: "Operations Agent", status: blocked ? "blocked" : "pending", riskLevel: 2, dependencies: ["T-03"],
-      requiredInputs: ["Approved audience rules"], expectedOutputs: ["Suppressed audience", "Internal launch record"], definitionOfDone: "Audience excludes prohibited members and changes are auditable.",
-      requiredCapabilities: ["CRM: read audience", "CRM: write mission-scoped segment"], forbiddenActions: ["Contact customers", "Delete CRM records"], timeLimitMinutes: 25,
-      approvalPolicy: "Allowed by workspace policy after a passing preflight", retryPolicy: { maxAttempts: 2, backoffMinutes: 5 }, stopCondition: "Stop if suppression count is zero or source scope changes.",
-      rollbackStrategy: "Delete the mission-scoped draft segment; never alter source records.", requiredEvidence: ["Audience count", "Suppression query", "Change event"], outcomeMetric: "0 prohibited members in final audience",
+      id: uid(), key: "T-04", title: readiness ? "Compile the audience guardrail" : "Prepare verified audience and internal records", goal: "Apply exclusions and prepare internal launch records.",
+      ownerType: "agent", ownerName: "Operations Agent", status: blocked ? "blocked" : "pending", riskLevel: readiness ? 1 : 2, dependencies: ["T-03"],
+      requiredInputs: ["Approved audience rules"], expectedOutputs: readiness ? ["Versioned audience guardrail"] : ["Suppressed audience", "Internal launch record"], definitionOfDone: readiness ? "Every audience inclusion and exclusion is traceable to source evidence." : "Audience excludes prohibited members and changes are auditable.",
+      requiredCapabilities: readiness ? ["Relay: compile audience guardrail from mission snapshots"] : ["CRM: read audience", "CRM: write mission-scoped segment"], forbiddenActions: ["Contact customers", "Delete CRM records"], timeLimitMinutes: 25,
+      approvalPolicy: readiness ? "No approval; internal artifact only" : "Allowed by workspace policy after a passing preflight", retryPolicy: { maxAttempts: 2, backoffMinutes: 5 }, stopCondition: "Stop if the audience rule is ambiguous or source scope changes.",
+      rollbackStrategy: readiness ? "Supersede the artifact with a new plan version." : "Delete the mission-scoped draft segment; never alter source records.", requiredEvidence: ["Audience rule", "Source assertion", "Plan version"], outcomeMetric: "0 prohibited members in the approved audience contract",
     },
     {
-      id: uid(), key: "T-05", title: "Create external launch drafts", goal: "Prepare email, social and advertising drafts without publishing.",
+      id: uid(), key: "T-05", title: readiness ? "Create the launch draft bundle" : "Create external launch drafts", goal: "Prepare email, social and advertising drafts without publishing.",
       ownerType: "agent", ownerName: "Launch Agent", status: blocked ? "blocked" : "pending", riskLevel: 1, dependencies: ["T-03", "T-04"],
       requiredInputs: ["Campaign brief", "Verified audience"], expectedOutputs: ["Email draft", "Social draft", "Ad campaign draft"], definitionOfDone: "All artifacts exist as drafts and share one payload version.",
-      requiredCapabilities: ["Gmail: create draft", "Meta Ads: create draft"], forbiddenActions: ["Send", "Publish", "Activate ads"], timeLimitMinutes: 30,
+      requiredCapabilities: readiness ? ["Relay: create mission-scoped draft bundle"] : ["Gmail: create draft", "Meta Ads: create draft"], forbiddenActions: ["Send", "Publish", "Activate ads"], timeLimitMinutes: 30,
       approvalPolicy: "Draft only; external actions remain blocked", retryPolicy: { maxAttempts: 2, backoffMinutes: 5 }, stopCondition: "Stop if any provider reports a scope or identity mismatch.",
       rollbackStrategy: "Delete only Relay-created drafts using their idempotency keys.", requiredEvidence: ["Draft IDs", "Creative checksum", "Audience checksum"], outcomeMetric: "All launch artifacts ready for one exact review",
     },
     {
-      id: uid(), key: "T-06", title: "Review the exact release payload", goal: "Bind human approval to the precise action and active plan version.",
-      ownerType: "human", ownerName: "Named approver", status: blocked ? "blocked" : "pending", riskLevel: 3, dependencies: ["T-05"], requiredInputs: ["Exact payload", "Budget", "Audience", "Stop condition"],
+      id: uid(), key: "T-06", title: readiness ? "Approve the exact launch handoff" : "Review the exact release payload", goal: "Bind human approval to the precise action and active plan version.",
+      ownerType: "human", ownerName: "Named approver", status: blocked ? "blocked" : "pending", riskLevel: readiness ? 2 : 3, dependencies: ["T-05"], requiredInputs: ["Exact payload", "Budget", "Audience", "Stop condition"],
       expectedOutputs: ["Approval decision"], definitionOfDone: "A named approver accepts or rejects the payload hash before expiration.", requiredCapabilities: [], forbiddenActions: ["Generic approval", "Reuse approval after payload change"],
       timeLimitMinutes: 120, approvalPolicy: "Exact approval required", retryPolicy: { maxAttempts: 1, backoffMinutes: 0 }, stopCondition: "Stop when plan, audience, budget or creative changes.",
       rollbackStrategy: "Invalidate approval and request a new decision.", requiredEvidence: ["Approver", "Payload hash", "Expiration", "Decision reason"], outcomeMetric: "No stale or ambiguous approval used",
     },
     {
-      id: uid(), key: "T-07", title: "Execute approved launch", goal: "Perform only the externally approved actions.", ownerType: "agent", ownerName: "Launch Agent",
-      status: blocked ? "blocked" : "pending", riskLevel: 3, dependencies: ["T-06"], requiredInputs: ["Valid exact approval", "Verified provider access"], expectedOutputs: ["Launch receipts", "External IDs"],
-      definitionOfDone: "Every approved action returns a provider receipt and audit event.", requiredCapabilities: ["Gmail: send approved draft", "Meta Ads: publish approved campaign"],
-      forbiddenActions: ["Change budget", "Change audience", "Use a different creative"], budgetLimit: 30_000, timeLimitMinutes: 15, approvalPolicy: "Valid approval for this version and hash",
+      id: uid(), key: "T-07", title: readiness ? "Release the approved handoff pack" : "Execute approved launch", goal: readiness ? "Deliver one approved, immutable package to the launch owner." : "Perform only the externally approved actions.", ownerType: "agent", ownerName: "Launch Agent",
+      status: blocked ? "blocked" : "pending", riskLevel: readiness ? 1 : 3, dependencies: ["T-06"], requiredInputs: readiness ? ["Valid exact approval", "Draft bundle"] : ["Valid exact approval", "Verified provider access"], expectedOutputs: readiness ? ["Approved launch handoff", "Artifact hashes"] : ["Launch receipts", "External IDs"],
+      definitionOfDone: readiness ? "The owner receives one version-locked launch pack with every prerequisite and next action." : "Every approved action returns a provider receipt and audit event.", requiredCapabilities: readiness ? ["Relay: release approved launch handoff"] : ["Gmail: send approved draft", "Meta Ads: publish approved campaign"],
+      forbiddenActions: ["Change budget", "Change audience", "Use a different creative", ...(readiness ? ["Send", "Publish", "Spend"] : [])], budgetLimit: readiness ? undefined : 30_000, timeLimitMinutes: 15, approvalPolicy: "Valid approval for this version and hash",
       retryPolicy: { maxAttempts: 1, backoffMinutes: 0 }, stopCondition: "Stop if CPA exceeds NT$1,250 after 10 conversions or any provider payload differs.",
-      rollbackStrategy: "Pause the campaign and preserve all provider receipts; do not delete evidence.", requiredEvidence: ["Provider receipt", "Idempotency key", "Payload hash"], outcomeMetric: input.successMetric,
+      rollbackStrategy: readiness ? "Invalidate the handoff when the plan changes and preserve the prior artifact." : "Pause the campaign and preserve all provider receipts; do not delete evidence.", requiredEvidence: readiness ? ["Artifact hash", "Approval hash", "Plan version"] : ["Provider receipt", "Idempotency key", "Payload hash"], outcomeMetric: readiness ? "One approved execution-ready launch pack" : input.successMetric,
     },
     {
       id: uid(), key: "T-08", title: "Verify mission outcome", goal: "Measure the result against the original success contract.", ownerType: "agent", ownerName: "Outcome Agent",
@@ -630,15 +631,15 @@ export function compilePlan(args: {
   const launchTask = tasks.find((task) => task.key === "T-07")!;
   const exactPayload = {
     planVersion: version,
-    action: "Launch campaign",
+    action: readiness ? "Release approved launch handoff pack" : "Launch campaign",
     audience: "Taiwan prospects, excluding existing members",
     creative: "mission-scoped approved drafts",
-    maximumBudgetTwd: launchTask.budgetLimit,
+    maximumBudgetTwd: launchTask.budgetLimit ?? 0,
     start: "After all dependencies pass preflight",
     stop: launchTask.stopCondition,
   };
   const approvals: ApprovalRequest[] = [{
-    id: uid(), taskId: launchTask.id, action: "Approve campaign launch", exactPayload, payloadHash: stablePayloadHash(exactPayload),
+    id: uid(), taskId: launchTask.id, action: readiness ? "Approve launch handoff pack" : "Approve campaign launch", exactPayload, payloadHash: stablePayloadHash(exactPayload),
     audience: String(exactPayload.audience), budget: launchTask.budgetLimit, startTime: undefined, stopCondition: launchTask.stopCondition,
     requester: "Launch Agent", approver: "Mission owner", status: "pending", expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), createdAt: isoNow(),
   }];
@@ -675,6 +676,7 @@ export const demoMissionInput: CreateMissionInput = {
   title: "Launch Kaohsiung campaign",
   objective: "Launch the Kaohsiung event campaign by July 29 with a maximum approved budget and no promotion to existing members.",
   successMetric: "Acquire 24 paid registrations while keeping CPA at or below NT$1,250.",
+  executionMode: "live_launch",
   createdBy: "Mission owner",
   sources: [
     { type: "Slack", title: "#kaohsiung-launch", author: "Growth lead", content: "We must launch on 7月29日. Target is 24 paid registrations. Do not promote to existing members.", authorityLevel: 4 },
@@ -684,5 +686,21 @@ export const demoMissionInput: CreateMissionInput = {
     { type: "Manual", title: "Executive update", author: "Mission owner", content: "The approved budget is NT$30,000 maximum. Nothing can be published without my approval.", authorityLevel: 5 },
     { type: "CRM", title: "Kaohsiung audience", author: "CRM system", content: "Current campaign audience contains existing members and new leads.", authorityLevel: 4 },
     { type: "Ads", title: "Meta Ads account", author: "Ads platform", content: "A payment method is missing; campaign publishing is unavailable.", authorityLevel: 5 },
+  ],
+};
+
+export const completedDemoMissionInput: CreateMissionInput = {
+  title: "Relay Launch Readiness Proof v1",
+  objective: "Produce one approved, execution-ready launch package for the Kaohsiung campaign without any external send, publish or spend action.",
+  successMetric: "Eight governed tasks completed with immutable artifacts and one exact human approval.",
+  executionMode: "launch_readiness",
+  createdBy: "Jennifer · Launch owner",
+  sources: [
+    { type: "Slack", title: "#kaohsiung-launch", author: "Growth lead", content: "Launch July 29. Target 24 paid registrations. Exclude existing members.", authorityLevel: 4 },
+    { type: "Email", title: "Client brand approval", author: "Client", content: "Final creative review is approved for July 28 before release.", authorityLevel: 5 },
+    { type: "Calendar", title: "Launch calendar", author: "Operations", content: "Brand review July 28; launch handoff July 29.", authorityLevel: 4 },
+    { type: "Notion", title: "Campaign brief v3", author: "Marketing", content: "Approved preparation budget ceiling: NT$30,000.", authorityLevel: 4 },
+    { type: "Manual", title: "Executive approval policy", author: "Mission owner", content: "The owner must approve the exact audience, creative and stop rule before handoff.", authorityLevel: 5 },
+    { type: "CRM", title: "Audience rule snapshot", author: "CRM system", content: "The approved audience definition excludes all existing members.", authorityLevel: 4 },
   ],
 };

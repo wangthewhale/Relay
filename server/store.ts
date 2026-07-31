@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
-import { compilePlan, demoMissionInput } from "./compiler";
+import { compilePlan, completedDemoMissionInput, demoMissionInput } from "./compiler";
 import { compileIntent, fallbackCompilerReceipt } from "./intelligence";
 import { pool } from "./db";
 import { executeBuiltIn, verifiedExecutorFor } from "./execution";
@@ -62,6 +62,7 @@ export interface RelayStore {
   createPublicReport(missionId: string, scope: StoreScope): Promise<PublicMissionReport>;
   getPublicReport(slug: string): Promise<PublicMissionReport>;
   seedDemo(): Promise<string>;
+  seedCompletedDemo(): Promise<string>;
 }
 
 interface InternalMission {
@@ -71,6 +72,7 @@ interface InternalMission {
   title: string;
   objective: string;
   successMetric: string;
+  executionMode: NonNullable<CreateMissionInput["executionMode"]>;
   status: MissionDetail["status"];
   currentPlanVersion: number;
   createdBy: string;
@@ -99,6 +101,7 @@ function summaryFromMission(mission: InternalMission): MissionSummary {
     id: mission.id,
     title: mission.title,
     objective: mission.objective,
+    executionMode: mission.executionMode,
     status: mission.status,
     currentPlanVersion: mission.currentPlanVersion,
     openConflicts: mission.conflicts.filter((conflict) => conflict.status === "open").length,
@@ -110,12 +113,27 @@ function summaryFromMission(mission: InternalMission): MissionSummary {
   };
 }
 
+function missionImpact(mission: Pick<MissionDetail, "sources" | "conflicts" | "currentPlan" | "artifacts" | "executionReceipts" | "outcome">) {
+  const meetingsAvoided = Math.max(0, (mission.outcome?.baselineMeetings ?? 0) - (mission.outcome?.actualMeetings ?? 0));
+  const peopleHoursAvoided = Number(((meetingsAvoided * (mission.outcome?.meetingMinutes ?? 0) * (mission.outcome?.teamSize ?? 1)) / 60).toFixed(1));
+  return {
+    sourcesReconciled: mission.sources.length,
+    conflictsResolved: mission.conflicts.filter((conflict) => conflict.status === "resolved").length,
+    agentTasksCompleted: mission.currentPlan?.tasks.filter((task) => task.ownerType === "agent" && task.status === "completed").length ?? 0,
+    artifactsCreated: mission.artifacts.length,
+    executionReceipts: mission.executionReceipts.filter((receipt) => receipt.status === "succeeded").length,
+    humanDecisions: mission.conflicts.filter((conflict) => conflict.resolution).length + (mission.currentPlan?.approvals.filter((approval) => ["approved", "rejected"].includes(approval.status)).length ?? 0),
+    meetingsAvoided,
+    peopleHoursAvoided,
+  };
+}
+
 function detailFromMission(mission: InternalMission): MissionDetail {
   const summary = summaryFromMission(mission);
   const compilerReceipt = mission.compilerReceipt ?? (mission.assertions.length
     ? fallbackCompilerReceipt({ sources: mission.sources.length, assertions: mission.assertions, conflicts: mission.conflicts, generatedAt: mission.updatedAt })
     : undefined);
-  return {
+  const detail = {
     ...summary,
     workspaceName: mission.workspaceName,
     createdBy: mission.createdBy,
@@ -131,7 +149,8 @@ function detailFromMission(mission: InternalMission): MissionDetail {
     compilerReceipt,
     outcome: mission.outcome,
     createdAt: mission.createdAt,
-  };
+  } as Omit<MissionDetail, "impact">;
+  return { ...detail, impact: missionImpact(detail) };
 }
 
 function audit(
@@ -293,9 +312,9 @@ class MemoryRelayStore implements RelayStore {
     const createdAt = now();
     const mission: InternalMission = {
       id: uid(), workspaceId: scope.kind === "session" ? scope.workspaceId : DEMO_WORKSPACE_ID, workspaceName: scope.kind === "session" ? "Private launch workspace" : "Relay Demo",
-      title: input.title, objective: input.objective, successMetric: input.successMetric, status: "intake", currentPlanVersion: 0,
+      title: input.title, objective: input.objective, successMetric: input.successMetric, executionMode: input.executionMode ?? "launch_readiness", status: "intake", currentPlanVersion: 0,
       createdBy: input.createdBy, sources: input.sources.map((source) => ({ ...source, id: source.id ?? uid(), createdAt })), assertions: [], conflicts: [],
-      planVersions: [], auditEvents: [], artifacts: [], executionReceipts: [], outcome: { id: uid(), metricName: input.successMetric, targetValue: input.successMetric, actualValue: "", status: "not_started", cost: 0, durationMinutes: 0, humanInterventions: 0, blockers: [], recommendation: "", updatedAt: createdAt },
+      planVersions: [], auditEvents: [], artifacts: [], executionReceipts: [], outcome: { id: uid(), metricName: input.successMetric, targetValue: input.successMetric, actualValue: "", status: "not_started", cost: 0, durationMinutes: 0, humanInterventions: 0, teamSize: 1, baselineMeetings: 0, actualMeetings: 0, meetingMinutes: 0, blockers: [], recommendation: "", updatedAt: createdAt },
       createdAt, updatedAt: createdAt,
     };
     audit(mission, { actorType: "human", actorName: input.createdBy, eventType: "mission.created", entityType: "mission", entityId: mission.id, summary: "Mission created with source evidence.", data: { sourceCount: mission.sources.length } });
@@ -445,6 +464,25 @@ class MemoryRelayStore implements RelayStore {
     await this.compileMission(created.id, systemScope);
     return created.id;
   }
+
+  async seedCompletedDemo() {
+    const existing = [...this.missions.values()].find((mission) => mission.title === completedDemoMissionInput.title);
+    if (existing) return existing.id;
+    const created = await this.createMission(completedDemoMissionInput, systemScope);
+    let mission = await this.compileMission(created.id, systemScope);
+    for (const key of ["T-03", "T-04", "T-05"]) {
+      const task = mission.currentPlan?.tasks.find((item) => item.key === key);
+      if (task) mission = (await this.runTask(task.id, `${task.ownerName} · Sample run`, systemScope)).mission;
+    }
+    const approval = mission.currentPlan?.approvals[0];
+    if (approval) mission = await this.decideApproval(approval.id, { decision: "approved", decidedBy: "Jennifer · Launch owner", reason: "Sample owner verified the exact audience, draft bundle, budget ceiling and stop rule." }, systemScope);
+    for (const key of ["T-07", "T-08"]) {
+      const task = mission.currentPlan?.tasks.find((item) => item.key === key);
+      if (task) mission = (await this.runTask(task.id, `${task.ownerName} · Sample run`, systemScope)).mission;
+    }
+    await this.updateOutcome(mission.id, { metricName: "Launch readiness contract", targetValue: "8/8 governed tasks complete", actualValue: "8/8 tasks complete; 6 source snapshots reconciled; exact handoff approved", status: "achieved", cost: 0, durationMinutes: 4, humanInterventions: 1, teamSize: 8, baselineMeetings: 3, actualMeetings: 1, meetingMinutes: 45, recommendation: "Connect verified providers only when the team is ready for external send, publish or spend actions." }, systemScope);
+    return mission.id;
+  }
 }
 
 function mapAssertion(row: Row): IntentAssertion {
@@ -544,7 +582,7 @@ class PostgresRelayStore implements RelayStore {
       GROUP BY m.id ORDER BY m.updated_at DESC
     `, values);
     return result.rows.map((row: Row) => ({
-      id: row.id, title: row.title, objective: row.objective, status: row.status, currentPlanVersion: row.current_plan_version,
+      id: row.id, title: row.title, objective: row.objective, executionMode: row.execution_mode ?? "launch_readiness", status: row.status, currentPlanVersion: row.current_plan_version,
       openConflicts: row.open_conflicts, blockingConflicts: row.blocking_conflicts, pendingApprovals: row.pending_approvals,
       completedTasks: row.completed_tasks, totalTasks: row.total_tasks, updatedAt: row.updated_at.toISOString(),
     }));
@@ -588,8 +626,8 @@ class PostgresRelayStore implements RelayStore {
     const compilerReceipt = compiledAudit?.data.compilerReceipt as CompilerReceipt | undefined
       ?? (assertions.length ? fallbackCompilerReceipt({ sources: sourceResult.rows.length, assertions, conflicts, generatedAt: compiledAudit?.createdAt ?? m.updated_at.toISOString() }) : undefined);
     const outcomeRow: Row | undefined = outcomeResult.rows[0];
-    return {
-      id: m.id, title: m.title, objective: m.objective, status: m.status, currentPlanVersion: m.current_plan_version,
+    const detail = {
+      id: m.id, title: m.title, objective: m.objective, executionMode: m.execution_mode ?? "launch_readiness", status: m.status, currentPlanVersion: m.current_plan_version,
       openConflicts: conflictResult.rows.filter((row: Row) => row.status === "open").length,
       blockingConflicts: conflictResult.rows.filter((row: Row) => row.status === "open" && row.blocking).length,
       pendingApprovals: currentPlan?.approvals.filter((approval) => approval.status === "pending").length ?? 0,
@@ -602,9 +640,10 @@ class PostgresRelayStore implements RelayStore {
       artifacts: artifactResult.rows.map((row: Row) => mapArtifact(row, row.version_no)),
       executionReceipts: receiptResult.rows.map((row: Row) => mapExecutionReceipt(row, row.task_key, row.version_no)),
       compilerReceipt,
-      outcome: outcomeRow ? { id: outcomeRow.id, metricName: outcomeRow.metric_name, targetValue: outcomeRow.target_value, actualValue: outcomeRow.actual_value, status: outcomeRow.status, cost: Number(outcomeRow.cost), durationMinutes: outcomeRow.duration_minutes, humanInterventions: outcomeRow.human_interventions, blockers: outcomeRow.blockers, recommendation: outcomeRow.recommendation, updatedAt: outcomeRow.updated_at.toISOString() } : undefined,
+      outcome: outcomeRow ? { id: outcomeRow.id, metricName: outcomeRow.metric_name, targetValue: outcomeRow.target_value, actualValue: outcomeRow.actual_value, status: outcomeRow.status, cost: Number(outcomeRow.cost), durationMinutes: outcomeRow.duration_minutes, humanInterventions: outcomeRow.human_interventions, teamSize: outcomeRow.team_size ?? 1, baselineMeetings: outcomeRow.baseline_meetings ?? 0, actualMeetings: outcomeRow.actual_meetings ?? 0, meetingMinutes: outcomeRow.meeting_minutes ?? 0, blockers: outcomeRow.blockers, recommendation: outcomeRow.recommendation, updatedAt: outcomeRow.updated_at.toISOString() } : undefined,
       createdAt: m.created_at.toISOString(),
-    } satisfies MissionDetail;
+    } as Omit<MissionDetail, "impact">;
+    return { ...detail, impact: missionImpact(detail) };
   }
 
   async getMissionByConflictId(conflictId: string, scope: StoreScope) {
@@ -628,7 +667,7 @@ class PostgresRelayStore implements RelayStore {
     try {
       await client.query("BEGIN");
       if (scope.kind === "system") await this.ensureIdentity(client);
-      await client.query("INSERT INTO missions (id, workspace_id, title, objective, success_metric, status, created_by) VALUES ($1, $2, $3, $4, $5, 'intake', $6)", [missionId, workspaceId, input.title, input.objective, input.successMetric, input.createdBy]);
+      await client.query("INSERT INTO missions (id, workspace_id, title, objective, success_metric, execution_mode, status, created_by) VALUES ($1, $2, $3, $4, $5, $6, 'intake', $7)", [missionId, workspaceId, input.title, input.objective, input.successMetric, input.executionMode ?? "launch_readiness", input.createdBy]);
       for (const source of input.sources) {
         await client.query("INSERT INTO sources (id, mission_id, source_type, title, author_name, content, occurred_at, authority_level, evidence_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", [source.id ?? uid(), missionId, source.type, source.title, source.author, source.content, source.occurredAt ?? null, source.authorityLevel, source.evidenceUrl || null]);
       }
@@ -833,10 +872,10 @@ class PostgresRelayStore implements RelayStore {
     const client = await pool!.connect();
     try {
       await client.query("BEGIN");
-      await client.query(`INSERT INTO outcomes (id, mission_id, metric_name, target_value, actual_value, status, cost, duration_minutes, human_interventions, blockers, recommendation, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
-        ON CONFLICT (mission_id) DO UPDATE SET metric_name=EXCLUDED.metric_name,target_value=EXCLUDED.target_value,actual_value=EXCLUDED.actual_value,status=EXCLUDED.status,cost=EXCLUDED.cost,duration_minutes=EXCLUDED.duration_minutes,human_interventions=EXCLUDED.human_interventions,blockers=EXCLUDED.blockers,recommendation=EXCLUDED.recommendation,updated_at=now()`,
-      [mission.outcome?.id ?? uid(), missionId, input.metricName, input.targetValue, input.actualValue, input.status, input.cost, input.durationMinutes, input.humanInterventions, JSON.stringify(blockers), input.recommendation]);
+      await client.query(`INSERT INTO outcomes (id, mission_id, metric_name, target_value, actual_value, status, cost, duration_minutes, human_interventions, team_size, baseline_meetings, actual_meetings, meeting_minutes, blockers, recommendation, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now())
+        ON CONFLICT (mission_id) DO UPDATE SET metric_name=EXCLUDED.metric_name,target_value=EXCLUDED.target_value,actual_value=EXCLUDED.actual_value,status=EXCLUDED.status,cost=EXCLUDED.cost,duration_minutes=EXCLUDED.duration_minutes,human_interventions=EXCLUDED.human_interventions,team_size=EXCLUDED.team_size,baseline_meetings=EXCLUDED.baseline_meetings,actual_meetings=EXCLUDED.actual_meetings,meeting_minutes=EXCLUDED.meeting_minutes,blockers=EXCLUDED.blockers,recommendation=EXCLUDED.recommendation,updated_at=now()`,
+      [mission.outcome?.id ?? uid(), missionId, input.metricName, input.targetValue, input.actualValue, input.status, input.cost, input.durationMinutes, input.humanInterventions, input.teamSize, input.baselineMeetings, input.actualMeetings, input.meetingMinutes, JSON.stringify(blockers), input.recommendation]);
       if (["achieved", "missed"].includes(input.status)) await client.query("UPDATE missions SET status = 'completed', updated_at = now() WHERE id = $1", [missionId]);
       await this.insertAudit(client, missionId, { actorType: "human", actorName: mission.createdBy, eventType: "outcome.updated", entityType: "outcome", entityId: mission.outcome?.id, planVersion: mission.currentPlanVersion, summary: `Outcome marked ${input.status}.`, data: { actualValue: input.actualValue, cost: input.cost } });
       await client.query("COMMIT");
@@ -867,6 +906,26 @@ class PostgresRelayStore implements RelayStore {
     const created = await this.createMission(demoMissionInput, systemScope);
     await this.compileMission(created.id, systemScope);
     return created.id;
+  }
+
+  async seedCompletedDemo() {
+    await this.ensureIdentity(pool!);
+    const existing = await pool!.query("SELECT id FROM missions WHERE title = $1 ORDER BY created_at LIMIT 1", [completedDemoMissionInput.title]);
+    if (existing.rowCount) return existing.rows[0].id;
+    const created = await this.createMission(completedDemoMissionInput, systemScope);
+    let mission = await this.compileMission(created.id, systemScope);
+    for (const key of ["T-03", "T-04", "T-05"]) {
+      const task = mission.currentPlan?.tasks.find((item) => item.key === key);
+      if (task) mission = (await this.runTask(task.id, `${task.ownerName} · Sample run`, systemScope)).mission;
+    }
+    const approval = mission.currentPlan?.approvals[0];
+    if (approval) mission = await this.decideApproval(approval.id, { decision: "approved", decidedBy: "Jennifer · Launch owner", reason: "Sample owner verified the exact audience, draft bundle, budget ceiling and stop rule." }, systemScope);
+    for (const key of ["T-07", "T-08"]) {
+      const task = mission.currentPlan?.tasks.find((item) => item.key === key);
+      if (task) mission = (await this.runTask(task.id, `${task.ownerName} · Sample run`, systemScope)).mission;
+    }
+    await this.updateOutcome(mission.id, { metricName: "Launch readiness contract", targetValue: "8/8 governed tasks complete", actualValue: "8/8 tasks complete; 6 source snapshots reconciled; exact handoff approved", status: "achieved", cost: 0, durationMinutes: 4, humanInterventions: 1, teamSize: 8, baselineMeetings: 3, actualMeetings: 1, meetingMinutes: 45, recommendation: "Connect verified providers only when the team is ready for external send, publish or spend actions." }, systemScope);
+    return mission.id;
   }
 }
 

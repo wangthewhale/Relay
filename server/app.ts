@@ -48,6 +48,7 @@ import { controlAgentRun, enqueueAgentRun, ensureMissionAgents, invalidateMissio
 import { beginOAuth, completeOAuth, listConnectorDescriptors, revokeConnector, verifyConnector } from "./connectors";
 import { executeToolCall } from "./toolGateway";
 import { contentHash } from "./execution";
+import { missionEvalCases } from "./evals/missionCases";
 
 function requestBaseUrl(request: Request) {
   const host = request.header("X-Forwarded-Host")?.split(",")[0]?.trim() || request.get("host");
@@ -88,6 +89,10 @@ export function createApp() {
       product: "Relay",
       definition: "Intent compiler and execution control plane",
       compiler: compilerRuntimeStatus(),
+      releaseBenchmark: {
+        deterministicCases: missionEvalCases.length,
+        semanticModelRunConfigured: compilerRuntimeStatus().mode === "hybrid",
+      },
       connectorPolicy: "No connector is shown as verified until Relay completes a real provider capability check.",
       riskLevels: [
         { level: 0, label: "Read", approval: "Access grant required" },
@@ -144,6 +149,13 @@ export function createApp() {
     try {
       const missionId = await store.seedDemo();
       response.json({ mission: await store.getMission(missionId, systemScope), readOnly: true });
+    } catch (error) { next(error); }
+  });
+
+  app.get("/api/demo/completed", async (_request, response, next) => {
+    try {
+      const missionId = await store.seedCompletedDemo();
+      response.json({ mission: await store.getMission(missionId, systemScope), readOnly: true, proofScope: "Launch readiness completed inside Relay; external provider writes are explicitly excluded." });
     } catch (error) { next(error); }
   });
 

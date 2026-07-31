@@ -4,6 +4,9 @@ import type { Artifact, ExecutionTask, MissionDetail } from "../shared/domain";
 const EXECUTORS: Record<string, { name: string; artifactType: Artifact["type"] }> = {
   "T-01": { name: "Relay Evidence Worker v1", artifactType: "evidence_manifest" },
   "T-03": { name: "Relay Brief Worker v1", artifactType: "execution_brief" },
+  "T-04": { name: "Relay Audience Guardrail Worker v1", artifactType: "audience_guardrail" },
+  "T-05": { name: "Relay Launch Draft Worker v1", artifactType: "launch_draft_bundle" },
+  "T-07": { name: "Relay Launch Handoff Worker v1", artifactType: "launch_handoff" },
   "T-08": { name: "Relay Outcome Worker v1", artifactType: "outcome_report" },
 };
 
@@ -24,6 +27,7 @@ export function contentHash(value: unknown) {
 }
 
 export function verifiedExecutorFor(task: ExecutionTask) {
+  if (["T-04", "T-05", "T-07"].includes(task.key) && !task.requiredCapabilities.some((capability) => capability.startsWith("Relay:"))) return undefined;
   return EXECUTORS[task.key];
 }
 
@@ -78,6 +82,40 @@ export function executeBuiltIn(mission: MissionDetail, task: ExecutionTask, acto
         .map((conflict) => ({ conflictId: conflict.id, title: conflict.title, decision: conflict.resolution?.decision, decidedBy: conflict.resolution?.decidedBy })),
       tasks: plan.tasks.map((item) => ({ key: item.key, title: item.title, owner: item.ownerName, riskLevel: item.riskLevel, dependencies: item.dependencies })),
       forbiddenExternalActions: ["send", "publish", "spend", "modify provider data"],
+    };
+  } else if (task.key === "T-04") {
+    title = `Audience guardrail · Plan v${plan.version}`;
+    content = {
+      missionId: mission.id,
+      planVersion: plan.version,
+      sourceAssertions: mission.assertions.filter((assertion) => assertion.type === "Exclusion" || /audience|member|exclude|existing/i.test(assertion.statement)).map((assertion) => ({ id: assertion.id, statement: assertion.statement, sourceId: assertion.sourceId })),
+      immutableRules: plan.contract.invariants,
+      externalWrites: 0,
+    };
+  } else if (task.key === "T-05") {
+    title = `Launch draft bundle · Plan v${plan.version}`;
+    content = {
+      missionId: mission.id,
+      planVersion: plan.version,
+      drafts: [
+        { channel: "email", status: "internal_draft", purpose: "Client-ready launch announcement" },
+        { channel: "social", status: "internal_draft", purpose: "Launch social copy" },
+        { channel: "ads", status: "internal_draft", purpose: "Campaign setup brief" },
+      ],
+      audienceGuardrailArtifact: mission.artifacts.find((artifact) => artifact.type === "audience_guardrail")?.contentHash,
+      forbiddenActions: task.forbiddenActions,
+      externalWrites: 0,
+    };
+  } else if (task.key === "T-07") {
+    const approved = plan.approvals.find((approval) => approval.status === "approved");
+    title = `Approved launch handoff · Plan v${plan.version}`;
+    content = {
+      missionId: mission.id,
+      planVersion: plan.version,
+      approval: approved ? { id: approved.id, approver: approved.approver, payloadHash: approved.payloadHash, decidedAt: approved.decidedAt } : null,
+      includedArtifacts: mission.artifacts.map((artifact) => ({ type: artifact.type, title: artifact.title, contentHash: artifact.contentHash })),
+      ownerNextAction: "Connect verified providers to perform external send, publish or spend operations.",
+      externalWrites: 0,
     };
   } else {
     title = `Outcome verification report · Plan v${plan.version}`;

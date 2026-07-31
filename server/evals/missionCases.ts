@@ -183,4 +183,100 @@ export const missionEvalCases: MissionEvalCase[] = [
     },
     expectedConflictTypes: [], expectedBlockingConflictTypes: [],
   },
+  {
+    id: "launch-budget-version-drift",
+    description: "Finance and Growth hold two incompatible launch budget ceilings.",
+    input: {
+      title: "Prepare launch budget", objective: "Prepare a current campaign budget.", successMetric: "One approved ceiling", createdBy: "Tara",
+      sources: [
+        { type: "Notion", title: "Old launch budget", author: "Growth", content: "Campaign budget limit is NT$18,000.", authorityLevel: 2 },
+        { type: "Email", title: "Finance approval", author: "Finance lead", content: "The approved budget is NT$26,000 maximum.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: ["Version conflict"], minimumReferencedAuthority: 5,
+  },
+  {
+    id: "writer-capacity-shortfall",
+    description: "The content launch needs more writers than the team has available.",
+    input: {
+      title: "Write launch sequence", objective: "Finish the content sequence this week.", successMetric: "All copy reviewed", createdBy: "Sol",
+      sources: [
+        { type: "Notion", title: "Content plan", author: "Growth", content: "The launch requires 5 writers to finish on time.", authorityLevel: 4 },
+        { type: "Slack", title: "Capacity", author: "Operations", content: "Only 2 writers are available this week.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: ["Resource conflict"], minimumReferencedAuthority: 5,
+  },
+  {
+    id: "taipei-audience-policy-violation",
+    description: "A campaign exclusion conflicts with the actual CRM audience snapshot.",
+    input: {
+      title: "Build Taipei launch audience", objective: "Reach new prospects without contacting existing members.", successMetric: "Zero existing members contacted", createdBy: "Ivy",
+      sources: [
+        { type: "Slack", title: "Audience policy", author: "CEO", content: "Do not promote to existing members.", authorityLevel: 5 },
+        { type: "CRM", title: "Audience snapshot", author: "CRM owner", content: "The current audience contains existing members.", authorityLevel: 4 },
+      ],
+    },
+    expectedConflictTypes: ["Policy conflict"], minimumReferencedAuthority: 5,
+  },
+  {
+    id: "launch-date-after-review",
+    description: "A launch after its mandatory review is a valid sequence.",
+    input: {
+      title: "Release approved campaign", objective: "Complete the approved release sequence.", successMetric: "Release on time", createdBy: "Bo",
+      sources: [
+        { type: "Calendar", title: "Approval review", author: "Brand", content: "Mandatory brand approval review is scheduled for 9 月 2 日.", authorityLevel: 5 },
+        { type: "Slack", title: "Release date", author: "Growth", content: "The campaign must launch on 9 月 4 日.", authorityLevel: 4 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
+  },
+  {
+    id: "budget-format-equivalence",
+    description: "Equivalent comma formatting must not create budget drift.",
+    input: {
+      title: "Confirm launch spend", objective: "Use the approved launch ceiling.", successMetric: "No budget variance", createdBy: "Aya",
+      sources: [
+        { type: "Notion", title: "Budget", author: "Finance", content: "Campaign budget limit is NT$25,000.", authorityLevel: 5 },
+        { type: "Email", title: "Confirmation", author: "CEO", content: "The approved budget is TWD 25000 maximum.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
+  },
+  {
+    id: "engineering-capacity-sufficient",
+    description: "A team with spare engineering capacity must not be blocked.",
+    input: {
+      title: "Prepare release integration", objective: "Finish release integration this sprint.", successMetric: "Integration ready", createdBy: "Kai",
+      sources: [
+        { type: "Notion", title: "Release plan", author: "Engineering", content: "The release needs 3 engineers to finish on time.", authorityLevel: 4 },
+        { type: "Slack", title: "Staffing", author: "Engineering manager", content: "5 engineers are available this sprint.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
+  },
+  {
+    id: "customer-refund-path-aligned",
+    description: "Two sources agreeing on a refund path must not create a policy collision.",
+    input: {
+      title: "Resolve refund request", objective: "Resolve one verified refund request.", successMetric: "One settlement path", createdBy: "Uma",
+      sources: [
+        { type: "Slack", title: "Support", author: "Support", content: "Support will issue a refund after Finance approval.", authorityLevel: 3 },
+        { type: "Email", title: "Finance approval", author: "Finance", content: "The refund is approved and may be issued today.", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: [], expectedBlockingConflictTypes: [],
+  },
+  {
+    id: "ads-payment-missing-zh",
+    description: "A Chinese advertising account snapshot identifies a missing payment dependency.",
+    input: {
+      title: "啟動廣告", objective: "完成已核准的付費投放準備。", successMetric: "廣告帳號可安全啟動", createdBy: "Lena",
+      sources: [
+        { type: "Ads", title: "投放計畫", author: "Growth", content: "這次 Launch 需要啟動 Meta Ads 廣告活動。", authorityLevel: 4 },
+        { type: "Ads", title: "帳號狀態", author: "廣告管理員", content: "廣告帳號缺少已驗證付款方式，目前無法發布。", authorityLevel: 5 },
+      ],
+    },
+    expectedConflictTypes: ["Dependency conflict"], minimumReferencedAuthority: 5,
+  },
 ];

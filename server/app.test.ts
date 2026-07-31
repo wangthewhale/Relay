@@ -43,6 +43,19 @@ describe("Relay mission lifecycle API", () => {
     expect(response.body.evidence).toHaveLength(2);
   });
 
+  it("serves a completed launch-readiness run with immutable proof and transparent coordination math", async () => {
+    const response = await request(app).get("/api/demo/completed").expect(200);
+    const completed = response.body.mission as MissionDetail;
+
+    expect(response.body.proofScope).toContain("external provider writes are explicitly excluded");
+    expect(completed).toMatchObject({ executionMode: "launch_readiness", status: "completed", completedTasks: 8, totalTasks: 8 });
+    expect(completed.outcome).toMatchObject({ status: "achieved", teamSize: 8, baselineMeetings: 3, actualMeetings: 1, meetingMinutes: 45 });
+    expect(completed.impact).toMatchObject({ sourcesReconciled: 6, agentTasksCompleted: 6, artifactsCreated: 6, humanDecisions: 1, meetingsAvoided: 2, peopleHoursAvoided: 12 });
+    expect(completed.executionReceipts).toHaveLength(6);
+    expect(completed.executionReceipts.every((receipt) => receipt.status === "succeeded" && receipt.artifactHash?.startsWith("sha256:"))).toBe(true);
+    expect(completed.artifacts.find((artifact) => artifact.type === "launch_handoff")?.content).toMatchObject({ externalWrites: 0 });
+  });
+
   it("isolates workspaces and rejects cross-origin mutations", async () => {
     const outsider = request.agent(app);
     await outsider.post("/api/session/guest").send({ name: "Other owner" }).expect(201);

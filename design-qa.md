@@ -1,82 +1,55 @@
-# Relay Execution Flow Canvas — Design QA
+# Relay Agent Lucy Mission Canvas — Design QA
 
-- Reference: `/Users/wknd/.codex/generated_images/019f84c7-b32f-7ce0-b513-296d383e42ec/exec-c0f36318-32bc-48ad-8d1e-5f30d4579226.png`
-- Reference dimensions: 1487 × 1058 px, 1×
-- Implementation route: `/missions/:missionId?view=room&lang=zh-TW`
-- Desktop evidence: `/tmp/relay-execution-canvas-1488x1057.png`, 1488 × 1057 px, 1×
-- Combined comparison: `/tmp/relay-execution-canvas-comparison.png`
-- Mobile evidence: `/tmp/relay-execution-canvas-mobile-fixed.png` and `/tmp/relay-execution-canvas-mobile-inspector.png`, 390 × 844 px, 1×
-- State: seeded Kaohsiung launch mission, Plan v1, five blocking conflicts, inspector open, Traditional Chinese
+Date: 2026-08-01
 
-## Full-view comparison
+## Source truth
 
-The reference and implementation were reviewed together in one side-by-side image at effectively identical desktop dimensions. The implementation preserves the selected direction's five-stage causal hierarchy: intent sources → conflict/decision → accountable human → governed AI agents → verifiable outcome. It also preserves the minimal white canvas, low-contrast dot grid, colored semantic edges, fixed correction command and evidence-led conflict inspector.
+- User-reported problem state: `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/56FE1B08-2067-4D67-A036-39F9A4571467/1-照片-1.jpg`
+- Normalized 390 × 844 comparison: `audit/lucy-canvas-2026-08-01/00-reference-form-normalized.jpg`
+- Implemented mobile states:
+  - `audit/lucy-canvas-2026-08-01/01-mobile-start-en.png`
+  - `audit/lucy-canvas-2026-08-01/02-mobile-ready-en.png`
+  - `audit/lucy-canvas-2026-08-01/03-mobile-room-en.png`
+  - `audit/lucy-canvas-2026-08-01/04-mobile-ready-zh.png`
+  - `audit/lucy-canvas-2026-08-01/05-mobile-room-zh.png`
+- Implemented desktop states:
+  - `audit/lucy-canvas-2026-08-01/06-desktop-ready-en.png`
+  - `audit/lucy-canvas-2026-08-01/07-desktop-room-en.png`
 
-Intentional product adaptations:
+## Viewports and states verified
 
-- The existing seven Mission destinations remain in a compact icon rail so real product navigation is not removed.
-- The inspector uses real mission assertions, decision ownership and a working conflict switcher instead of the static reference copy.
-- Agent cards reflect current task status and progress from mission data; connectors continue to report truthful states elsewhere in the product.
+- Mobile: 390 × 844, English and Traditional Chinese.
+- Desktop: 1440 × 1000, English.
+- States: blank Start canvas, Lucy interview complete, real Mission created, compiled Mission Room, Agent work queued.
+- Reference and implementation comparison used a normalized 390 × 844 viewport.
 
-## Focused-region review
+## Findings and corrections
 
-### Top bar
+- P1 — Form overload: removed the identity, department, email and source forms from the primary intake path. Agent Lucy now asks one contextual question at a time and offers low-effort response suggestions.
+- P1 — Missing product model: the canvas now grows from Start into the human owner, shared goal, team and authority, three governed Agent tasks and final sign-off.
+- P1 — Fake magic moment risk: the final CTA calls the real Mission creation and compiler APIs, then queues eligible low-risk Agent work. External actions remain access- and approval-gated.
+- P1 — Mobile Mission Room hid the big picture: replaced the long linear mobile-only story with the same zoomable React Flow canvas used on desktop.
+- P2 — Agent identity unclear: Agent Lucy is a persistent Mission lead node between conflict resolution, human authorization and worker Agents.
+- P2 — Hard-coded human identity: removed the Jennifer image and render the verified session member with the standard person icon.
+- P2 — Mobile English clipping: verified the landing hero and Lucy flow at 390 px with no document overflow.
+- P3 — Density and navigation: controls, copy, chat height, bottom command dock and inspector behavior were adapted for 390 px without hiding the core flow.
 
-- Mission identity, valid plan version, contract actors, locale and refresh controls remain legible without creating a second application header.
-- No clipped title or overlapping controls at desktop width.
+## Interaction and truthfulness checks
 
-### Canvas and nodes
+- Lucy uses the structured AI endpoint when configured and clearly labels the deterministic fallback when the model is unavailable.
+- The flow does not claim that an external action succeeded unless the Tool Gateway returns evidence.
+- Human authority, exact approval and permission boundaries remain visible.
+- Mobile E2E created real Missions in both English and Traditional Chinese and reached the live Mission Room.
+- Mobile flow rendered 10+ nodes including Agent Lucy and three worker Agents.
+- `document.scrollWidth === document.clientWidth` at 390 px and 1440 px.
+- Browser console errors: none.
 
-- All four source assertions remain readable and connect to the selected blocking conflict.
-- Human ownership is visually distinct from AI execution.
-- Animated red edges are limited to assertions that participate in the selected conflict.
-- Pan, zoom, fit-view and minimap controls render without obscuring the correction command.
+## Engineering verification
 
-### Conflict inspector
+- `npm run check`: passed.
+- `npm test -- --run`: 30 tests passed across 6 files.
+- `npm run build`: passed.
 
-- Five conflicts are selectable.
-- Evidence, consequence, decision owner and exact next safe action update with the selected conflict.
-- Inspector can be closed and reopened without losing the selected state.
+## Final result
 
-### Mobile
-
-- At 390 × 844, the canvas remains pannable, the primary correction command remains reachable and Mission navigation is fixed to the bottom.
-- The conflict inspector follows the canvas in the same scroll container and is fully reachable.
-- The mobile fixed-navigation containing-block issue caused by the blurred sticky header was corrected by disabling the backdrop filter at the mobile breakpoint.
-
-## Interaction verification
-
-- Conflict 02 selection updates the inspector to “發布日期早於必要核准日期”.
-- Inspector close and reopen controls work.
-- Mission Room → Plan → Mission Room navigation works and updates the query state.
-- Human correction submission enables only after valid input, POSTs successfully, clears the input and displays confirmation.
-- Fresh-page browser console: 0 errors, 0 warnings.
-
-## Iteration history
-
-1. Initial implementation left excessive unused canvas space and rendered the execution graph too small.
-2. Increased node legibility, tightened graph coordinates and tuned the desktop viewport to restore the reference hierarchy.
-3. Split React Flow into a lazy-loaded chunk so the landing-page bundle remains unaffected.
-4. Fixed mobile navigation positioning and enabled scrolling from canvas to inspector.
-5. Memoized React Flow node types and confirmed a clean fresh-page console.
-6. Replaced simulated live-presence cues with truthful contract-role labels and removed cursor nodes that implied unimplemented realtime presence.
-7. Added a source-linked compiler receipt and a read-only interactive demo route so the canonical example cannot be changed from the public CTA.
-8. Replaced the 11-field default intake with a one-paste brief parser while preserving the structured-source mode.
-
-## YC investor-conversion pass — 2026-07-26
-
-- Narrowed the first customer to 5–50 person Growth, Agency and Operations teams running campaign and launch operations.
-- Rebuilt the first-value promise around one paste → first blocker → accountable owner → next safe action.
-- Added explicit “available now” versus “design partner rollout” states; external OAuth and tool execution are no longer implied to be complete.
-- Added the accumulating Source → Assertion → Conflict → Decision → Plan → Approval → Outcome chain to make the product moat visible inside the product.
-- Verified the one-paste parser with Chinese and English inputs, including source typing and minimum evidence fallback.
-- `tsc --noEmit`, 11 automated tests and the production build pass; `npm audit --omit=dev` reports zero vulnerabilities.
-- End-to-end one-paste validation produced 7 sources, 18 assertions and all five material conflict classes, including the deadline-versus-review hard conflict.
-
-## Severity findings
-
-- P0: none.
-- P1: none remaining.
-- P2: none remaining.
-
-Final result: passed
+passed

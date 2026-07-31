@@ -20,6 +20,7 @@ import {
   MousePointer2,
   ShieldCheck,
   Target,
+  UserRound,
 } from "lucide-react";
 import { useMemo } from "react";
 import { localizeLabel } from "./i18n";
@@ -53,7 +54,7 @@ function MissionFlowNodeCard({ data }: NodeProps<MissionFlowNode>) {
   return <div className={`flow-node flow-node-${data.variant} ${data.accent ?? ""}`}>
     {data.variant !== "intent" && <Handle type="target" position={Position.Left} className="flow-handle" />}
     <div className="flow-node-top">
-      <span className="flow-node-icon">{data.variant === "intent" ? <FlowSourceIcon type={data.sourceType} /> : data.variant === "conflict" ? <AlertOctagon size={18} /> : data.variant === "human" ? <img src="/assets/relay-jennifer-256.png" alt="" /> : data.variant === "agent" ? <Bot size={18} /> : <Target size={19} />}</span>
+      <span className="flow-node-icon">{data.variant === "intent" ? <FlowSourceIcon type={data.sourceType} /> : data.variant === "conflict" ? <AlertOctagon size={18} /> : data.variant === "human" ? <UserRound size={18} /> : data.variant === "agent" ? <Bot size={18} /> : <Target size={19} />}</span>
       <div><small>{data.meta}</small><b>{data.title}</b></div>
       {data.status && <span className={`flow-node-status status-${data.status.replaceAll("_", "-")}`}>{localizeLabel(data.status)}</span>}
     </div>
@@ -66,8 +67,8 @@ function MissionFlowNodeCard({ data }: NodeProps<MissionFlowNode>) {
 export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect }: { nodes: MissionFlowNode[]; edges: Edge[]; onConflictSelect: (id: string) => void }) {
   const nodeTypes = useMemo(() => ({ missionNode: MissionFlowNodeCard }), []);
   const compact = typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
-  const defaultViewport = compact ? { x: 20, y: 60, zoom: 0.56 } : { x: 12, y: 100, zoom: 0.88 };
-  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} minZoom={0.38} maxZoom={1.45} nodesConnectable={false} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); }} proOptions={{ hideAttribution: true }}>
+  const defaultViewport = compact ? { x: 8, y: 35, zoom: 0.32 } : { x: 12, y: 100, zoom: 0.88 };
+  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitView={compact} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .42 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); }} proOptions={{ hideAttribution: true }}>
     <Background color="#d7d8d2" gap={24} size={1} />
     <Controls position="bottom-left" showInteractive={false} />
     <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor={(node) => node.data.variant === "conflict" ? "#ef5b55" : node.data.variant === "human" ? "#7659e8" : node.data.variant === "agent" ? "#4175d6" : "#baff39"} />

@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "./router";
 import type { Edge, MarkerType } from "@xyflow/react";
 import type { MissionFlowNode } from "./ExecutionFlowCanvas";
+import type { LucyMissionDraft } from "./LucyMissionCanvas";
 import {
   Activity, AlertOctagon, ArrowRight, BadgeCheck, Ban, Blocks, Bot, Braces, CalendarDays, Check, ChevronDown, CircleDollarSign, Copy,
   CircleStop, Clock3, Database, ExternalLink, FileCheck2, FileText, Fingerprint, GitBranch, History, KeyRound, LayoutDashboard,
@@ -73,6 +74,7 @@ const sourceColors: Record<string, string> = {
 };
 
 const ExecutionFlowCanvas = lazy(() => import("./ExecutionFlowCanvas"));
+const LucyMissionCanvas = lazy(() => import("./LucyMissionCanvas"));
 
 function Logo({ compact = false }: { compact?: boolean }) {
   return <Link to="/" className={`logo ${compact ? "logo-compact" : ""}`} aria-label={tr("Relay home", "Relay 首頁")}><span className="logo-mark"><span /><span /><span /></span><span>relay</span></Link>;
@@ -384,7 +386,7 @@ function AppShell({ children }: { children: ReactNode }) {
   const session = useSessionIdentity();
   const actorName = session?.actorName || tr("Mission owner", "Mission 負責人");
   const actorRole = session?.title || localizeLabel(session?.department || "Other");
-  const isMissionWorkspace = /^\/missions\/[^/]+$/.test(location.pathname);
+  const isMissionWorkspace = /^\/missions\/(?:new|[^/]+)$/.test(location.pathname);
   return (
     <div className={`app-shell ${isMissionWorkspace ? "mission-shell" : ""}`}>
       {!isMissionWorkspace && <aside className={sidebar ? "sidebar open" : "sidebar"}>
@@ -548,7 +550,7 @@ function CompileRunMoment({ state, runtime, onClose }: { state: CompileRunMoment
   </div>;
 }
 
-function MissionIntakePage() {
+function LegacyMissionIntakePage() {
   const navigate = useNavigate();
   const quickExample = tr(
     `Mission: Launch the Kaohsiung campaign\nGoal: Launch by July 29 and acquire 24 paid registrations\nSlack | Growth lead: Do not promote to existing members\nEmail | Client: Every public creative requires brand approval\nCalendar | Operations: Brand review is scheduled for July 30\nNotion | Marketing: Budget limit is NT$20,000\nManual | Mission owner: Approved budget is NT$30,000 and nothing can publish without my approval\nCRM | CRM system: Current audience includes existing members and new leads\nAds | Meta Ads: Payment method is missing, so publishing is unavailable\nSuccess: 24 paid registrations at CPA no higher than NT$1,250`,
@@ -641,6 +643,39 @@ function MissionIntakePage() {
     {mode === "quick" ? <form id="quick-mission-form" onSubmit={submitQuick} className="intake-layout quick-intake-layout"><div className="intake-main"><section className="quick-brief-card"><div className="quick-brief-head"><div><span>{tr("PASTE HERE", "貼在這裡")}</span><h2>{tr("Put every version in one box.", "把不同版本全部放進同一格。")}</h2><p>{tr("One line per person or tool is enough. Example: “Slack | Amy: launch July 29”.", "每個人或工具一行就好，例如：「Slack｜Amy：7 月 29 日發布」。")}</p></div><span className="time-to-value"><Clock3 size={15} /> {tr("About one minute", "約 1 分鐘")}</span></div><label className="quick-brief-label"><span>{tr("Your team's messages", "團隊的原始訊息")}</span><textarea className="quick-brief-textarea" value={rawBrief} onChange={(event) => setRawBrief(event.target.value)} rows={18} placeholder={tr("Paste messages, client requirements, dates and budgets here. Contradictions are welcome.", "把訊息、客戶要求、日期與預算貼在這裡。不一致也沒關係。") } required /></label><p className="quick-analysis-note"><ShieldCheck size={14} /> {tr("Relay only analyzes this text in step 2. It will not contact anyone or change another tool.", "第 2 步只會分析這些文字，不會聯絡任何人，也不會修改其他工具。")}</p></section></div>{compileSidebar}</form>
       : <form id="structured-mission-form" onSubmit={submitStructured} className="intake-layout"><div className="intake-main"><section className="form-section"><div className="form-section-title"><span>01</span><div><h2>{tr("Define the outcome", "定義成果")}</h2><p>{tr("What must be true when this mission succeeds?", "這個 Mission 成功時，哪些條件必須成立？")}</p></div></div><label>{tr("Mission name", "Mission 名稱")}<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={tr("Launch Kaohsiung campaign", "推出高雄活動行銷專案")} required minLength={3} /></label><label>{tr("Objective", "目標")}<textarea value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })} placeholder={tr("Launch by… within… while never…", "在……前完成；限制為……；且絕不能……")} required minLength={10} rows={4} /></label><label>{tr("Success contract", "成功合約")}<input value={form.successMetric} onChange={(event) => setForm({ ...form, successMetric: event.target.value })} placeholder={tr("24 paid registrations at CPA ≤ NT$1,250", "24 筆付費報名，CPA ≤ NT$1,250")} required /></label></section>
         <section className="form-section"><div className="form-section-title"><span>02</span><div><h2>{tr("Attach sources", "加入來源")}</h2><p>{tr("Add at least two messages, documents or system records.", "至少加入兩則訊息、文件或系統紀錄。")}</p></div></div><div className="source-editor-list">{form.sources.map((source, index) => <article className="source-editor" key={index}><div className="source-editor-head"><span className={`source-number ${sourceColors[source.type] ?? "lime"}`}>{index + 1}</span><select value={source.type} onChange={(event) => updateSource(index, { type: event.target.value as SourceInput["type"] })}>{["Slack", "Email", "Notion", "Google Drive", "Calendar", "CRM", "Ads", "GitHub", "Figma", "Meeting note", "Manual"].map((type) => <option key={type} value={type}>{localizeLabel(type)}</option>)}</select>{form.sources.length > 2 && <button type="button" className="icon-button" aria-label={tr("Remove source", "移除來源")} onClick={() => setForm({ ...form, sources: form.sources.filter((_, itemIndex) => itemIndex !== index) })}><X size={17} /></button>}</div><div className="form-grid"><label>{tr("Source title", "來源標題")}<input value={source.title} onChange={(event) => updateSource(index, { title: event.target.value })} placeholder={tr("#launch or client thread", "#launch 或客戶對話串")} required /></label><label>{tr("Author / system", "作者／系統")}<input value={source.author} onChange={(event) => updateSource(index, { author: event.target.value })} placeholder={tr("Growth lead", "Growth 負責人")} required /></label></div><label>{tr("Exact content", "原始內容")}<textarea value={source.content} onChange={(event) => updateSource(index, { content: event.target.value })} placeholder={tr("Paste the original instruction—do not clean it up.", "貼上原始指令，不要先整理或改寫。")} rows={4} required /></label><div className="authority-row"><span>{tr("Authority", "權威等級")}</span><input aria-label={tr("Source authority level", "來源權威等級")} type="range" min="1" max="5" value={source.authorityLevel} onChange={(event) => updateSource(index, { authorityLevel: Number(event.target.value) })} /><b>{source.authorityLevel}/5</b></div></article>)}</div><button type="button" className="button button-ghost add-source" onClick={() => setForm({ ...form, sources: [...form.sources, { type: "Manual", title: "", author: "", content: "", authorityLevel: 3 }] })}><Plus size={17} /> {tr("Add another source", "再加入一個來源")}</button></section></div>{compileSidebar}</form>}
+  </main></AppShell>;
+}
+
+function MissionIntakePage() {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState("");
+  const [error, setError] = useState("");
+
+  const launchMission = async ({ input, owner }: LucyMissionDraft) => {
+    setBusy(true); setError("");
+    try {
+      setStage(tr("Lucy is securing your identity and source evidence…", "Lucy 正在保存身分與來源證據…"));
+      await api("/api/session/profile", { method: "PUT", body: JSON.stringify(owner) });
+      const created = await api<{ mission: MissionDetail }>("/api/missions", { method: "POST", body: JSON.stringify({ ...input, createdBy: owner.name }) });
+      setStage(tr("Lucy is reconciling the team and building Mission v1…", "Lucy 正在收斂團隊需求並建立 Mission v1…"));
+      const compiled = await api<{ mission: MissionDetail }>(`/api/missions/${created.mission.id}/compile`, { method: "POST" });
+      const safeAgentTasks = (compiled.mission.currentPlan?.tasks ?? []).filter((task) => task.ownerType === "agent" && task.riskLevel <= 1 && task.status === "ready").slice(0, 3);
+      if (safeAgentTasks.length) {
+        setStage(tr(`Lucy is starting ${safeAgentTasks.length} safe Agent tasks…`, `Lucy 正在啟動 ${safeAgentTasks.length} 個安全 Agent 任務…`));
+        await Promise.allSettled(safeAgentTasks.map((task) => api(`/api/tasks/${task.id}/agent-runs`, { method: "POST", body: "{}" })));
+      } else {
+        setStage(tr("Lucy found a decision that needs the right human first…", "Lucy 找到需要先由正確人員決定的事項…"));
+      }
+      navigate(`/missions/${created.mission.id}?view=room`);
+    } catch (launchError) {
+      setError((launchError as Error).message); setBusy(false); setStage("");
+    }
+  };
+
+  return <AppShell><main className="lucy-intake-page">
+    <header className="lucy-intake-header"><div><Link to="/app" className="lucy-back" aria-label={tr("Back to workspace", "返回工作區")}><ArrowRight size={17}/></Link><Logo/><span>{tr("NEW MISSION", "新 MISSION")}</span></div><div><span><ShieldCheck size={14}/>{tr("Nothing external runs without scoped access", "沒有範圍權限就不會執行外部操作")}</span><LanguageSwitcher compact/></div></header>
+    <Suspense fallback={<div className="lucy-canvas-loading"><span className="loader"/><p>{tr("Opening Lucy’s blank canvas…", "正在打開 Lucy 的空白畫布…")}</p></div>}><LucyMissionCanvas onLaunch={launchMission} busy={busy} stage={stage} error={error}/></Suspense>
   </main></AppShell>;
 }
 
@@ -860,7 +895,6 @@ function MissionPage() {
   if (!mission) return <AppShell><main className="page"><LoadingBlock label={tr("Loading mission contract…", "正在載入 Mission 合約…")} /></main></AppShell>;
   const plan = mission.currentPlan;
   const isStale = plan?.status === "superseded";
-  const showRunReveal = params.get("new") === "1";
   const presentHumans = new Set(collaboration?.presence.map((item) => item.userId)).size;
   const runningAgents = collaboration?.runs.filter((run) => ["queued","running","pause_requested","cancel_requested"].includes(run.status)).length ?? 0;
   return <AppShell><main className={`mission-page view-${view}`}>
@@ -877,7 +911,7 @@ function MissionPage() {
       {mission.status === "planning" && <button className="button button-primary button-small mission-compile" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: "{}" }), tr("A new active contract was created. Previous approvals were invalidated.", "新的有效合約已建立，舊版核准已失效。"))}><GitBranch size={15}/>{tr("Compile", "編譯")} v{mission.currentPlanVersion + 1}</button>}
     </div><nav className="mission-tabs" aria-label={tr("Mission views", "Mission 檢視")}>{missionTabs.map(([key, label, labelZh, Icon]) => <button className={view === key ? "active" : ""} key={key} onClick={() => setParams({ view: key })} title={tr(label, labelZh)} aria-label={tr(label, labelZh)}><Icon size={18}/><span className="mission-tab-label">{tr(label, labelZh)}</span>{key === "conflicts" && mission.openConflicts > 0 && <em>{mission.openConflicts}</em>}{key === "approvals" && mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button>)}</nav></header>
     {(notice || error) && <div className={`toast-banner ${error ? "error" : ""}`}>{error ? <AlertOctagon size={17} /> : <BadgeCheck size={17} />}<span>{error || notice}</span><button className="icon-button" onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
-    <div className={`mission-content mission-content-${view}`}>{showRunReveal && view === "room" && <MissionRunReceipt mission={mission} onInvite={() => setInviteOpen(true)} onOpenRoom={() => setParams({ view: "room" })}/>} {view === "room" && <><LiveMissionRuntime mission={mission} collaboration={collaboration} onRefresh={refreshAll} onInvite={() => setInviteOpen(true)}/><MissionRoom mission={mission} action={action} busy={busy} setView={(next) => setParams({ view: next })}/></>}{view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy}/>} {view === "plan" && <PlanView mission={mission} action={action} busy={busy}/>} {view === "access" && <AccessView mission={mission} onRefresh={refreshAll}/>} {view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale}/>} {view === "evidence" && <EvidenceLedger mission={mission}/>} {view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy}/>}</div>
+    <div className={`mission-content mission-content-${view}`}>{view === "room" && <MissionRoom mission={mission} action={action} busy={busy} setView={(next) => setParams({ view: next })}/>} {view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy}/>} {view === "plan" && <PlanView mission={mission} action={action} busy={busy}/>} {view === "access" && <AccessView mission={mission} onRefresh={refreshAll}/>} {view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale}/>} {view === "evidence" && <EvidenceLedger mission={mission}/>} {view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy}/>}</div>
   </main></AppShell>;
 }
 
@@ -900,7 +934,7 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   const [correction, setCorrection] = useState("");
   const [correctionAuthor, setCorrectionAuthor] = useState(mission.createdBy);
   useEffect(() => { if (session?.actorName) setCorrectionAuthor(session.actorName); }, [session?.actorName]);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(() => typeof window === "undefined" || !window.matchMedia("(max-width: 760px)").matches);
   const plan = mission.currentPlan;
   const selectedConflict = openConflicts.find((conflict) => conflict.id === selectedConflictId) ?? primaryConflict;
 
@@ -950,15 +984,19 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
       data: { variant: "conflict", title: openConflicts.length ? tr(`${openConflicts.length} blocking conflicts`, `${openConflicts.length} 項阻擋衝突`) : tr("Intent resolved", "意圖已收斂"), meta: tr("CONFLICT / DECISION", "衝突／決策"), detail: selectedConflict ? localizeDomainText(selectedConflict.title) : tr("No incompatible instruction remains.", "目前沒有互不相容的指令。"), status: openConflicts.length ? "blocked" : "completed", accent: openConflicts.length ? "red" : "lime", conflictId: selectedConflict?.id },
     },
     {
-      id: "human-owner", type: "missionNode", position: { x: 535, y: 275 },
+      id: "lucy-lead", type: "missionNode", position: { x: 535, y: 275 },
+      data: { variant: "agent", title: "Agent Lucy", meta: tr("AI MISSION LEAD", "AI MISSION 主理人"), detail: openConflicts.length ? tr("Keeps worker Agents paused and asks the right human one clear question", "先停住 Worker Agents，再向正確的人提出一個清楚問題") : tr("Coordinates the plan, workers, evidence and human sign-offs", "協調計畫、Worker、證據與人類 sign-off"), status: openConflicts.length ? "waiting_on_human" : "running", progress: openConflicts.length ? 36 : 68, accent: "lime" },
+    },
+    {
+      id: "human-owner", type: "missionNode", position: { x: 760, y: 275 },
       data: { variant: "human", title: localizeDomainText(selectedConflict?.decisionOwner ?? mission.createdBy), meta: tr("HUMAN DECISION", "人工決策"), detail: openConflicts.length ? tr("Waiting for an accountable decision", "等待具權責的人做出決策") : tr("Contract decision recorded", "合約決策已記錄"), status: openConflicts.length ? "pending" : "completed", accent: "violet" },
     },
     ...agents.map((agent, index) => ({
-      id: `agent-${agent.id}`, type: "missionNode" as const, position: { x: 755, y: 85 + index * 190 },
+      id: `agent-${agent.id}`, type: "missionNode" as const, position: { x: 985, y: 85 + index * 190 },
       data: { variant: "agent" as const, title: agent.name, meta: tr("AI EXECUTION", "AI 執行"), detail: agent.title, status: openConflicts.length && agent.status !== "completed" ? "blocked" : agent.status, progress: agent.progress, accent: "blue" as const },
     })),
     {
-      id: "outcome", type: "missionNode", position: { x: 995, y: 275 },
+      id: "outcome", type: "missionNode", position: { x: 1245, y: 275 },
       data: { variant: "outcome", title: tr("Mission outcome", "Mission 成果"), meta: tr("VERIFIABLE RESULT", "可驗收成果"), detail: localizeDomainText(mission.successMetric), status: mission.outcome?.status ?? "not_started", accent: "lime" },
     },
   ];
@@ -967,7 +1005,8 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   const edgeBase = { type: "smoothstep", markerEnd: { type: arrowClosed, width: 14, height: 14 }, pathOptions: { borderRadius: 18 } };
   const flowEdges: Edge[] = [
     ...visibleAssertions.map((assertion) => ({ id: `edge-${assertion.id}-conflict`, source: `intent-${assertion.id}`, target: "conflict-hub", animated: selectedAssertionIds.has(assertion.id), style: { stroke: selectedAssertionIds.has(assertion.id) ? "#ef5b55" : "#b9bbb7", strokeWidth: selectedAssertionIds.has(assertion.id) ? 2 : 1.3 }, markerEnd: { type: arrowClosed, color: selectedAssertionIds.has(assertion.id) ? "#ef5b55" : "#b9bbb7", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
-    { id: "edge-conflict-human", source: "conflict-hub", target: "human-owner", animated: Boolean(openConflicts.length), style: { stroke: openConflicts.length ? "#ef5b55" : "#82a43d", strokeWidth: 2 }, markerEnd: { type: arrowClosed, color: openConflicts.length ? "#ef5b55" : "#82a43d", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions },
+    { id: "edge-conflict-lucy", source: "conflict-hub", target: "lucy-lead", animated: Boolean(openConflicts.length), style: { stroke: openConflicts.length ? "#ef5b55" : "#82a43d", strokeWidth: 2 }, markerEnd: { type: arrowClosed, color: openConflicts.length ? "#ef5b55" : "#82a43d", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions },
+    { id: "edge-lucy-human", source: "lucy-lead", target: "human-owner", animated: Boolean(openConflicts.length), style: { stroke: openConflicts.length ? "#ef5b55" : "#82a43d", strokeWidth: 2 }, markerEnd: { type: arrowClosed, color: openConflicts.length ? "#ef5b55" : "#82a43d", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions },
     ...agents.map((agent) => ({ id: `edge-human-${agent.id}`, source: "human-owner", target: `agent-${agent.id}`, animated: !openConflicts.length && agent.status === "running", style: { stroke: openConflicts.length ? "#c7c8c4" : "#4175d6", strokeDasharray: openConflicts.length ? "5 5" : undefined, strokeWidth: 1.5 }, markerEnd: { type: arrowClosed, color: openConflicts.length ? "#c7c8c4" : "#4175d6", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
     ...agents.map((agent) => ({ id: `edge-${agent.id}-outcome`, source: `agent-${agent.id}`, target: "outcome", style: { stroke: "#c7c8c4", strokeDasharray: "5 5", strokeWidth: 1.2 }, markerEnd: { type: arrowClosed, color: "#c7c8c4", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
   ];
@@ -1010,9 +1049,9 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
       </div> : <div className="mobile-clear-contract"><BadgeCheck size={32} /><h2>{tr("No incompatible instruction remains.", "目前沒有互不相容的指令。")}</h2><p>{tr("Open the execution plan to review preflight checks and continue.", "開啟執行計畫，檢查執行前條件並繼續任務。")}</p><button className="button button-primary button-full" onClick={() => setView("plan")}>{tr("Open execution plan", "開啟執行計畫")} <ArrowRight size={17} /></button></div>}
     </section>
     <section className="flow-canvas" aria-label={tr("Mission execution canvas", "Mission 執行 Canvas")}>
-      <div className="flow-stage-labels" aria-hidden="true"><span>{tr("Intent sources", "意圖來源")}<small>{tr("Evidence-backed inputs", "輸入與依據")}</small></span><span>{tr("Conflict / Decision", "衝突／決策")}<small>{tr("What blocks execution", "阻擋執行的關鍵")}</small></span><span>{tr("Human approval", "人工核准")}<small>{tr("Accountable judgment", "具權責的判斷")}</small></span><span>{tr("AI execution", "AI 執行")}<small>{tr("Governed agent work", "受治理的 Agent 任務")}</small></span><span>{tr("Outcome", "成果")}<small>{tr("Verifiable result", "可驗收成果")}</small></span></div>
+      <div className="flow-stage-labels" aria-hidden="true"><span>{tr("Intent sources", "意圖來源")}<small>{tr("Evidence-backed inputs", "輸入與依據")}</small></span><span>{tr("Conflict", "衝突")}<small>{tr("What blocks execution", "阻擋執行的關鍵")}</small></span><span>Agent Lucy<small>{tr("Mission lead", "Mission 主理人")}</small></span><span>{tr("Human approval", "人工核准")}<small>{tr("Accountable judgment", "具權責的判斷")}</small></span><span>{tr("AI execution", "AI 執行")}<small>{tr("Governed worker tasks", "受治理的 Worker 任務")}</small></span><span>{tr("Outcome", "成果")}<small>{tr("Verifiable result", "可驗收成果")}</small></span></div>
       <Suspense fallback={<div className="flow-loading"><span className="loader" /><p>{tr("Opening execution canvas…", "正在開啟執行 Canvas…")}</p></div>}><ExecutionFlowCanvas nodes={flowNodes} edges={flowEdges} onConflictSelect={setSelectedConflictId} /></Suspense>
-      <form className="flow-command" onSubmit={submitCorrection}><label className="flow-command-author"><UserRound size={14} /><input aria-label={tr("Verified correction author", "已驗證的修正者")} value={correctionAuthor} readOnly /></label><Zap size={17} /><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} disabled={readOnly} onChange={(event) => setCorrection(event.target.value)} placeholder={readOnly ? tr("Read-only example · create a mission to add corrections", "唯讀範例 · 建立自己的 Mission 後即可修正") : tr("Add an instruction or correction, for example: Set the budget to NT$20,000", "輸入指令或修正，例如：將預算統一為 NT$20,000")} /><kbd>⌘ ↵</kbd><button type="submit" disabled={readOnly || correction.trim().length < 5 || correctionAuthor.trim().length < 1 || busy === "correction"} aria-label={tr("Submit correction and replan", "送出修正並重新規劃")}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></form>
+      <form className="flow-command" onSubmit={submitCorrection}><label className="flow-command-author"><UserRound size={14} /><input aria-label={tr("Verified correction author", "已驗證的修正者")} value={correctionAuthor} readOnly /></label><Zap size={17} /><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} disabled={readOnly} onChange={(event) => setCorrection(event.target.value)} placeholder={readOnly ? tr("Read-only example · create a mission to add corrections", "唯讀範例 · 建立自己的 Mission 後即可修正") : tr("Message Lucy or add a team correction…", "告訴 Lucy，或加入團隊修正…")} /><kbd>⌘ ↵</kbd><button type="submit" disabled={readOnly || correction.trim().length < 5 || correctionAuthor.trim().length < 1 || busy === "correction"} aria-label={tr("Submit correction and replan", "送出修正並重新規劃")}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></form>
       {!inspectorOpen && <button className="flow-inspector-open" onClick={() => setInspectorOpen(true)} aria-label={tr("Open conflict inspector", "開啟衝突檢視")}><PanelRightOpen size={18} /><span>{mission.blockingConflicts}</span></button>}
     </section>
     {inspectorOpen && <aside className="flow-inspector"><div className="flow-inspector-head"><div><span>{selectedConflict ? tr("SELECTED CONFLICT", "已選取衝突") : tr("CONTRACT STATE", "合約狀態")}</span><h2>{selectedConflict ? tr(`${mission.blockingConflicts} blocking conflicts`, `${mission.blockingConflicts} 項阻擋衝突`) : tr("Execution can proceed", "執行可以繼續")}</h2></div><button className="icon-button" onClick={() => setInspectorOpen(false)} aria-label={tr("Close inspector", "關閉檢視")}><PanelRightClose size={18} /></button></div>

@@ -49,6 +49,7 @@ import { beginOAuth, completeOAuth, listConnectorDescriptors, revokeConnector, v
 import { executeToolCall } from "./toolGateway";
 import { contentHash } from "./execution";
 import { missionEvalCases } from "./evals/missionCases";
+import { continueLucyConversation, lucyTurnSchema } from "./lucy";
 
 function requestBaseUrl(request: Request) {
   const host = request.header("X-Forwarded-Host")?.split(",")[0]?.trim() || request.get("host");
@@ -66,7 +67,10 @@ export function createApp() {
     response.setHeader("X-Frame-Options", "DENY");
     response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-    response.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; connect-src 'self'; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'");
+    const development = process.env.NODE_ENV === "development";
+    const scriptPolicy = development ? "script-src 'self' 'unsafe-inline'" : "script-src 'self'";
+    const connectPolicy = development ? "connect-src 'self' ws:" : "connect-src 'self'";
+    response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ${scriptPolicy}; ${connectPolicy}; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'`);
     next();
   });
   app.use((request, _response, next) => {
@@ -102,6 +106,15 @@ export function createApp() {
         { level: 4, label: "High-impact", approval: "Exact approval, audit and rollback required" },
       ],
     });
+  });
+
+  app.post("/api/lucy/turn", async (request, response, next) => {
+    try {
+      await resolveRequestScope(request, { sessionOnly: true });
+      response.json(await continueLucyConversation(lucyTurnSchema.parse(request.body)));
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.post("/api/session/guest", async (request, response, next) => {

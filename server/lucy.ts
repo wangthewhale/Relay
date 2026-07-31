@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { departments, type Department } from "../shared/domain";
+import { hasRequiredLucyInputs } from "../shared/lucy";
 
 const lucyPhases = ["identity", "objective", "context", "success", "ready"] as const;
 
@@ -174,7 +175,7 @@ export async function continueLucyConversation(raw: unknown) {
     });
     if (!response.ok) throw new Error(`lucy_model_http_${response.status}`);
     const result = lucyModelOutputSchema.parse(JSON.parse(outputText(await response.json())));
-    const complete = result.memory.objective.trim().length >= 10 && result.memory.constraints.trim().length >= 3 && result.memory.successMetric.trim().length >= 3;
+    const complete = hasRequiredLucyInputs(result.memory);
     return { ...result, nextPhase: complete ? result.nextPhase : result.nextPhase === "ready" ? input.phase : result.nextPhase, modelUsed: true };
   } catch {
     return fallbackLucyTurn(input);

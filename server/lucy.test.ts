@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fallbackLucyTurn, type LucyMemory } from "./lucy";
+import { hasRequiredLucyInputs } from "../shared/lucy";
 
 const empty: LucyMemory = {
   name: "",
@@ -37,5 +38,13 @@ describe("Agent Lucy fallback interview", () => {
     expect(reply.nextPhase).toBe("ready");
     expect(reply.memory.successMetric).toBe("Launch on time with every owner signed off");
     expect(reply.modelUsed).toBe(false);
+  });
+
+  it("accepts concise CJK objectives offered by Lucy's own quick replies", () => {
+    expect(hasRequiredLucyInputs({
+      objective: "兩週內推出新產品",
+      constraints: "發布前 CEO 要核准",
+      successMetric: "準時發布且所有負責人 sign off",
+    })).toBe(true);
   });
 });

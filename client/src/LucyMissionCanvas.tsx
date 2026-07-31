@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { CreateMissionInput, Department } from "@shared/domain";
+import { hasRequiredLucyInputs } from "@shared/lucy";
 import { api } from "./api";
 import { tr, useLocale } from "./i18n";
 import "@xyflow/react/dist/style.css";
@@ -161,7 +162,7 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
   };
 
   const submit = (event: FormEvent) => { event.preventDefault(); void send(input); };
-  const canLaunch = phase === "ready" && memory.objective.trim().length >= 10 && memory.constraints.trim().length >= 3 && memory.successMetric.trim().length >= 3;
+  const canLaunch = phase === "ready" && hasRequiredLucyInputs(memory);
   const launch = () => {
     if (!canLaunch || busy) return;
     const ownerName = memory.name.trim() || tr("Mission owner", "Mission 負責人");

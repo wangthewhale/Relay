@@ -144,7 +144,7 @@ function PublicHeader() {
     <header className="public-header">
       <Logo />
       <nav className={open ? "public-nav open" : "public-nav"}>
-        <a href="#how">{tr("How it works", "如何運作")}</a><a href="#proof">{tr("Proof", "完成證明")}</a>
+        <a href="#live-canvas">{tr("See Agents work", "看 Agents 工作")}</a><a href="#roles">{tr("For your role", "適合誰用")}</a><a href="#proof">{tr("Proof", "完成證明")}</a>
         <LanguageSwitcher compact />
         <Link to="/demo" className="text-link">{tr("Live demo", "即時 Demo")}</Link>
         <Link to="/missions/new" className="quiet-start-link">{tr("Start a mission", "開始一個 Mission")} <ArrowRight size={17} /></Link>
@@ -152,6 +152,167 @@ function PublicHeader() {
       <button className="icon-button mobile-menu" onClick={() => setOpen((value) => !value)} aria-label={tr("Toggle menu", "開關選單")}><Menu size={20} /></button>
     </header>
   );
+}
+
+type LandingScenario = {
+  id: string;
+  role: string;
+  mission: string;
+  prompt: string;
+  invitees: string[];
+  agents: string[];
+  approval: string;
+  outcome: string;
+  activity: string[];
+  icon: typeof Radar;
+};
+
+function getLandingScenarios(): LandingScenario[] {
+  return [
+    {
+      id: "investor", role: tr("Investor", "投資人"), icon: Search,
+      mission: tr("Find one company worth advancing", "找到一個值得進入下一輪的投資標的"),
+      prompt: tr("Find the strongest AI infrastructure company in our pipeline. Invite the DD team, challenge the market assumptions and return an investment memo by Friday.", "從投資名單找出最值得深入的 AI 基礎建設公司。邀請 DD 團隊、挑戰市場假設，週五前交回投資備忘錄。"),
+      invitees: [tr("Investment partner", "投資合夥人"), tr("Finance lead", "財務負責人"), tr("Legal counsel", "法務顧問")],
+      agents: [tr("Sourcing Agent", "標的搜尋 Agent"), tr("Market Agent", "市場研究 Agent"), tr("DD Agent", "盡調 Agent")],
+      approval: tr("You decide whether the deal advances", "由你決定是否進入下一輪"),
+      outcome: tr("A sourced investment memo, open risks and every DD owner", "一份有來源的投資備忘錄、未解風險與每項盡調負責人"),
+      activity: [tr("Lucy is mapping the investment thesis", "Lucy 正在畫出投資論點"), tr("Lucy is inviting the DD team", "Lucy 正在邀請 DD 團隊"), tr("Counterpart Agents are comparing assumptions", "每人的 AI 搭檔正在比對假設"), tr("Agent Council is challenging the market case", "Agent Council 正在挑戰市場論點"), tr("DD Agents are reading the data room", "DD Agents 正在讀取資料室"), tr("Lucy is learning the correction and revising the memo", "Lucy 正在吸收修正並重寫備忘錄")],
+    },
+    {
+      id: "ceo", role: "CEO", icon: LayoutDashboard,
+      mission: tr("Turn five department plans into one company plan", "把五個部門計畫收斂成一份公司計畫"),
+      prompt: tr("Build our Q4 operating plan. Let every function state its goal and constraint, resolve the trade-offs and bring me only the decisions that change runway or strategy.", "建立 Q4 營運計畫。讓每個部門說出目標與限制，先解決取捨，只把會改變現金跑道或策略的決定帶回給我。"),
+      invitees: [tr("Finance", "財務"), tr("Product", "產品"), tr("Revenue lead", "營收負責人")],
+      agents: [tr("Strategy Agent", "策略 Agent"), tr("Planning Agent", "計畫 Agent"), tr("Risk Agent", "風險 Agent")],
+      approval: tr("You sign off on strategy and budget", "你只核准策略與預算"),
+      outcome: tr("One operating plan, named owners and no status meeting", "一份營運計畫、具名負責人，而且不用開進度會"),
+      activity: [tr("Lucy is collecting each function's goal", "Lucy 正在收齊各部門目標"), tr("Counterparts are surfacing hidden constraints", "AI 搭檔正在找出隱藏限制"), tr("Agent Council is resolving priorities", "Agent Council 正在解決優先順序"), tr("Planning Agent is assigning owners", "計畫 Agent 正在指派負責人"), tr("Risk Agent is checking runway impact", "風險 Agent 正在檢查現金跑道影響"), tr("Lucy is preparing two decisions for the CEO", "Lucy 正在整理兩項需要 CEO 決定的事")],
+    },
+    {
+      id: "engineering", role: tr("Engineering", "工程"), icon: GitBranch,
+      mission: tr("Ship a release without coordination debt", "不用追進度，也能安全完成版本發布"),
+      prompt: tr("Ship the billing release this week. Invite Product, Design, Security and QA. Keep GitHub and Linear updated, stop on a failed check and return the release proof.", "本週完成帳務版本發布。邀請產品、設計、安全與 QA；同步 GitHub 和 Linear，檢查失敗就停止，最後交回發布證明。"),
+      invitees: [tr("Product manager", "產品經理"), tr("Security", "資安"), "QA"],
+      agents: [tr("Code Agent", "程式 Agent"), tr("QA Agent", "測試 Agent"), tr("Release Agent", "發布 Agent")],
+      approval: tr("The release owner approves production", "發布負責人核准正式上線"),
+      outcome: tr("Merged code, passed checks, release notes and rollback proof", "合併程式、通過檢查、發布說明與回滾證明"),
+      activity: [tr("Lucy is drawing the release dependency map", "Lucy 正在畫發布依賴圖"), tr("Engineering counterparts are clarifying scope", "工程 AI 搭檔正在釐清範圍"), tr("Code Agent is opening the implementation branch", "程式 Agent 正在建立實作分支"), tr("QA Agent is running regression checks", "測試 Agent 正在跑回歸檢查"), tr("Release Agent is waiting at production approval", "發布 Agent 正在正式環境核准點等待"), tr("Lucy is learning from the failed check and replanning", "Lucy 正在從失敗檢查學習並重新規劃")],
+    },
+    {
+      id: "product", role: tr("Product", "產品"), icon: Network,
+      mission: tr("Move a feature from request to measurable outcome", "把一個需求做到可驗證的成果"),
+      prompt: tr("Turn customer requests into a scoped onboarding improvement. Invite Design, Engineering, Support and Data, reconcile constraints and own the experiment through its result.", "把客戶回饋變成一個明確的 onboarding 改善。邀請設計、工程、客服與數據，收斂限制，並一路執行到實驗結果。"),
+      invitees: [tr("Designer", "設計師"), tr("Engineer", "工程師"), tr("Support lead", "客服負責人")],
+      agents: [tr("Research Agent", "研究 Agent"), tr("Spec Agent", "規格 Agent"), tr("Experiment Agent", "實驗 Agent")],
+      approval: tr("You approve scope and success metric", "你只核准範圍與成功指標"),
+      outcome: tr("A shipped experiment tied back to the original evidence", "一個已上線、能追溯到原始證據的實驗"),
+      activity: [tr("Lucy is clustering customer evidence", "Lucy 正在整理客戶證據"), tr("Research Agent is finding the repeated pain", "研究 Agent 正在找重複痛點"), tr("Counterparts are negotiating scope", "各方 AI 搭檔正在協調範圍"), tr("Spec Agent is writing acceptance criteria", "規格 Agent 正在寫驗收條件"), tr("Experiment Agent is preparing measurement", "實驗 Agent 正在準備量測"), tr("Lucy is updating the plan from new evidence", "Lucy 正依新證據更新計畫")],
+    },
+    {
+      id: "design", role: tr("Design", "設計"), icon: Sparkles,
+      mission: tr("Turn scattered feedback into one approved design", "把分散回饋收斂成一版核准設計"),
+      prompt: tr("Finish the mobile checkout redesign. Invite Product, Research, Brand and Engineering; reconcile their feedback, update Figma and prepare a clean handoff.", "完成手機結帳改版。邀請產品、研究、品牌與工程；收斂回饋、更新 Figma，並準備乾淨的交接。"),
+      invitees: [tr("Product", "產品"), tr("Brand", "品牌"), tr("Engineer", "工程師")],
+      agents: [tr("Research Agent", "研究 Agent"), tr("Design QA Agent", "設計 QA Agent"), tr("Handoff Agent", "交接 Agent")],
+      approval: tr("Design and Product sign off on the exact frame", "設計與產品核准精確畫面版本"),
+      outcome: tr("One approved Figma version with specs and unresolved notes", "一個核准的 Figma 版本、規格與未解事項"),
+      activity: [tr("Lucy is pinning every feedback source", "Lucy 正在固定每個回饋來源"), tr("Research Agent is checking user evidence", "研究 Agent 正在檢查用戶證據"), tr("Counterparts are resolving conflicting comments", "AI 搭檔正在解決衝突留言"), tr("Design QA Agent is checking every state", "設計 QA Agent 正在檢查所有狀態"), tr("Handoff Agent is preparing engineering specs", "交接 Agent 正在準備工程規格"), tr("Lucy is recording the accepted correction", "Lucy 正在記錄已接受的修正")],
+    },
+    {
+      id: "finance", role: tr("Finance", "財務"), icon: CircleDollarSign,
+      mission: tr("Close the month without chasing documents", "不用催資料，也能完成月結"),
+      prompt: tr("Close July by Friday. Ask every cost owner for missing evidence, reconcile the ledger, flag policy exceptions and bring me only the entries that need judgment.", "週五前完成七月月結。向每位成本負責人補齊憑證、核對帳目、標出政策例外，只把需要判斷的項目帶回給我。"),
+      invitees: [tr("Budget owners", "預算負責人"), tr("Operations", "營運"), tr("CEO", "執行長")],
+      agents: [tr("Reconciliation Agent", "對帳 Agent"), tr("Policy Agent", "政策 Agent"), tr("Close Agent", "月結 Agent")],
+      approval: tr("Finance keeps every payment and exception approval", "每筆付款與例外核准仍由財務掌握"),
+      outcome: tr("Reconciled books, exception list and signed close report", "完成對帳、例外清單與已簽核月結報告"),
+      activity: [tr("Lucy is requesting missing evidence", "Lucy 正在索取缺少的憑證"), tr("Counterparts are answering cost-owner questions", "AI 搭檔正在回答成本歸屬問題"), tr("Reconciliation Agent is matching transactions", "對帳 Agent 正在核對交易"), tr("Policy Agent is flagging exceptions", "政策 Agent 正在標示例外"), tr("Close Agent is preparing the report", "月結 Agent 正在準備報告"), tr("Lucy is learning the new coding rule", "Lucy 正在學習新的會計分類規則")],
+    },
+    {
+      id: "people", role: tr("People / HR", "人資"), icon: UsersRound,
+      mission: tr("Run hiring without another scheduling meeting", "不用再開協調會，也能完成招募"),
+      prompt: tr("Hire a senior designer. Invite the hiring panel, align the scorecard, coordinate interviews, collect evidence and prepare the offer for exact approval.", "招募一位資深設計師。邀請面試小組、對齊評分表、安排面試、收集證據，最後準備精確的 offer 核准。"),
+      invitees: [tr("Hiring manager", "用人主管"), tr("Design lead", "設計主管"), tr("Finance", "財務")],
+      agents: [tr("Sourcing Agent", "人才搜尋 Agent"), tr("Interview Agent", "面試 Agent"), tr("Offer Agent", "Offer Agent")],
+      approval: tr("Humans make the hiring and compensation decision", "錄用與薪資決定永遠由人類做"),
+      outcome: tr("A documented hiring decision and approved offer", "一份有依據的錄用決策與已核准 Offer"),
+      activity: [tr("Lucy is aligning the hiring scorecard", "Lucy 正在對齊招募評分表"), tr("Sourcing Agent is screening the pipeline", "人才 Agent 正在篩選名單"), tr("Panel counterparts are comparing evidence", "面試官 AI 搭檔正在比對證據"), tr("Interview Agent is coordinating schedules", "面試 Agent 正在協調時間"), tr("Offer Agent is checking the approved band", "Offer Agent 正在檢查核准薪資帶"), tr("Lucy is correcting the search from panel feedback", "Lucy 正依面試回饋修正搜尋")],
+    },
+    {
+      id: "growth", role: tr("Growth", "行銷成長"), icon: Target,
+      mission: tr("Launch a campaign without version chaos", "不用在版本混亂中完成行銷上線"),
+      prompt: tr("Launch the September campaign. Invite Brand, Finance, CRM and Legal; exclude existing customers, prepare every channel and stop if CPA crosses the limit.", "推出九月活動。邀請品牌、財務、CRM 與法務；排除既有客戶、準備所有渠道，CPA 超過上限就停止。"),
+      invitees: [tr("Brand", "品牌"), tr("Finance", "財務"), tr("Legal", "法務")],
+      agents: [tr("Audience Agent", "受眾 Agent"), tr("Creative Agent", "素材 Agent"), tr("Campaign Agent", "活動 Agent")],
+      approval: tr("Owners approve audience, creative and exact spend", "負責人核准受眾、素材與精確花費"),
+      outcome: tr("A governed multi-channel launch with live performance proof", "一個受治理的多渠道上線與即時成效證明"),
+      activity: [tr("Lucy is reconciling the launch brief", "Lucy 正在收斂 Launch Brief"), tr("Audience Agent is excluding customers", "受眾 Agent 正在排除既有客戶"), tr("Brand counterpart is reviewing creative", "品牌 AI 搭檔正在審查素材"), tr("Agent Council is resolving budget versions", "Agent Council 正在解決預算版本"), tr("Campaign Agent is waiting for exact approval", "活動 Agent 正等待精確核准"), tr("Lucy is learning from live CPA and adjusting", "Lucy 正從即時 CPA 學習並調整")],
+    },
+    {
+      id: "sales", role: tr("Sales", "業務"), icon: Mail,
+      mission: tr("Move a complex deal without internal chasing", "不用內部追人，也能推進複雜交易"),
+      prompt: tr("Advance the enterprise renewal. Invite Solutions, Security, Legal and Finance; answer the customer's open questions, prepare the proposal and protect the approved terms.", "推進企業續約。邀請解決方案、資安、法務與財務；完成客戶待答問題、準備提案，並保護已核准條款。"),
+      invitees: [tr("Solutions", "解決方案"), tr("Security", "資安"), tr("Legal", "法務")],
+      agents: [tr("Account Agent", "客戶 Agent"), tr("Security Agent", "資安 Agent"), tr("Proposal Agent", "提案 Agent")],
+      approval: tr("Humans approve price, terms and the exact send", "價格、條款與寄送仍由人類核准"),
+      outcome: tr("A complete proposal, answered risks and a clean handoff", "完整提案、已回答風險與乾淨交接"),
+      activity: [tr("Lucy is mapping the buying committee", "Lucy 正在畫出採購決策鏈"), tr("Account Agent is reading the CRM history", "客戶 Agent 正在讀取 CRM 紀錄"), tr("Security Agent is drafting questionnaire answers", "資安 Agent 正在準備問卷回覆"), tr("Counterparts are resolving commercial terms", "AI 搭檔正在協調商務條款"), tr("Proposal Agent is assembling the final packet", "提案 Agent 正在組合最終文件"), tr("Lucy is updating the plan from customer feedback", "Lucy 正依客戶回饋更新計畫")],
+    },
+    {
+      id: "operations", role: tr("Operations", "營運"), icon: RouteIcon,
+      mission: tr("Coordinate a multi-location operation end to end", "從頭到尾協調多據點營運"),
+      prompt: tr("Open three new locations. Invite every local owner, Procurement, Finance and Legal; track permits, vendors and dependencies until every site signs off.", "開三個新據點。邀請各地負責人、採購、財務與法務；追蹤許可、供應商與依賴，直到每個據點完成簽核。"),
+      invitees: [tr("Local owners", "據點負責人"), tr("Procurement", "採購"), tr("Legal", "法務")],
+      agents: [tr("Vendor Agent", "供應商 Agent"), tr("Schedule Agent", "排程 Agent"), tr("Launch Agent", "開幕 Agent")],
+      approval: tr("Local owners keep site and spend authority", "據點與支出權限仍留在地方負責人"),
+      outcome: tr("Three launch-ready sites with one visible dependency map", "三個可開幕據點與一張清楚的依賴圖"),
+      activity: [tr("Lucy is drawing the location dependency map", "Lucy 正在畫各據點依賴圖"), tr("Local counterparts are reporting constraints", "各地 AI 搭檔正在回報限制"), tr("Vendor Agent is collecting bids", "供應商 Agent 正在收集報價"), tr("Schedule Agent is resolving collisions", "排程 Agent 正在解決衝突"), tr("Launch Agent is checking every sign-off", "開幕 Agent 正在檢查所有簽核"), tr("Lucy is replanning the delayed location", "Lucy 正在重新規劃延誤據點")],
+    },
+    {
+      id: "agency", role: tr("Agency", "代理商"), icon: Blocks,
+      mission: tr("Deliver client work from the one valid brief", "用唯一有效 Brief 完成客戶交付"),
+      prompt: tr("Deliver the campaign without scope drift. Invite the client, Strategy, Creative and Media; reconcile every revision, protect approvals and finish the launch pack.", "在不失控擴張範圍下完成活動。邀請客戶、策略、創意與媒體；收斂每次改版、保護核准，完成上線交付包。"),
+      invitees: [tr("Client owner", "客戶負責人"), tr("Creative", "創意"), tr("Media", "媒體")],
+      agents: [tr("Brief Agent", "Brief Agent"), tr("Production Agent", "製作 Agent"), tr("Delivery Agent", "交付 Agent")],
+      approval: tr("The client approves the exact deliverable version", "客戶核准精確的交付版本"),
+      outcome: tr("One client-visible plan, finished assets and change receipts", "一份客戶可見計畫、完成素材與所有變更憑據"),
+      activity: [tr("Lucy is reconciling client revisions", "Lucy 正在收斂客戶改版"), tr("Brief Agent is invalidating stale promises", "Brief Agent 正在使舊承諾失效"), tr("Creative counterparts are aligning the work", "創意 AI 搭檔正在對齊工作"), tr("Production Agent is finishing approved assets", "製作 Agent 正在完成核准素材"), tr("Delivery Agent is preparing the launch pack", "交付 Agent 正在準備上線包"), tr("Lucy is recording the final client correction", "Lucy 正在記錄客戶最終修正")],
+    },
+  ];
+}
+
+function LandingLiveCanvas({ scenario, onStart }: { scenario: LandingScenario; onStart: () => void }) {
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    setPhase(0);
+    const timer = window.setInterval(() => setPhase((current) => (current + 1) % scenario.activity.length), 2400);
+    return () => window.clearInterval(timer);
+  }, [scenario.id, scenario.activity.length]);
+  const invitees = scenario.invitees.slice(0, 3);
+  const agents = scenario.agents.slice(0, 2);
+  const nodes = useMemo<MissionFlowNode[]>(() => [
+    { id: "landing-intent", type: "missionNode", position: { x: 0, y: 250 }, data: { variant: "intent", title: scenario.mission, meta: `${scenario.role} · MISSION`, detail: tr("One outcome, shared by the whole team", "一個全隊共用的成果"), status: "verified", accent: "lime", addable: false } },
+    { id: "landing-lucy", type: "missionNode", position: { x: 290, y: 250 }, data: { variant: "agent", title: "Lucy", meta: tr("AI MISSION PARTNER", "AI MISSION 搭檔"), detail: phase < 2 ? tr("Listening, drawing the plan and finding the right people", "理解目標、畫出計畫並找到正確的人") : tr("Keeping every goal, constraint and correction in sync", "持續同步每個目標、限制與修正"), status: phase < 1 ? "listening" : "running", progress: Math.min(92, 18 + phase * 15), accent: "blue", addable: false } },
+    ...invitees.map((person, index) => ({ id: `landing-human-${index}`, type: "missionNode" as const, position: { x: 585, y: 65 + index * 185 }, data: { variant: "human" as const, title: person, meta: tr("HUMAN + AI COUNTERPART", "人類＋專屬 AI 搭檔"), detail: tr("Goals represented. Approval stays human.", "立場由 AI 帶入；核准權留在人類。"), status: phase >= 2 ? "informed" : "invited", accent: "violet" as const, addable: false } })),
+    { id: "landing-council", type: "missionNode", position: { x: 890, y: 250 }, data: { variant: "agent", title: tr("Agent Council", "Agent 代理人會議"), meta: tr("NO HUMAN MEETING", "人類不用開會"), detail: tr("Counterparts compare goals, evidence and constraints", "每人的 AI 搭檔比對目標、證據與限制"), status: phase >= 4 ? "minutes_ready" : phase >= 3 ? "meeting" : "ready", progress: phase >= 4 ? 100 : phase >= 3 ? 62 : 12, accent: "blue", addable: false } },
+    ...agents.map((agent, index) => ({ id: `landing-agent-${index}`, type: "missionNode" as const, position: { x: 1190, y: 145 + index * 230 }, data: { variant: "agent" as const, title: agent, meta: tr("AI EXECUTION", "AI 執行"), detail: index === 0 ? tr("Works through approved tools", "透過已授權工具工作") : tr("Returns evidence, not status theatre", "交回證據，不做進度表演"), status: phase >= 5 ? "completed" : phase >= 4 ? "running" : "queued", progress: phase >= 5 ? 100 : phase >= 4 ? 58 + index * 12 : 4, accent: "blue" as const, addable: false } })),
+    { id: "landing-outcome", type: "missionNode", position: { x: 1500, y: 250 }, data: { variant: "outcome", title: tr("Mission complete", "Mission 完成"), meta: tr("VERIFIED OUTCOME", "已驗證成果"), detail: scenario.outcome, status: phase >= 5 ? "achieved" : "waiting", accent: "lime", addable: false } },
+  ], [agents, invitees, phase, scenario.mission, scenario.outcome, scenario.role]);
+  const arrowClosed = "arrowclosed" as MarkerType;
+  const link = (id: string, source: string, target: string, active: boolean): Edge => ({ id, source, target, type: "smoothstep", animated: active, style: { stroke: active ? "#0066cc" : "#c8c8c8", strokeWidth: active ? 2 : 1.25 }, markerEnd: { type: arrowClosed, color: active ? "#0066cc" : "#c8c8c8", width: 14, height: 14 } });
+  const edges: Edge[] = [
+    link("landing-e-1", "landing-intent", "landing-lucy", phase >= 1),
+    ...invitees.map((_, index) => link(`landing-e-human-${index}`, "landing-lucy", `landing-human-${index}`, phase === 2)),
+    ...invitees.map((_, index) => link(`landing-e-council-${index}`, `landing-human-${index}`, "landing-council", phase === 3)),
+    ...agents.map((_, index) => link(`landing-e-agent-${index}`, "landing-council", `landing-agent-${index}`, phase === 4)),
+    ...agents.map((_, index) => link(`landing-e-outcome-${index}`, `landing-agent-${index}`, "landing-outcome", phase === 5)),
+  ];
+  return <section className="landing-live-canvas" id="live-canvas" aria-label={tr("Live AI team canvas", "AI 團隊即時白紙") }>
+    <header className="landing-live-head"><div><span className="landing-live-dot"/><p><small>{tr("RELAY LIVE CANVAS", "RELAY 即時白紙")}</small><b>{scenario.activity[phase]}</b></p></div><span>{String(phase + 1).padStart(2, "0")} / {String(scenario.activity.length).padStart(2, "0")}</span></header>
+    <div className="landing-canvas-stage"><Suspense fallback={<div className="flow-loading"><span className="loader"/><p>{tr("Opening the live mission…", "正在打開即時 Mission…")}</p></div>}><ExecutionFlowCanvas nodes={nodes} edges={edges} onConflictSelect={() => undefined} presentation/></Suspense></div>
+    <footer className="landing-live-footer"><div><Bot size={16}/><span>{tr("Lucy is drawing · inviting · aligning · executing · learning", "Lucy 正在畫圖、邀請、對齊、執行與學習")}</span></div><button type="button" onClick={onStart}>{tr("Run this mission", "執行這個 Mission")}<ArrowRight size={16}/></button></footer>
+  </section>;
 }
 
 function LandingMagicCompiler({ onOpenFullMission }: { onOpenFullMission: (brief: string) => void }) {
@@ -405,64 +566,73 @@ function LegacyLandingPage() {
 
 function LandingPage() {
   const navigate = useNavigate();
-  const { locale } = useLocale();
   const [goal, setGoal] = useState("");
-  const sampleGoal = tr(
-    "Launch our new product by September 15. Finance must approve spend, Design must approve creative, and no existing customers may receive the announcement.",
-    "9 月 15 日前推出新產品。財務要核准預算、設計要核准素材，而且不能把公告寄給既有客戶。",
-  );
+  const scenarios = getLandingScenarios();
+  const [scenarioId, setScenarioId] = useState("investor");
+  const scenario = scenarios.find((item) => item.id === scenarioId) ?? scenarios[0];
+  const start = (value: string) => {
+    sessionStorage.setItem("relay_lucy_goal", value);
+    navigate("/missions/new?goal=1");
+  };
   const begin = (event: FormEvent) => {
     event.preventDefault();
     const value = goal.trim();
     if (value.length < 3) return;
-    sessionStorage.setItem("relay_lucy_goal", value);
-    navigate("/missions/new?goal=1");
+    start(value);
   };
 
   return <div className="landing quiet-landing">
     <PublicHeader />
     <main>
-      <section className="quiet-hero">
-        <div className="quiet-hero-copy">
-          <p className="quiet-eyebrow">{tr("ONE MISSION · HUMAN DIRECTION · AGENT EXECUTION", "一個 MISSION · 人類定方向 · AGENTS 負責完成")}</p>
-          <h1>{locale === "zh-TW" ? <>把目標說給 Lucy。<br/>剩下的，交給 Agents。</> : <>Tell Lucy the goal.<br/>Leave the rest to your Agents.</>}</h1>
-          <p>{tr("No status meetings. No chasing updates. Everyone gets an AI counterpart; the Agents align the team, do the safe work, and come back only for the decision that needs a human.", "不用再開進度會議，也不用追問誰做到哪裡。每位同事都有一位 AI 搭檔；Agents 先替大家對齊、執行，只有真正需要人判斷時才回來找你。")}</p>
+      <section className="relay-hero">
+        <div className="relay-hero-copy">
+          <p className="quiet-eyebrow"><span/>{tr("YOUR AI TEAM, ALREADY AT WORK", "你的 AI 團隊，已經開始工作")}</p>
+          <h1>{tr("Tell Lucy the goal. Watch your AI team finish it.", "把目標告訴 Lucy。看著 AI 團隊把它做完。")}</h1>
+          <p className="relay-hero-lede">{tr("Stop calling status meetings. Every teammate gets an AI counterpart; the Agents meet, coordinate and execute for you. Humans step in only to decide or approve.", "不用再開進度會。每位同事都有一位 AI 搭檔；Agents 替大家開會、協調、執行。人類只在需要判斷或授權時出手。")}</p>
+          <form className="quiet-goal-composer" onSubmit={begin}>
+            <label className="visually-hidden" htmlFor="relay-goal">{tr("Tell Lucy your goal", "告訴 Lucy 你的目標")}</label>
+            <span><Sparkles size={18}/></span>
+            <input id="relay-goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder={tr("What should your AI team finish?", "你想讓 AI 團隊完成什麼？")} autoComplete="off" />
+            <button type="submit" disabled={goal.trim().length < 3} aria-label={tr("Start this mission", "開始這個 Mission")}><ArrowRight size={21}/></button>
+          </form>
+          <button className="quiet-example" type="button" onClick={() => setGoal(scenario.prompt)}>{tr(`Try the ${scenario.role} example`, `載入「${scenario.role}」真實情境`)}</button>
+          <div className="relay-hero-boundary"><span><Check size={14}/>{tr("Agents do the work", "Agents 負責做事")}</span><span><ShieldCheck size={14}/>{tr("Humans keep authority", "人類保留決策權")}</span><span><Activity size={14}/>{tr("Everything stays visible", "所有進度都看得見")}</span></div>
         </div>
-
-        <form className="quiet-goal-composer" onSubmit={begin}>
-          <label className="visually-hidden" htmlFor="relay-goal">{tr("Tell Lucy your goal", "告訴 Lucy 你的目標")}</label>
-          <input id="relay-goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder={tr("Tell Lucy your goal, e.g. launch the campaign by month-end", "告訴 Lucy 你的目標，例如：月底前推出行銷活動")} autoComplete="off" />
-          <span><Sparkles size={18}/></span>
-          <button type="submit" disabled={goal.trim().length < 3} aria-label={tr("Start this mission", "開始這個 Mission")}><ArrowRight size={21}/></button>
-        </form>
-        <button className="quiet-example" type="button" onClick={() => setGoal(sampleGoal)}>{tr("Try a real launch example", "不知道怎麼說？載入真實 Launch 範例")}</button>
-
-        <ol className="quiet-execution-preview" aria-label={tr("How Relay moves a mission forward", "Relay 如何推進 Mission") }>
-          <li><span className="quiet-avatar">RL</span><div><b>{tr("Lucy turns the goal into one shared mission", "Lucy 理解你的目標")}</b><small>{tr("One source of truth for the whole team", "轉成全隊共用、可執行的 Mission")}</small></div><em>{tr("ready", "已就緒")}</em><Check size={18}/></li>
-          <li><span className="quiet-agent-stack"><i>EV</i><i>PL</i><i>EX</i></span><div><b>{tr("Three Agents align and divide the work", "3 位 Agents 已對齊並分工")}</b><small>{tr("Evidence, planning and execution continue in the background", "證據、計畫與執行在背景繼續")}</small></div><em>{tr("working", "執行中")}</em><RefreshCw className="quiet-spin-icon" size={18} aria-hidden="true"/></li>
-          <li><span className="quiet-avatar"><UserRound size={18}/></span><div><b>{tr("One decision will need you", "之後只需要你的 1 次核准")}</b><small>{tr("Lucy asks only the person who truly owns it", "Lucy 只會在關鍵時刻找真正有權的人")}</small></div><em>{tr("later", "稍後詢問")}</em><ShieldCheck size={18}/></li>
-        </ol>
-        <p className="quiet-background-note">{tr("Agents keep the mission moving while you are away. External sends, publishing and spend stay locked until the exact owner approves.", "你離開畫面，Agents 仍會持續推進；寄送、發布與花費，仍會等正確的人精確核准。")}</p>
+        <LandingLiveCanvas scenario={scenario} onStart={() => start(scenario.prompt)}/>
       </section>
 
-      <section className="quiet-how" id="how">
-        <header><span>01</span><h2>{tr("Humans speak once. Agents carry it to done.", "人類說一次。Agents 做到底。")}</h2></header>
-        <div>
-          <article><span>1</span><h3>{tr("Say the outcome", "說出想完成的事")}</h3><p>{tr("Lucy asks one natural question at a time—no setup form.", "Lucy 一次只問一件事，不丟給你一張表單。")}</p></article>
-          <article><span>2</span><h3>{tr("Invite the right people", "把該加入的人帶進來")}</h3><p>{tr("Each teammate gets a counterpart Agent that carries their goals and limits.", "每位同事都有 AI 搭檔，替他記住目標與限制。")}</p></article>
-          <article><span>3</span><h3>{tr("Let the Agents meet", "讓 Agents 代替大家開會")}</h3><p>{tr("They reconcile conflicts, write the minutes and start reversible work.", "它們先對齊衝突、留下紀錄，再開始可逆工作。")}</p></article>
-          <article><span>4</span><h3>{tr("Approve the one thing that matters", "只核准真正重要的事")}</h3><p>{tr("Relay returns the exact decision, then the Agents finish with proof.", "Relay 帶回精確決策，Agents 完成後交回證明。")}</p></article>
-        </div>
+      <section className="relay-method" id="how">
+        <header><span>01 / {tr("ONE NEW WAY TO WORK", "一種新的工作方式")}</span><h2>{tr("Your team speaks once. Its Agents keep moving.", "團隊只說一次。Agents 持續把事情往前推。")}</h2></header>
+        <ol>
+          <li><span>1</span><div><h3>{tr("Lucy learns the mission", "Lucy 先理解任務")}</h3><p>{tr("Talk naturally. Lucy asks only what is missing, then draws the work on one live canvas.", "像平常說話就好。Lucy 只追問缺少的資訊，接著把工作畫在同一張即時白紙上。")}</p></div></li>
+          <li><span>2</span><div><h3>{tr("Every person gets a counterpart", "每個人都有一位 AI 搭檔")}</h3><p>{tr("Invite teammates once. Their Agents remember their goals, meet each other and keep everyone informed.", "邀請同事一次就好。每人的 Agent 記住他的目標、彼此開會，並持續同步所有人。")}</p></div></li>
+          <li><span>3</span><div><h3>{tr("Agents execute. Humans hold the keys.", "Agents 執行；人類握著鑰匙。")}</h3><p>{tr("Agents use approved tools, stop at real risk and return exact approvals, artifacts and a verifiable outcome.", "Agents 使用已授權工具，遇到真風險才停下，帶回精確核准、產出物與可驗證成果。")}</p></div></li>
+        </ol>
+      </section>
+
+      <section className="relay-roles" id="roles">
+        <header><span>02 / {tr("BUILT AROUND YOUR ROLE", "從你的角色開始")}</span><h2>{tr("Whatever you own, Lucy assembles the team to finish it.", "不論你負責什麼，Lucy 都會組好一支團隊把它完成。")}</h2><p>{tr("Choose your role. See who Lucy invites, which Agents work, what stays with humans and what comes back finished.", "選擇你的角色。看看 Lucy 會邀請誰、哪些 Agents 會工作、什麼保留給人類，以及最後交回什麼。")}</p></header>
+        <div className="relay-role-tabs" role="tablist" aria-label={tr("Relay use cases by role", "依角色查看 Relay 使用情境")}>{scenarios.map((item) => { const Icon = item.icon; return <button key={item.id} type="button" role="tab" aria-selected={item.id === scenario.id} className={item.id === scenario.id ? "active" : ""} onClick={() => setScenarioId(item.id)}><Icon size={17}/>{item.role}</button>; })}</div>
+        <article className="relay-role-detail" role="tabpanel">
+          <div className="relay-role-brief"><span>{scenario.role}</span><h3>{scenario.mission}</h3><blockquote>“{scenario.prompt}”</blockquote><button type="button" onClick={() => start(scenario.prompt)}>{tr("Give this mission to Lucy", "把這個 Mission 交給 Lucy")}<ArrowRight size={17}/></button></div>
+          <div className="relay-role-execution">
+            <div><small>{tr("LUCY INVITES", "LUCY 邀請")}</small><p>{scenario.invitees.map((person) => <span key={person}><UserRound size={14}/>{person}</span>)}</p></div>
+            <div><small>{tr("AGENTS EXECUTE", "AGENTS 執行")}</small><p>{scenario.agents.map((agent) => <span key={agent}><Bot size={14}/>{agent}</span>)}</p></div>
+            <div><small>{tr("HUMAN AUTHORITY", "人類保留")}</small><strong><ShieldCheck size={17}/>{scenario.approval}</strong></div>
+            <div className="relay-role-outcome"><small>{tr("RELAY RETURNS", "RELAY 交回")}</small><strong><BadgeCheck size={18}/>{scenario.outcome}</strong></div>
+          </div>
+        </article>
+        <p className="relay-role-note">{tr("Also useful for procurement, customer success, compliance, events, research, content operations and any mission where several people and several tools must agree before AI acts.", "也適合採購、客戶成功、法遵、活動、研究、內容營運，以及任何需要多人、多工具先對齊，AI 才能動手的任務。")}</p>
       </section>
 
       <section className="quiet-proof" id="proof">
-        <div className="quiet-proof-copy"><span>02</span><h2>{tr("Not a staged animation. A finished Relay run.", "不是預製動畫。這是一筆完成的 Relay 執行。")}</h2><p>{tr("This example is loaded from Relay's production data model. Completed Agent work has a receipt; external actions stay visibly locked until a real connector and exact approval exist.", "這個範例直接讀取 Relay 的正式資料模型。Agent 完成的工作都有憑據；外部操作在真實連線與精確核准前會清楚保持鎖定。")}</p><Link to="/demo" className="quiet-text-action">{tr("Open the live proof", "查看即時完成證明")} <ArrowRight size={17}/></Link></div>
+        <div className="quiet-proof-copy"><span>03 / {tr("PROOF, NOT THEATRE", "成果，不是表演")}</span><h2>{tr("See the work. Inspect the proof.", "看見工作。檢查證明。")}</h2><p>{tr("The live canvas makes coordination visible. The receipt below comes from Relay's persisted product data: completed Agent work has an artifact; unsafe external action stays locked until the right human approves.", "即時白紙讓協作看得見。下方憑據來自 Relay 已保存的產品資料：完成的 Agent 工作有產出物；不安全的外部操作會保持鎖定，直到正確的人核准。")}</p><Link to="/demo" className="quiet-text-action">{tr("Run the live product demo", "親手操作即時 Demo")} <ArrowRight size={17}/></Link></div>
         <CompletedLaunchProof compact />
       </section>
 
-      <section className="quiet-final-cta"><h2>{tr("Give Lucy one goal.", "只要先告訴 Lucy 一個目標。")}</h2><p>{tr("Your team can lay back while the work keeps moving.", "剩下的交給 Relay，團隊不用再困在會議裡。")}</p><button type="button" onClick={() => navigate("/missions/new")}>{tr("Start with Lucy", "開始跟 Lucy 說")}<ArrowRight size={19}/></button></section>
+      <section className="quiet-final-cta"><span>{tr("USE RELAY. SKIP THE MEETING.", "用 RELAY。省下會議。")}</span><h2>{tr("Give Lucy the outcome. Get back finished work.", "把成果交代給 Lucy。拿回完成的工作。")}</h2><p>{tr("Start alone. Lucy will invite the right humans and Agents when the mission needs them.", "你可以一個人開始。Mission 需要時，Lucy 會再邀請正確的人類與 Agents。")}</p><button type="button" onClick={() => navigate("/missions/new")}>{tr("Start with Lucy", "開始跟 Lucy 說")}<ArrowRight size={19}/></button></section>
     </main>
-    <footer><Logo /><p>{tr("Humans decide. Agents finish.", "人類決定。Agents 完成。")}</p><span>© 2026 Relay</span></footer>
+    <footer><Logo /><p>{tr("Humans decide. Agents meet, execute and finish.", "人類決定。Agents 開會、執行、完成。")}</p><span>© 2026 Relay</span></footer>
   </div>;
 }
 
@@ -900,6 +1070,23 @@ function LiveMissionRuntime({ mission, collaboration, onRefresh, onInvite }: { m
   </section>;
 }
 
+function MissionAgentRibbon({ mission, collaboration, liveState, onOpenCanvas }: { mission: MissionDetail; collaboration?: CollaborationSnapshot; liveState: "connecting" | "live" | "reconnecting"; onOpenCanvas: () => void }) {
+  const activeRuns = collaboration?.runs.filter((run) => ["queued", "running", "pause_requested", "cancel_requested"].includes(run.status)) ?? [];
+  const workers = (mission.currentPlan?.tasks ?? []).filter((task) => task.ownerType === "agent").slice(0, 3);
+  const currentState = liveState === "reconnecting"
+    ? tr("Restoring the mission event stream", "正在恢復 Mission 即時連線")
+    : activeRuns.length
+      ? tr(`${activeRuns.length} Agents are executing the active plan`, `${activeRuns.length} 個 Agents 正在執行有效計畫`)
+      : mission.blockingConflicts
+        ? tr("Agents paused safely for a human decision", "Agents 已安全暫停，等待人類決定")
+        : tr("Lucy is watching the active contract", "Lucy 正在監看有效合約");
+  return <aside className="mission-agent-ribbon" aria-label={tr("Live Agent work", "即時 Agent 工作") }>
+    <button className="mission-agent-ribbon-title" type="button" onClick={onOpenCanvas}><span className={`canvas-live-dot ${liveState}`}/><p><small>{tr("LUCY · LIVE CANVAS", "LUCY · 即時白紙")}</small><b>{currentState}</b></p></button>
+    <div className="mission-agent-ribbon-runs">{workers.map((task) => { const run = activeRuns.find((item) => item.taskId === task.id); const status = run?.status ?? task.status; return <span key={task.id}><Bot size={14}/><b>{localizeDomainText(task.ownerName)}</b><small>{localizeLabel(status)}</small></span>; })}{!workers.length && <span><Bot size={14}/><b>Lucy</b><small>{tr("ready", "待命中")}</small></span>}</div>
+    <button className="mission-agent-ribbon-open" type="button" onClick={onOpenCanvas}>{tr("Open live canvas", "打開即時白紙")}<ArrowRight size={15}/></button>
+  </aside>;
+}
+
 function MissionPage() {
   const { id = "" } = useParams();
   const [params, setParams] = useSearchParams();
@@ -926,6 +1113,7 @@ function MissionPage() {
     const response = await api<{ collaboration: CollaborationSnapshot }>(`/api/missions/${id}/collaboration`);
     setCollaboration(response.collaboration);
   }, [id]);
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
   const refreshAll = useCallback(async () => { await Promise.all([loadMission(true), loadCollaboration()]); }, [loadMission, loadCollaboration]);
   useEffect(() => {
     void loadMission().then(() => loadCollaboration()).catch((err) => setError((err as Error).message));
@@ -999,6 +1187,7 @@ function MissionPage() {
     </div><nav className="mission-tabs" aria-label={tr("Mission views", "Mission 檢視")}>{missionTabs.map(([key, label, labelZh, Icon], index) => <button className={`${view === key ? "active" : ""} ${index > 2 ? "mission-tab-secondary" : ""}`} key={key} onClick={() => { setMobileMoreOpen(false); setParams({ view: key }); }} title={tr(label, labelZh)} aria-label={tr(label, labelZh)}><Icon size={18}/><span className="mission-tab-label">{tr(label, labelZh)}</span>{key === "conflicts" && mission.openConflicts > 0 && <em>{mission.openConflicts}</em>}{key === "approvals" && mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button>)}<button className={`mission-more-tab ${["access","approvals","evidence","outcome"].includes(view) || mobileMoreOpen ? "active" : ""}`} onClick={() => setMobileMoreOpen((open) => !open)} aria-expanded={mobileMoreOpen} aria-controls="mission-mobile-more"><Menu size={20}/><span className="mission-tab-label">{tr("More", "更多")}</span>{mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button></nav></header>
     {mobileMoreOpen && <div className="mission-mobile-more-scrim" onClick={() => setMobileMoreOpen(false)}><section id="mission-mobile-more" className="mission-mobile-more" aria-label={tr("More mission views", "更多 Mission 檢視")} onClick={(event) => event.stopPropagation()}><header><div><small>{tr("MORE", "更多")}</small><h2>{tr("Mission controls", "Mission 工具")}</h2></div><button type="button" onClick={() => setMobileMoreOpen(false)} aria-label={tr("Close more menu", "關閉更多選單")}><X size={20}/></button></header><div>{missionTabs.slice(3).map(([key, label, labelZh, Icon]) => <button type="button" className={view === key ? "active" : ""} key={key} onClick={() => { setMobileMoreOpen(false); setParams({ view: key }); }}><span><Icon size={20}/></span><p><b>{tr(label, labelZh)}</b><small>{key === "access" ? tr("Connect the tools Agents need", "連接 Agent 需要的工具") : key === "approvals" ? tr("Review exact high-impact actions", "檢查高影響操作") : key === "evidence" ? tr("See sources and every recorded change", "查看來源與所有變更") : tr("Verify whether the mission succeeded", "驗收 Mission 是否成功")}</small></p>{key === "approvals" && mission.pendingApprovals > 0 ? <em>{mission.pendingApprovals}</em> : <ArrowRight size={18}/>}</button>)}</div></section></div>}
     {(notice || error) && <div className={`toast-banner ${error ? "error" : ""}`}>{error ? <AlertOctagon size={17} /> : <BadgeCheck size={17} />}<span>{error || notice}</span><button className="icon-button" onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
+    {view !== "room" && <MissionAgentRibbon mission={mission} collaboration={collaboration} liveState={liveState} onOpenCanvas={() => setParams({ view: "room" })}/>}
     <div className={`mission-content mission-content-${view}`}>{view === "room" && <MissionRoom mission={mission} collaboration={collaboration} action={action} busy={busy} setView={(next) => setParams({ view: next })} onInvite={() => setInviteOpen(true)} onRefresh={refreshAll} liveState={liveState}/>} {view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy}/>} {view === "plan" && <PlanView mission={mission} action={action} busy={busy}/>} {view === "access" && <AccessView mission={mission} onRefresh={refreshAll}/>} {view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale}/>} {view === "evidence" && <EvidenceLedger mission={mission}/>} {view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy}/>}</div>
   </main></AppShell>;
 }
@@ -1186,7 +1375,7 @@ function MissionRoom({ mission, collaboration, action, busy, setView, onInvite =
     </section>
     <section className="flow-canvas" aria-label={tr("Mission execution canvas", "Mission 執行 Canvas")}>
       <div className="mobile-canvas-bar">
-        <div className="mobile-canvas-live"><span className={`canvas-live-dot ${liveState}`}/><p><small>{tr("RELAY LIVE CANVAS", "RELAY 即時白紙")}</small><b>{canvasState}</b>{latestCanvasEvent && <em>{localizeDomainText(latestCanvasEvent.actorName)} · {localizeDomainText(latestCanvasEvent.summary)}</em>}</p></div>
+        <div className="mobile-canvas-live"><span className={`canvas-live-dot ${liveState}`}/><p><small>{tr("RELAY LIVE CANVAS", "RELAY 即時白紙")}</small><b>{canvasState}</b>{latestCanvasEvent && <em>{localizeDomainText(latestCanvasEvent.actorName)} · {tr("Mission state updated", "Mission 狀態已更新")}</em>}</p></div>
         <button type="button" onClick={() => setMobileCanvasOpen((open) => !open)} aria-label={mobileCanvasOpen ? tr("Close full screen canvas", "關閉全螢幕白紙") : tr("Open full screen canvas", "全螢幕查看白紙")}>{mobileCanvasOpen ? <X size={19}/> : <Maximize2 size={19}/>}<span>{mobileCanvasOpen ? tr("Back", "返回") : tr("Expand", "放大")}</span></button>
       </div>
       <div className="flow-stage-labels" aria-hidden="true"><span>{tr("Evidence", "證據")}<small>{tr("What everyone said", "大家說過的話")}</small></span><span>Lucy<small>{tr("Mission partner", "Mission 搭檔")}</small></span><span>{tr("People + counterparts", "人類＋專屬 AI")}<small>{tr("One pair per teammate", "每位同事一組")}</small></span><span>{tr("Agent Council", "代理人會議")}<small>{tr("No human meeting", "人類不用開會")}</small></span><span>{tr("AI execution", "AI 執行")}<small>{tr("Work through verified tools", "透過已驗證工具工作")}</small></span><span>{tr("Outcome", "成果")}<small>{tr("Everyone signs off", "全員 sign off")}</small></span></div>
@@ -1372,8 +1561,11 @@ function LegacyDemoPage() {
 
 function DemoPage() {
   const navigate = useNavigate();
+  const demoScenario = getLandingScenarios().find((item) => item.id === "growth") ?? getLandingScenarios()[0];
+  const startDemoScenario = () => { sessionStorage.setItem("relay_lucy_goal", demoScenario.prompt); navigate("/missions/new?goal=1"); };
   return <div className="landing quiet-landing demo-live-page"><PublicHeader/><main>
-    <section className="quiet-demo-hero"><span>{tr("LIVE PRODUCT PROOF", "真實產品證明")}</span><h1>{tr("See what Relay finishes. Then run it on your team's mess.", "先看 Relay 完成了什麼。再用你的團隊難題親手 Run。")}</h1><p>{tr("The completion receipt comes from persisted product data. The compiler below waits for your input; nothing is pre-run for you.", "完成憑據來自已保存的產品資料；下方編譯器會等你輸入，不會先替你播放假結果。")}</p></section>
+    <section className="quiet-demo-hero"><span>{tr("LIVE PRODUCT PROOF", "真實產品證明")}</span><h1>{tr("Watch the AI team work. Then hand it your real mission.", "先看 AI 團隊工作。再把真實任務交給它。")}</h1><p>{tr("The canvas explains the operating model. The completion receipt and compiler below use persisted product data and the live API—not a prewritten result.", "白紙展示 Relay 如何工作；下方完成憑據與編譯器使用已保存的產品資料與即時 API，不是預先寫好的結果。")}</p></section>
+    <section className="quiet-demo-canvas"><LandingLiveCanvas scenario={demoScenario} onStart={startDemoScenario}/></section>
     <section className="quiet-demo-proof"><CompletedLaunchProof compact/></section>
     <section className="quiet-demo-run"><div><span>01</span><h2>{tr("Paste the versions that do not agree.", "把互相對不上的版本貼進來。")}</h2><p>{tr("Press Run. Relay will show the exact collision, the source, and what must stop before an Agent acts.", "按下 Run。Relay 會指出精確衝突、原始來源，以及 Agent 動手前必須先停下什麼。")}</p></div><LandingMagicCompiler onOpenFullMission={(brief) => { sessionStorage.setItem("relay_mission_draft", brief); navigate("/missions/new?draft=1"); }}/></section>
   </main></div>;

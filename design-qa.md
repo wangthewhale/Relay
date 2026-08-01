@@ -127,4 +127,20 @@ Date: 2026-08-01
 - Verification: TypeScript check passed; 34/34 tests passed across 7 files; production build passed.
 - Remaining P0/P1/P2 issues in the requested mobile journey: none.
 
+## Premium live-mission system and role journeys — 2026-08-01
+
+- Verified desktop viewport: 1440 × 1000 CSS px. Verified phone viewport: 390 × 844 CSS px.
+- P0 — the landing page explained Relay with a static timeline while the actual product was a live canvas. The first viewport now pairs one plain-language mission composer with the same zoomable React Flow grammar used inside the Mission Room.
+- The landing canvas cycles through explicit, labelled states: Lucy maps the goal, invites teammates, pairs each person with an AI counterpart, convenes Agent Council, executes work through Agents, learns from a correction and returns a verified outcome.
+- The restrained visual system uses white, black, neutral gray and one blue live signal. Editorial serif headings were removed from the primary product hierarchy; landing, dashboard, intake, Mission and contract views now share the same Manrope-based system.
+- Role discovery is interactive rather than a wall of marketing cards. Investor, CEO, Engineering, Product, Design, Finance, People/HR, Growth, Sales, Operations and Agency tabs each show a realistic prompt, invited humans, executing Agents, retained human authority and finished Relay output.
+- Mobile landing inspection confirmed a 43px primary headline, 17px explanatory copy, 16px mission input, large touch targets and no horizontal document overflow (`innerWidth = 390`, `documentElement.scrollWidth = 375`).
+- English mobile inspection confirmed that the headline, body and mission composer wrap inside the viewport without clipping or horizontal overflow.
+- Mission Room inspection confirmed that the live whiteboard remains the first mobile surface. Decision, Plan, Access, Approval, Evidence and Outcome views now retain a sticky Lucy live-work ribbon that returns to the canvas in one tap.
+- Lucy intake remains a single-action blank sheet. No identity form or connector setup appears before the user states an outcome.
+- Interaction checks passed: mobile navigation open/close, English/Traditional Chinese switching, role-tab switching, role content update, canvas animation, zoom controls, Mission Room loading, decision view, Plan view and one-tap return path to the live canvas.
+- Browser console review after the complete local journey: 0 warnings and 0 errors; only Vite connection and React development information messages were present.
+- Verification: TypeScript check passed; 34/34 tests passed across 7 files; production build passed.
+- Remaining P0/P1/P2 issues in the requested landing, role and live-canvas journey: none.
+
 final result: passed

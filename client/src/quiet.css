@@ -518,3 +518,319 @@ body { background: #fff; color: #111; -webkit-font-smoothing: antialiased; }
   .canvas-live-dot,
   .flow-node-agent .flow-node-icon { animation: none; }
 }
+
+/* Relay product system -----------------------------------------------------
+   One white surface, one live signal and one clear hierarchy. The canvas is
+   the product; everything else either explains it or lets a human govern it. */
+.quiet-landing,
+.app-shell,
+.join-page,
+.public-report-page { font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+.quiet-landing .public-header {
+  position: sticky;
+  top: 0;
+  z-index: 70;
+  height: 72px;
+  border-bottom: 1px solid #ececec;
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: blur(18px);
+}
+.quiet-landing .logo { font-size: 25px; font-weight: 800; letter-spacing: -.055em; }
+.quiet-landing .public-nav { gap: 24px; }
+
+.relay-hero {
+  width: min(1480px, calc(100% - 64px));
+  min-height: calc(100svh - 72px);
+  margin: 0 auto;
+  padding: clamp(64px, 8vh, 104px) 0 92px;
+  display: grid;
+  grid-template-columns: minmax(390px, .82fr) minmax(620px, 1.18fr);
+  align-items: center;
+  gap: clamp(48px, 6vw, 104px);
+}
+.relay-hero-copy { min-width: 0; }
+.relay-hero .quiet-eyebrow,
+.relay-method > header > span,
+.relay-roles > header > span,
+.quiet-final-cta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #646464;
+  font: 650 11px/1.4 "DM Mono", monospace;
+  letter-spacing: .1em;
+}
+.relay-hero .quiet-eyebrow > span { width: 8px; height: 8px; border-radius: 50%; background: #0066cc; box-shadow: 0 0 0 5px rgba(0, 102, 204, .08); animation: relay-live-pulse 1.8s ease-in-out infinite; }
+.relay-hero h1 {
+  max-width: 700px;
+  margin: 23px 0 0;
+  font-family: inherit;
+  font-size: clamp(54px, 5.25vw, 82px);
+  font-weight: 700;
+  line-height: 1.01;
+  letter-spacing: -.066em;
+}
+.relay-hero-lede { max-width: 640px; margin: 29px 0 0; color: #5f6063; font-size: clamp(17px, 1.4vw, 20px); line-height: 1.65; letter-spacing: -.018em; }
+.relay-hero .quiet-goal-composer { width: 100%; min-height: 76px; margin-top: 38px; padding: 9px 10px 9px 20px; grid-template-columns: auto minmax(0, 1fr) auto; border-radius: 22px; box-shadow: none; }
+.relay-hero .quiet-goal-composer:focus-within { border-color: #111; box-shadow: 0 0 0 4px rgba(0, 0, 0, .035); }
+.relay-hero .quiet-goal-composer > span { display: grid; color: #111; }
+.relay-hero .quiet-goal-composer input { font-size: 17px; }
+.relay-hero .quiet-goal-composer button { width: 54px; height: 54px; }
+.relay-hero .quiet-example { margin-top: 14px; color: #5e5e62; font-size: 13px; font-weight: 650; text-decoration: none; }
+.relay-hero .quiet-example:hover { color: #0066cc; }
+.relay-hero-boundary { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 10px 18px; color: #68686d; }
+.relay-hero-boundary span { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; }
+.relay-hero-boundary svg { color: #111; }
+
+.landing-live-canvas { min-width: 0; overflow: hidden; border: 1px solid #dadce0; border-radius: 26px; background: #fff; box-shadow: 0 30px 80px rgba(0, 0, 0, .075); }
+.landing-live-head { min-height: 76px; padding: 0 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e8e8e8; }
+.landing-live-head > div { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
+.landing-live-dot { width: 10px; height: 10px; border-radius: 50%; background: #0066cc; box-shadow: 0 0 0 6px rgba(0, 102, 204, .08); animation: relay-live-pulse 1.8s ease-in-out infinite; }
+.landing-live-head p { min-width: 0; margin: 0; display: grid; gap: 3px; }
+.landing-live-head small { color: #6c6c70; font: 650 10px/1.35 "DM Mono", monospace; letter-spacing: .09em; }
+.landing-live-head b { overflow: hidden; color: #111; font-size: 15px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.landing-live-head > span { color: #77777b; font: 600 11px "DM Mono", monospace; }
+.landing-canvas-stage { position: relative; height: 570px; background: #fafafa; }
+.landing-canvas-stage .react-flow { background: #fafafa; }
+.landing-canvas-stage .react-flow__controls { overflow: hidden; border: 1px solid #ddd; border-radius: 12px; box-shadow: none; }
+.landing-canvas-stage .react-flow__controls-button { width: 38px; height: 38px; border-color: #e5e5e5; background: rgba(255, 255, 255, .95); }
+.landing-canvas-stage .flow-node { border-color: #d9dce0; border-radius: 14px; background: rgba(255, 255, 255, .98); box-shadow: 0 9px 24px rgba(0, 0, 0, .055); }
+.landing-canvas-stage .flow-node-human,
+.landing-canvas-stage .flow-node-agent { border-color: #ccd8e6; }
+.landing-canvas-stage .flow-node-icon { border-radius: 12px; background: #f1f3f5; color: #111; }
+.landing-canvas-stage .flow-node-agent .flow-node-icon { background: #eef5fc; color: #0066cc; }
+.landing-canvas-stage .flow-node-top b { color: #111; }
+.landing-canvas-stage .flow-progress > span { background: #0066cc; }
+.landing-live-footer { min-height: 68px; padding: 10px 14px 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-top: 1px solid #e8e8e8; }
+.landing-live-footer > div { display: inline-flex; align-items: center; gap: 9px; color: #5e6065; font-size: 12px; font-weight: 650; }
+.landing-live-footer > div svg { color: #0066cc; }
+.landing-live-footer button { min-height: 44px; padding: 0 17px; display: inline-flex; align-items: center; gap: 9px; border: 0; border-radius: 999px; background: #111; color: #fff; font-size: 13px; font-weight: 750; cursor: pointer; }
+
+.relay-method,
+.relay-roles,
+.quiet-proof { width: min(1240px, calc(100% - 64px)); margin: 0 auto; padding: 132px 0; border-top: 1px solid #e5e5e5; }
+.relay-method > header,
+.relay-roles > header { max-width: 900px; }
+.relay-method h2,
+.relay-roles h2,
+.quiet-proof h2,
+.quiet-final-cta h2,
+.quiet-demo-hero h1,
+.quiet-demo-run h2 {
+  margin: 18px 0 0;
+  font-family: inherit;
+  font-weight: 650;
+  letter-spacing: -.055em;
+}
+.relay-method h2,
+.relay-roles h2 { font-size: clamp(44px, 5vw, 68px); line-height: 1.08; }
+.relay-method ol { margin: 76px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #ddd; list-style: none; }
+.relay-method li { min-height: 300px; padding: 30px 34px 30px 0; display: grid; align-content: space-between; border-right: 1px solid #ddd; }
+.relay-method li + li { padding-left: 34px; }
+.relay-method li:last-child { border-right: 0; }
+.relay-method li > span { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid #bfc0c2; border-radius: 50%; font: 600 12px "DM Mono", monospace; }
+.relay-method li h3 { margin: 0 0 15px; font-size: 22px; letter-spacing: -.035em; }
+.relay-method li p { margin: 0; color: #66676a; font-size: 16px; line-height: 1.65; }
+
+.relay-roles > header > p { max-width: 720px; margin: 27px 0 0; color: #67686b; font-size: 17px; line-height: 1.65; }
+.relay-role-tabs { margin-top: 64px; display: flex; flex-wrap: wrap; gap: 8px; }
+.relay-role-tabs button { min-height: 46px; padding: 0 16px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid #d8d8da; border-radius: 999px; background: #fff; color: #56575a; font-size: 14px; font-weight: 700; cursor: pointer; }
+.relay-role-tabs button:hover { border-color: #999; color: #111; }
+.relay-role-tabs button.active { border-color: #111; background: #111; color: #fff; }
+.relay-role-detail { margin-top: 24px; display: grid; grid-template-columns: minmax(0, .92fr) minmax(520px, 1.08fr); border: 1px solid #d9d9db; border-radius: 24px; overflow: hidden; }
+.relay-role-brief { padding: 52px; display: flex; flex-direction: column; align-items: flex-start; background: #111; color: #fff; }
+.relay-role-brief > span { color: #aaa; font: 600 11px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.relay-role-brief h3 { margin: 23px 0 0; color: #fff; font-size: clamp(30px, 3vw, 46px); line-height: 1.12; letter-spacing: -.045em; }
+.relay-role-brief blockquote { margin: 32px 0; padding: 0; color: #c9c9cc; font-size: 16px; line-height: 1.65; }
+.relay-role-brief button { min-height: 50px; margin-top: auto; padding: 0 19px; display: inline-flex; align-items: center; gap: 10px; border: 0; border-radius: 999px; background: #fff; color: #111; font-size: 14px; font-weight: 750; cursor: pointer; }
+.relay-role-execution { display: grid; background: #fff; }
+.relay-role-execution > div { min-height: 128px; padding: 24px 30px; display: grid; align-content: center; gap: 13px; border-bottom: 1px solid #e4e4e5; }
+.relay-role-execution > div:last-child { border-bottom: 0; }
+.relay-role-execution small { color: #707176; font: 650 10px "DM Mono", monospace; letter-spacing: .09em; }
+.relay-role-execution p { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.relay-role-execution p span { min-height: 34px; padding: 0 11px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #dedee0; border-radius: 999px; color: #333438; font-size: 13px; font-weight: 650; }
+.relay-role-execution strong { display: flex; align-items: flex-start; gap: 11px; color: #202124; font-size: 17px; line-height: 1.5; }
+.relay-role-execution strong svg { margin-top: 3px; color: #0066cc; }
+.relay-role-outcome { background: #f5f8fb; }
+.relay-role-note { max-width: 900px; margin: 28px 0 0; color: #76777b; font-size: 14px; line-height: 1.65; }
+
+.quiet-proof { grid-template-columns: minmax(0, .8fr) minmax(540px, 1.2fr); }
+.quiet-proof-copy h2 { font-size: clamp(44px, 4.5vw, 64px); line-height: 1.08; }
+.quiet-proof-copy > span { line-height: 1.45; }
+.quiet-final-cta { padding: 150px 24px; background: #111; color: #fff; }
+.quiet-final-cta > span { color: #9d9da2; }
+.quiet-final-cta h2 { max-width: 920px; color: #fff; font-size: clamp(48px, 6vw, 80px); line-height: 1.05; }
+.quiet-final-cta p { max-width: 650px; color: #b8b8bc; line-height: 1.6; }
+.quiet-final-cta button { background: #fff; color: #111; }
+
+.quiet-demo-hero { width: min(1000px, calc(100% - 64px)); }
+.quiet-demo-hero h1 { font-size: clamp(50px, 6vw, 78px); line-height: 1.06; }
+.quiet-demo-canvas { width: min(1280px, calc(100% - 64px)); margin: 0 auto 110px; }
+.quiet-demo-canvas .landing-canvas-stage { height: 520px; }
+.quiet-demo-proof { padding-top: 110px; border-top: 1px solid #e5e5e5; }
+.quiet-demo-run { width: min(1240px, calc(100% - 64px)); }
+
+/* The live whiteboard remains one click away from every mission view. */
+.mission-agent-ribbon {
+  position: sticky;
+  top: 72px;
+  z-index: 32;
+  min-height: 70px;
+  margin-left: 64px;
+  padding: 10px 22px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  align-items: center;
+  gap: 22px;
+  border-bottom: 1px solid #e4e4e6;
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: blur(18px);
+}
+.mission-agent-ribbon button { border: 0; background: transparent; cursor: pointer; }
+.mission-agent-ribbon-title { min-width: 0; padding: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; text-align: left; }
+.mission-agent-ribbon .canvas-live-dot { background: #0066cc; box-shadow: 0 0 0 5px rgba(0, 102, 204, .08); }
+.mission-agent-ribbon-title p { min-width: 0; margin: 0; display: grid; gap: 3px; }
+.mission-agent-ribbon-title small { color: #0066cc; font: 650 10px "DM Mono", monospace; letter-spacing: .08em; }
+.mission-agent-ribbon-title b { overflow: hidden; color: #111; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.mission-agent-ribbon-runs { display: flex; align-items: center; gap: 8px; }
+.mission-agent-ribbon-runs > span { min-height: 38px; padding: 0 11px; display: grid; grid-template-columns: auto auto; align-content: center; column-gap: 7px; border: 1px solid #e1e1e3; border-radius: 12px; }
+.mission-agent-ribbon-runs svg { grid-row: 1 / 3; color: #0066cc; }
+.mission-agent-ribbon-runs b { max-width: 110px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.mission-agent-ribbon-runs small { color: #737479; font-size: 9px; }
+.mission-agent-ribbon-open { padding: 9px 0 9px 12px !important; display: inline-flex; align-items: center; gap: 8px; color: #111; font-size: 12px; font-weight: 750; }
+
+/* Premium clarity across workspace, intake and contract screens. */
+.page-title h1,
+.view-heading h2,
+.mobile-room-hero h1,
+.lucy-mobile-welcome h1,
+.quiet-landing .completion-proof-title h3 { font-family: "Manrope", ui-sans-serif, system-ui, sans-serif; font-weight: 650; letter-spacing: -.045em; }
+.page-title h1 { font-size: clamp(38px, 4vw, 58px); }
+.view-heading h2 { font-size: clamp(34px, 3.4vw, 50px); line-height: 1.08; }
+.page-title p,
+.view-heading p { color: #646569; font-size: 16px; line-height: 1.65; }
+.panel,
+.stat-card,
+.dashboard-proof-band,
+.missions-panel,
+.attention-panel,
+.access-card,
+.task-card,
+.conflict-card,
+.approval-card,
+.evidence-card,
+.outcome-contract,
+.coordination-baseline { border-radius: 16px; }
+.mission-header { height: 72px; background: rgba(255, 255, 255, .97); }
+.mission-tabs button.active { color: #111; }
+.live-signal.live,
+.mobile-live,
+.flow-activity-title small,
+.runtime-section-title em { color: #0066cc; }
+.live-signal.live > span,
+.mobile-live > span,
+.flow-activity-title small > span { background: #0066cc; box-shadow: 0 0 0 5px rgba(0, 102, 204, .08); }
+.lucy-chat,
+.lucy-chat-pill { border-radius: 20px; }
+.lucy-messages p,
+.lucy-messages .human p { font-size: 16px; line-height: 1.55; }
+.lucy-suggestions button { min-height: 46px; font-size: 14px; }
+.lucy-composer input,
+.mobile-lucy-command input,
+.flow-command input { font-size: 16px; }
+
+@media (max-width: 1100px) {
+  .relay-hero { grid-template-columns: 1fr; width: min(840px, calc(100% - 48px)); }
+  .relay-hero-copy { max-width: 760px; }
+  .landing-live-canvas { width: 100%; }
+  .relay-role-detail { grid-template-columns: 1fr; }
+  .relay-role-brief { min-height: 430px; }
+  .mission-agent-ribbon { margin-left: 0; }
+}
+
+@media (max-width: 760px) {
+  .quiet-landing .public-header { height: 64px; padding: 0 18px; }
+  .quiet-landing .public-nav { top: 64px; padding: 14px 18px 20px; }
+  .quiet-landing .public-nav > a { min-height: 48px; font-size: 15px; }
+  .relay-hero { width: calc(100% - 32px); min-height: auto; padding: 50px 0 82px; gap: 46px; }
+  .relay-hero .quiet-eyebrow { margin-bottom: 0; font-size: 10px; }
+  .relay-method > header > span,
+  .relay-roles > header > span,
+  .quiet-final-cta > span { font-size: 12px; }
+  .relay-hero h1 { margin-top: 20px; font-size: clamp(43px, 12vw, 57px); line-height: 1.03; letter-spacing: -.064em; }
+  .relay-hero-lede { margin-top: 23px; font-size: 17px; line-height: 1.58; }
+  .relay-hero .quiet-goal-composer { min-height: 70px; margin-top: 30px; padding-left: 16px; border-radius: 20px; }
+  .relay-hero .quiet-goal-composer input { min-height: 50px; font-size: 16px; }
+  .relay-hero .quiet-goal-composer button { width: 50px; height: 50px; }
+  .relay-hero-boundary { margin-top: 25px; display: grid; gap: 10px; }
+  .relay-hero-boundary span { font-size: 13px; }
+
+  .landing-live-canvas { border-radius: 20px; box-shadow: 0 20px 55px rgba(0, 0, 0, .07); }
+  .landing-live-head { min-height: 78px; padding: 0 16px; }
+  .landing-live-head b { font-size: 14px; }
+  .landing-live-head > span { display: none; }
+  .landing-canvas-stage { height: 450px; }
+  .landing-canvas-stage .react-flow__controls { left: 10px; bottom: 10px; }
+  .landing-live-footer { min-height: 92px; padding: 12px 14px; align-items: stretch; flex-direction: column; }
+  .landing-live-footer > div { font-size: 13px; line-height: 1.45; }
+  .landing-live-footer button { min-height: 48px; justify-content: center; font-size: 14px; }
+
+  .relay-method,
+  .relay-roles,
+  .quiet-proof { width: calc(100% - 32px); padding: 88px 0; }
+  .relay-method h2,
+  .relay-roles h2 { font-size: 41px; line-height: 1.08; }
+  .relay-method ol { margin-top: 48px; grid-template-columns: 1fr; }
+  .relay-method li,
+  .relay-method li + li { min-height: 0; padding: 26px 0; grid-template-columns: 46px minmax(0, 1fr); align-content: start; gap: 16px; border-right: 0; border-bottom: 1px solid #ddd; }
+  .relay-method li:last-child { border-bottom: 0; }
+  .relay-method li h3 { margin-top: 3px; font-size: 21px; }
+  .relay-method li p { font-size: 16px; }
+  .relay-roles > header > p { font-size: 16px; }
+  .relay-role-tabs { margin: 40px -16px 0; padding: 0 16px 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .relay-role-tabs::-webkit-scrollbar { display: none; }
+  .relay-role-tabs button { flex: 0 0 auto; min-height: 48px; font-size: 15px; }
+  .relay-role-detail { margin-top: 16px; border-radius: 20px; }
+  .relay-role-brief { min-height: 430px; padding: 32px 24px; }
+  .relay-role-brief h3 { font-size: 34px; }
+  .relay-role-brief blockquote { font-size: 16px; }
+  .relay-role-brief button { width: 100%; min-height: 52px; justify-content: center; font-size: 15px; }
+  .relay-role-execution > div { min-height: 120px; padding: 22px; }
+  .relay-role-execution p span { min-height: 38px; font-size: 14px; }
+  .relay-role-execution strong { font-size: 16px; }
+  .relay-role-note { font-size: 15px; }
+
+  .quiet-proof { gap: 40px; }
+  .quiet-proof-copy h2 { font-size: 42px; }
+  .quiet-final-cta { padding: 104px 20px; }
+  .quiet-final-cta h2 { font-size: 46px; }
+  .quiet-final-cta p { font-size: 17px; }
+  .quiet-demo-hero { width: calc(100% - 32px); padding: 78px 0 52px; }
+  .quiet-demo-hero h1 { font-size: 46px; }
+  .quiet-demo-canvas { width: calc(100% - 32px); margin-bottom: 82px; }
+  .quiet-demo-canvas .landing-canvas-stage { height: 450px; }
+  .quiet-demo-proof { padding-top: 82px; }
+  .quiet-demo-run { width: calc(100% - 32px); }
+
+  .mission-agent-ribbon { top: 64px; min-height: 72px; padding: 10px 16px; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+  .mission-agent-ribbon-runs { display: none; }
+  .mission-agent-ribbon-title b { font-size: 14px; }
+  .mission-agent-ribbon-open { min-width: 46px; width: 46px; height: 46px; padding: 0 !important; justify-content: center; border-radius: 50% !important; background: #111 !important; color: #fff !important; font-size: 0 !important; }
+  .mission-agent-ribbon-open svg { width: 18px; height: 18px; }
+
+  .mission-content:not(.mission-content-room) { padding-top: 30px; }
+  .page-title h1 { font-size: 36px; line-height: 1.08; }
+  .view-heading h2 { font-size: 32px; line-height: 1.12; }
+  .page-title p,
+  .view-heading p { font-size: 16px; }
+  .mobile-room-hero h1,
+  .lucy-mobile-welcome h1 { font-family: "Manrope", ui-sans-serif, system-ui, sans-serif; font-size: 34px; font-weight: 650; }
+  .mobile-room-hero > p,
+  .lucy-mobile-welcome p { font-size: 17px; line-height: 1.58; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .relay-hero .quiet-eyebrow > span,
+  .landing-live-dot { animation: none; }
+}

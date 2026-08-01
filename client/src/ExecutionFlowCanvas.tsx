@@ -68,16 +68,18 @@ function MissionFlowNodeCard({ data }: NodeProps<MissionFlowNode>) {
   </div>;
 }
 
-export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect, onNodeAction }: { nodes: MissionFlowNode[]; edges: Edge[]; onConflictSelect: (id: string) => void; onNodeAction?: (node: MissionFlowNode) => void }) {
+export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect, onNodeAction, presentation = false }: { nodes: MissionFlowNode[]; edges: Edge[]; onConflictSelect: (id: string) => void; onNodeAction?: (node: MissionFlowNode) => void; presentation?: boolean }) {
   const nodeTypes = useMemo(() => ({ missionNode: MissionFlowNodeCard }), []);
   const compact = typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
   // A full-graph fit makes every card unreadably tiny on a phone. Start on the
   // human → counterpart → Agent Council handoff; the Fit View control remains
   // available when someone wants the whole mission map.
-  const defaultViewport = compact ? { x: -700, y: 158, zoom: 0.8 } : { x: 12, y: 100, zoom: 0.88 };
-  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .72 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} panOnScroll={false} zoomOnPinch zoomOnScroll={!compact} preventScrolling={!compact} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); onNodeAction?.(node); }} proOptions={{ hideAttribution: true }}>
+  const defaultViewport = presentation
+    ? compact ? { x: -95, y: 120, zoom: 0.52 } : { x: 24, y: 104, zoom: 0.64 }
+    : compact ? { x: -700, y: 158, zoom: 0.8 } : { x: 12, y: 100, zoom: 0.88 };
+  return <ReactFlow className={presentation ? "presentation-flow" : undefined} nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .72 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} panOnScroll={false} zoomOnPinch zoomOnScroll={!compact} preventScrolling={!compact} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); onNodeAction?.(node); }} proOptions={{ hideAttribution: true }}>
     <Background color="#d7d8d2" gap={24} size={1} />
     <Controls position="bottom-left" showInteractive={false} />
-    <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor={(node) => node.data.variant === "conflict" ? "#ef5b55" : node.data.variant === "human" ? "#7659e8" : node.data.variant === "agent" ? "#4175d6" : "#baff39"} />
+    {!presentation && <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor={(node) => node.data.variant === "conflict" ? "#ef5b55" : node.data.variant === "human" ? "#7659e8" : node.data.variant === "agent" ? "#4175d6" : "#baff39"} />}
   </ReactFlow>;
 }

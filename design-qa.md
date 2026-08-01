@@ -75,4 +75,29 @@ Date: 2026-08-01
 - Connector test coverage increased from 32 to 34 passing tests, including minimum Google scope selection and unsupported-capability rejection.
 - Remaining P0/P1/P2 issues in the mobile typography and Plugin Library journey: none.
 
+## Collapsible Lucy and action-first mobile workspace — 2026-08-01
+
+- Source references:
+  - `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/5ED5B839-D8A3-47FA-9EBE-322AE1034F3D/1-照片-1.jpg`
+  - `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/5ED5B839-D8A3-47FA-9EBE-322AE1034F3D/2-照片-2.jpg`
+  - `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/5ED5B839-D8A3-47FA-9EBE-322AE1034F3D/3-照片-3.jpg`
+- Production viewport: 390 × 844 CSS px. Captured page bitmap: 375 × 812 px due to the connected browser's content-area inset.
+- Production screenshots:
+  - `audit/mobile-redesign-2026-08-01/01-production-intake.png`
+  - `audit/mobile-redesign-2026-08-01/02-lucy-expanded.png`
+  - `audit/mobile-redesign-2026-08-01/03-lucy-collapsed.png`
+  - `audit/mobile-redesign-2026-08-01/04-production-room.png`
+  - `audit/mobile-redesign-2026-08-01/05-mobile-more-sheet.png`
+  - `audit/mobile-redesign-2026-08-01/06-mobile-mission-map.png`
+- Same-input before/after review: `audit/mobile-redesign-2026-08-01/07-before-after-comparison.jpg` (800 × 888 px). Both sides were normalized to the same 390 × 844 review frame.
+- The default mobile state now answers one question only: what needs the human now. The blocking decision, decision owner, and CTA lead the page; Agent progress, team synchronization, and recent activity follow in that order.
+- The desktop-scale graph is no longer the default mobile surface. It remains available through the explicit `查看完整 Mission 全局` action and opens as a dedicated zoomable canvas with a visible `返回現在` control.
+- Lucy opens as a readable bottom conversation sheet, collapses through the labelled `收起 Lucy 對話` control, persists that preference, and reopens from a compact bottom status pill.
+- Mobile navigation now has four primary destinations: 現在、要決定、計畫、更多. Tools, approvals, history, and outcomes are progressively disclosed in the `更多` bottom sheet.
+- Production interaction checks passed: Lucy open → collapse → reopen; More sheet open → close; mission map open → return to Now.
+- Responsive inspection: `innerWidth = 390`, `innerHeight = 844`, `documentElement.scrollWidth = 375`; no horizontal document overflow.
+- Production browser console after the full mobile journey: 0 warnings and 0 errors.
+- Verification: TypeScript check passed; 34/34 tests passed across 7 files; production build passed; deployment published successfully.
+- Remaining P0/P1/P2 issues in the requested mobile journey: none.
+
 final result: passed

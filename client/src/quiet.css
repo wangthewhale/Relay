@@ -443,10 +443,10 @@ body { background: #fff; color: #111; -webkit-font-smoothing: antialiased; }
   .canvas-live-dot { width: 10px; height: 10px; border-radius: 50%; background: #111; animation: relay-live-pulse 1.7s ease-in-out infinite; }
   .canvas-live-dot.reconnecting { background: #b42318; }
   .mobile-canvas-live p { min-width: 0; margin: 0; display: grid; gap: 1px; }
-  .mobile-canvas-live small { color: #555; font: 700 11px/1.25 "DM Mono", monospace; letter-spacing: .06em; }
-  .mobile-canvas-live b { overflow: hidden; color: #111; font-size: 14px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
-  .mobile-canvas-live em { overflow: hidden; color: #666; font: normal 12px/1.3 Inter, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
-  .mobile-canvas-bar button { flex: 0 0 auto; min-width: 76px; min-height: 46px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 999px; background: #111; color: #fff; font-size: 13px; font-weight: 800; }
+  .mobile-canvas-live small { color: #555; font: 700 13px/1.25 "DM Mono", monospace; letter-spacing: .045em; }
+  .mobile-canvas-live b { overflow: hidden; color: #111; font-size: 15px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-canvas-live em { overflow: hidden; color: #555; font: normal 13px/1.35 Inter, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-canvas-bar button { flex: 0 0 auto; min-width: 76px; min-height: 46px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 999px; background: #111; color: #fff; font-size: 14px; font-weight: 800; }
 
   /* Full-screen is still available, but the canvas no longer disappears by
      default. The same graph simply grows to the available viewport. */
@@ -473,42 +473,42 @@ body { background: #fff; color: #111; -webkit-font-smoothing: antialiased; }
   .version-picker { gap: 10px; color: #333; font-size: 14px; }
   .version-picker select { min-height: 50px; font-size: 16px; }
   .contract-invariants { padding: 18px; gap: 14px; border-radius: 18px; }
-  .contract-invariants > div { color: #fff; font-size: 12px; line-height: 1.4; }
+  .contract-invariants > div { color: #fff; font-size: 14px; line-height: 1.5; }
   .contract-invariants p { color: #e1e1e1; font-size: 14px; line-height: 1.55; }
-  .panel-heading > div > span { color: #555; font-size: 12px; }
+  .panel-heading > div > span { color: #555; font-size: 13px; }
   .panel-heading h2 { font-size: 25px; line-height: 1.2; }
   .diff-item { min-height: 98px; padding: 18px; }
   .diff-item b { color: #111; font-size: 16px; }
   .diff-item p { color: #555; font-size: 14px; line-height: 1.55; }
-  .task-graph-head { font-size: 12px; }
+  .task-graph-head { font-size: 13px; }
   .task-summary { min-height: 88px; padding: 14px; }
-  .task-key b { font-size: 13px; }
-  .task-key small { font-size: 12px; }
+  .task-key b { font-size: 14px; }
+  .task-key small { font-size: 13px; }
   .task-title b { color: #111; font-size: 16px; line-height: 1.4; }
   .task-title small { color: #666; font-size: 14px; line-height: 1.45; }
   .status-pill,
-  .risk-badge { font-size: 12px; }
-  .task-detail span { color: #555; font-size: 12px; }
+  .risk-badge { font-size: 13px; }
+  .task-detail span { color: #555; font-size: 13px; }
   .task-detail p { color: #222; font-size: 15px; line-height: 1.55; }
 
   .conflict-summary > span { min-height: 52px; padding: 11px 4px; color: #555; font-size: 13px; white-space: normal; text-align: center; }
   .conflict-number { padding: 16px 18px; color: #111; font-size: 14px; }
   .conflict-card-main { padding: 20px 18px; }
   .conflict-tags span,
-  .blocking-tag { font-size: 12px; line-height: 1.3; }
+  .blocking-tag { font-size: 13px; line-height: 1.3; }
   .conflict-head h3 { color: #111; font-size: 25px; line-height: 1.25; }
   .conflict-head p { color: #555; font-size: 16px; line-height: 1.6; }
-  .decision-owner span { color: #555; font-size: 12px; }
+  .decision-owner span { color: #555; font-size: 13px; }
   .decision-owner b { color: #111; font-size: 16px; }
   .decision-owner small { color: #666; font-size: 13px; }
   .conflict-source-proof { padding: 14px; }
-  .conflict-source-proof > span { color: #555; font-size: 12px; }
+  .conflict-source-proof > span { color: #555; font-size: 13px; }
   .conflict-source-proof q { color: #222; font-size: 15px; line-height: 1.55; }
-  .conflict-source-proof small { color: #666; font-size: 12px; line-height: 1.45; }
-  .consequence span { color: #7a201d; font-size: 12px; }
+  .conflict-source-proof small { color: #666; font-size: 13px; line-height: 1.45; }
+  .consequence span { color: #7a201d; font-size: 13px; }
   .consequence p { color: #4a2422; font-size: 15px; line-height: 1.55; }
   .option-top b { color: #111; font-size: 16px; }
-  .option-top span { font-size: 12px; }
+  .option-top span { font-size: 13px; }
   .resolution-option > p { color: #555; font-size: 15px; line-height: 1.55; }
   .option-impact span { color: #555; font-size: 13px; }
 }

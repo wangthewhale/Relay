@@ -100,4 +100,31 @@ Date: 2026-08-01
 - Verification: TypeScript check passed; 34/34 tests passed across 7 files; production build passed; deployment published successfully.
 - Remaining P0/P1/P2 issues in the requested mobile journey: none.
 
+## Live whiteboard restored and mobile contrast pass — 2026-08-01
+
+- Source references:
+  - `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/B99BC1BB-DF3C-4D74-8CD3-847139384A9B/1-照片-1.jpg`
+  - `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/B99BC1BB-DF3C-4D74-8CD3-847139384A9B/2-照片-2.jpg`
+  - `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/B99BC1BB-DF3C-4D74-8CD3-847139384A9B/3-照片-3.jpg`
+- Verified mobile viewport: 390 × 844 CSS px.
+- Same-input before/after comparison: `audit/live-canvas-mobile-2026-08-01/before-after-mobile.png` (780 × 844 px).
+- Live-canvas evidence: `audit/live-canvas-mobile-2026-08-01/mobile-now-live-canvas-verified.png`.
+- Full-screen and contextual action evidence:
+  - `audit/live-canvas-mobile-2026-08-01/mobile-canvas-fullscreen.png`
+  - `audit/live-canvas-mobile-2026-08-01/mobile-canvas-action-sheet.png`
+- Readability evidence:
+  - `audit/live-canvas-mobile-2026-08-01/mobile-now-decision-card.png`
+  - `audit/live-canvas-mobile-2026-08-01/mobile-plan-top-readable.png`
+  - `audit/live-canvas-mobile-2026-08-01/mobile-conflict-readable.png`
+- P0 — the real React Flow mission graph was explicitly hidden in the default phone view. The same SSE-backed graph now occupies the first screen, ahead of the linear decision and activity details.
+- P1 — the black decision surface inherited dark descendant text. Decision title, owner, explanation, and waiting receipt now use explicit white or high-contrast gray tokens.
+- P1 — plan invariants, version diffs, task summaries, conflict sources, option impacts, and metadata retained 7–11px desktop sizing. Phone typography now follows a 12px metadata, 14px support, and 16px body baseline.
+- P2 — wheel or trackpad scrolling over the embedded graph could move the graph rather than the page. Compact mode keeps drag and pinch-to-zoom but releases vertical page scrolling; verification moved `window.scrollY` from 0 to 420 while the canvas node moved with the document.
+- The live receipt states what Agents are doing, identifies the latest persisted event, and changes when the SSE connection is recovering. Running, meeting, and listening Agent nodes receive a restrained live pulse; reduced-motion settings disable it.
+- Default phone framing focuses the human → dedicated counterpart → Agent Council handoff at 0.8 zoom. The user can pan, pinch, use zoom controls, or expand the same graph to full screen.
+- Interaction verification passed: create a Mission through Lucy → load the live whiteboard → expand and return → tap a counterpart node → reveal teammate, plugin, file, and task actions → navigate to readable Plan and Decision views.
+- Browser console review: 0 warnings and 0 errors.
+- Verification: TypeScript check passed; 34/34 tests passed across 7 files; production build passed.
+- Remaining P0/P1/P2 issues in the requested mobile journey: none.
+
 final result: passed

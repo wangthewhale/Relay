@@ -127,19 +127,27 @@ function short(value: string, fallback: string, max = 74) {
 
 export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { onLaunch: (draft: LucyMissionDraft) => Promise<void> | void; busy: boolean; stage: string; error: string }) {
   const { locale } = useLocale();
-  const [started, setStarted] = useState(false);
+  const [seedGoal] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.sessionStorage.getItem("relay_lucy_goal")?.trim() ?? "";
+  });
+  const [started, setStarted] = useState(Boolean(seedGoal));
   const [phase, setPhase] = useState<LucyPhase>("identity");
-  const [memory, setMemory] = useState<LucyMemory>(emptyMemory);
+  const [memory, setMemory] = useState<LucyMemory>(() => ({ ...emptyMemory, objective: seedGoal }));
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [modelUsed, setModelUsed] = useState<boolean>();
   const [localError, setLocalError] = useState("");
-  const [selectedNode, setSelectedNode] = useState("start");
+  const [selectedNode, setSelectedNode] = useState(seedGoal ? "goal" : "start");
   const [chatOpen, setChatOpen] = useState(() => {
     if (typeof window === "undefined") return true;
+    if (seedGoal) return true;
     return window.localStorage.getItem("relay-lucy-chat") !== "collapsed";
   });
-  const [messages, setMessages] = useState<LucyMessage[]>(() => [{
+  const [messages, setMessages] = useState<LucyMessage[]>(() => seedGoal ? [
+    { id: "seed-goal", role: "human", body: seedGoal },
+    { id: "seed-reply", role: "lucy", body: tr("I’ll hold that outcome for the whole mission. Before I bring in the team, what should I call you—and what do you own here?", "這個目標我會替整個 Mission 守住。開始找團隊加入之前，我該怎麼稱呼你？你在這裡負責什麼？") },
+  ] : [{
     id: "hello",
     role: "lucy",
     body: tr("Hi, I’m Lucy—your counterpart for this mission. I’ll remember your point of view, bring in the right people, and let the Agents do the meeting. What should I call you, and what do you own here?", "嗨，我是 Lucy，這個 Mission 裡專門替你守住目標的 AI 搭檔。我會記住你的立場、找對的人加入，也會讓 Agents 代替大家開會。你希望我怎麼稱呼你？你在這裡負責什麼？"),
@@ -152,6 +160,9 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
   useEffect(() => {
     if (typeof window !== "undefined") window.localStorage.setItem("relay-lucy-chat", chatOpen ? "open" : "collapsed");
   }, [chatOpen]);
+  useEffect(() => {
+    if (seedGoal && typeof window !== "undefined") window.sessionStorage.removeItem("relay_lucy_goal");
+  }, [seedGoal]);
 
   const start = () => { setStarted(true); setChatOpen(true); setSelectedNode("lucy"); };
   const reset = () => {
@@ -174,9 +185,14 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
     setMessages((current) => [...current, { id: `human-${Date.now()}`, role: "human", body: message }]);
     try {
       const response = await api<LucyReply>("/api/lucy/turn", { method: "POST", body: JSON.stringify({ locale, phase, message, memory }) });
-      setMemory(response.memory); setPhase(response.nextPhase); setModelUsed(response.modelUsed);
-      setMessages((current) => [...current, { id: `lucy-${Date.now()}`, role: "lucy", body: response.reply }]);
-      setSelectedNode(response.nextPhase === "objective" ? "identity" : response.nextPhase === "context" ? "goal" : response.nextPhase === "success" ? "team" : response.nextPhase === "ready" ? "outcome" : "lucy");
+      const goalWasAlreadyCaptured = phase === "identity" && memory.objective.trim().length >= 3 && response.nextPhase === "objective";
+      const nextPhase = goalWasAlreadyCaptured ? "context" : response.nextPhase;
+      const reply = goalWasAlreadyCaptured
+        ? tr("I know your role and I’m still holding the goal you gave me. Who must be involved, what approval or file cannot be missing, and what must never go wrong?", "你的角色我記住了，剛才的目標也還在。這件事一定要找誰加入、不能少哪個授權或檔案，以及有什麼絕對不能出錯？")
+        : response.reply;
+      setMemory(response.memory); setPhase(nextPhase); setModelUsed(response.modelUsed);
+      setMessages((current) => [...current, { id: `lucy-${Date.now()}`, role: "lucy", body: reply }]);
+      setSelectedNode(nextPhase === "objective" ? "identity" : nextPhase === "context" ? "goal" : nextPhase === "success" ? "team" : nextPhase === "ready" ? "outcome" : "lucy");
     } catch (requestError) {
       setLocalError((requestError as Error).message);
     } finally { setThinking(false); }

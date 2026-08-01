@@ -144,10 +144,10 @@ function PublicHeader() {
     <header className="public-header">
       <Logo />
       <nav className={open ? "public-nav open" : "public-nav"}>
-        <a href="#pain">{tr("Why agents fail", "Agent 為何做錯")}</a><a href="#plain-tech">{tr("How Relay stops it", "Relay 怎麼阻擋")}</a><a href="#use-cases">{tr("Launch scenarios", "Launch 場景")}</a><a href="#proof">{tr("Verified today", "目前已驗證")}</a>
+        <a href="#how">{tr("How it works", "如何運作")}</a><a href="#proof">{tr("Proof", "完成證明")}</a>
         <LanguageSwitcher compact />
-        <Link to="/demo" className="text-link">{tr("Interactive demo", "可操作範例")}</Link>
-        <Link to="/missions/new" className="button button-small button-dark">{tr("Paste a mission", "貼上任務")} <ArrowRight size={15} /></Link>
+        <Link to="/demo" className="text-link">{tr("Live demo", "即時 Demo")}</Link>
+        <Link to="/missions/new" className="quiet-start-link">{tr("Start a mission", "開始一個 Mission")} <ArrowRight size={17} /></Link>
       </nav>
       <button className="icon-button mobile-menu" onClick={() => setOpen((value) => !value)} aria-label={tr("Toggle menu", "開關選單")}><Menu size={20} /></button>
     </header>
@@ -304,7 +304,7 @@ function CompletedLaunchProof({ compact = false }: { compact?: boolean }) {
   </aside>;
 }
 
-function LandingPage() {
+function LegacyLandingPage() {
   const navigate = useNavigate();
   const { locale } = useLocale();
   return (
@@ -401,6 +401,69 @@ function LandingPage() {
       <footer><Logo /><p>{tr("Git for organizational intent—and the control plane for AI execution.", "組織意圖的 Git，也是 AI 執行的控制層。")}</p><span>© 2026 Relay</span></footer>
     </div>
   );
+}
+
+function LandingPage() {
+  const navigate = useNavigate();
+  const { locale } = useLocale();
+  const [goal, setGoal] = useState("");
+  const sampleGoal = tr(
+    "Launch our new product by September 15. Finance must approve spend, Design must approve creative, and no existing customers may receive the announcement.",
+    "9 月 15 日前推出新產品。財務要核准預算、設計要核准素材，而且不能把公告寄給既有客戶。",
+  );
+  const begin = (event: FormEvent) => {
+    event.preventDefault();
+    const value = goal.trim();
+    if (value.length < 3) return;
+    sessionStorage.setItem("relay_lucy_goal", value);
+    navigate("/missions/new?goal=1");
+  };
+
+  return <div className="landing quiet-landing">
+    <PublicHeader />
+    <main>
+      <section className="quiet-hero">
+        <div className="quiet-hero-copy">
+          <p className="quiet-eyebrow">{tr("ONE MISSION · HUMAN DIRECTION · AGENT EXECUTION", "一個 MISSION · 人類定方向 · AGENTS 負責完成")}</p>
+          <h1>{locale === "zh-TW" ? <>把目標說給 Lucy。<br/>剩下的，交給 Agents。</> : <>Tell Lucy the goal.<br/>Leave the rest to your Agents.</>}</h1>
+          <p>{tr("No status meetings. No chasing updates. Everyone gets an AI counterpart; the Agents align the team, do the safe work, and come back only for the decision that needs a human.", "不用再開進度會議，也不用追問誰做到哪裡。每位同事都有一位 AI 搭檔；Agents 先替大家對齊、執行，只有真正需要人判斷時才回來找你。")}</p>
+        </div>
+
+        <form className="quiet-goal-composer" onSubmit={begin}>
+          <label className="visually-hidden" htmlFor="relay-goal">{tr("Tell Lucy your goal", "告訴 Lucy 你的目標")}</label>
+          <input id="relay-goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder={tr("Tell Lucy your goal, e.g. launch the campaign by month-end", "告訴 Lucy 你的目標，例如：月底前推出行銷活動")} autoComplete="off" />
+          <span><Sparkles size={18}/></span>
+          <button type="submit" disabled={goal.trim().length < 3} aria-label={tr("Start this mission", "開始這個 Mission")}><ArrowRight size={21}/></button>
+        </form>
+        <button className="quiet-example" type="button" onClick={() => setGoal(sampleGoal)}>{tr("Try a real launch example", "不知道怎麼說？載入真實 Launch 範例")}</button>
+
+        <ol className="quiet-execution-preview" aria-label={tr("How Relay moves a mission forward", "Relay 如何推進 Mission") }>
+          <li><span className="quiet-avatar">RL</span><div><b>{tr("Lucy turns the goal into one shared mission", "Lucy 理解你的目標")}</b><small>{tr("One source of truth for the whole team", "轉成全隊共用、可執行的 Mission")}</small></div><em>{tr("ready", "已就緒")}</em><Check size={18}/></li>
+          <li><span className="quiet-agent-stack"><i>EV</i><i>PL</i><i>EX</i></span><div><b>{tr("Three Agents align and divide the work", "3 位 Agents 已對齊並分工")}</b><small>{tr("Evidence, planning and execution continue in the background", "證據、計畫與執行在背景繼續")}</small></div><em>{tr("working", "執行中")}</em><RefreshCw className="quiet-spin-icon" size={18} aria-hidden="true"/></li>
+          <li><span className="quiet-avatar"><UserRound size={18}/></span><div><b>{tr("One decision will need you", "之後只需要你的 1 次核准")}</b><small>{tr("Lucy asks only the person who truly owns it", "Lucy 只會在關鍵時刻找真正有權的人")}</small></div><em>{tr("later", "稍後詢問")}</em><ShieldCheck size={18}/></li>
+        </ol>
+        <p className="quiet-background-note">{tr("Agents keep the mission moving while you are away. External sends, publishing and spend stay locked until the exact owner approves.", "你離開畫面，Agents 仍會持續推進；寄送、發布與花費，仍會等正確的人精確核准。")}</p>
+      </section>
+
+      <section className="quiet-how" id="how">
+        <header><span>01</span><h2>{tr("Humans speak once. Agents carry it to done.", "人類說一次。Agents 做到底。")}</h2></header>
+        <div>
+          <article><span>1</span><h3>{tr("Say the outcome", "說出想完成的事")}</h3><p>{tr("Lucy asks one natural question at a time—no setup form.", "Lucy 一次只問一件事，不丟給你一張表單。")}</p></article>
+          <article><span>2</span><h3>{tr("Invite the right people", "把該加入的人帶進來")}</h3><p>{tr("Each teammate gets a counterpart Agent that carries their goals and limits.", "每位同事都有 AI 搭檔，替他記住目標與限制。")}</p></article>
+          <article><span>3</span><h3>{tr("Let the Agents meet", "讓 Agents 代替大家開會")}</h3><p>{tr("They reconcile conflicts, write the minutes and start reversible work.", "它們先對齊衝突、留下紀錄，再開始可逆工作。")}</p></article>
+          <article><span>4</span><h3>{tr("Approve the one thing that matters", "只核准真正重要的事")}</h3><p>{tr("Relay returns the exact decision, then the Agents finish with proof.", "Relay 帶回精確決策，Agents 完成後交回證明。")}</p></article>
+        </div>
+      </section>
+
+      <section className="quiet-proof" id="proof">
+        <div className="quiet-proof-copy"><span>02</span><h2>{tr("Not a staged animation. A finished Relay run.", "不是預製動畫。這是一筆完成的 Relay 執行。")}</h2><p>{tr("This example is loaded from Relay's production data model. Completed Agent work has a receipt; external actions stay visibly locked until a real connector and exact approval exist.", "這個範例直接讀取 Relay 的正式資料模型。Agent 完成的工作都有憑據；外部操作在真實連線與精確核准前會清楚保持鎖定。")}</p><Link to="/demo" className="quiet-text-action">{tr("Open the live proof", "查看即時完成證明")} <ArrowRight size={17}/></Link></div>
+        <CompletedLaunchProof compact />
+      </section>
+
+      <section className="quiet-final-cta"><h2>{tr("Give Lucy one goal.", "只要先告訴 Lucy 一個目標。")}</h2><p>{tr("Your team can lay back while the work keeps moving.", "剩下的交給 Relay，團隊不用再困在會議裡。")}</p><button type="button" onClick={() => navigate("/missions/new")}>{tr("Start with Lucy", "開始跟 Lucy 說")}<ArrowRight size={19}/></button></section>
+    </main>
+    <footer><Logo /><p>{tr("Humans decide. Agents finish.", "人類決定。Agents 完成。")}</p><span>© 2026 Relay</span></footer>
+  </div>;
 }
 
 function AppShell({ children }: { children: ReactNode }) {
@@ -1287,11 +1350,20 @@ function OutcomeView({ mission, action, busy }: { mission: MissionDetail; action
   return <div className="outcome-layout"><section className="outcome-main"><div className="view-heading"><div><span className="page-kicker">{tr("INTENT → OUTCOME", "意圖 → 成果")}</span><h2>{tr("Did the mission actually work?", "這個 Mission 真的成功了嗎？")}</h2><p>{tr("Task completion is not success. Close the loop with the agreed metric, cost, time and interventions.", "任務完成不等於成功。請用雙方同意的指標、成本、時間與人工介入完成成果閉環。")}</p></div></div><div className="outcome-contract"><span>{tr("ORIGINAL SUCCESS CONTRACT", "原始成功合約")}</span><h3>{localizeDomainText(mission.successMetric)}</h3><div><Target /><span>{tr("Plan", "計畫")} v{mission.currentPlanVersion}</span><span>•</span><span>{tr("Created by", "建立者")} {mission.createdBy}</span></div></div><form className="outcome-form" onSubmit={(event) => { event.preventDefault(); action("outcome", api(`/api/missions/${mission.id}/outcome`, { method: "PUT", body: JSON.stringify(form) }), tr("Outcome and mission learning recorded.", "成果與 Mission 學習已記錄。")); }}><div className="form-grid"><label>{tr("Metric name", "指標名稱")}<input value={form.metricName} onChange={(event) => setForm({ ...form, metricName: event.target.value })} /></label><label>{tr("Status", "狀態")}<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as Outcome["status"] })}>{["not_started", "on_track", "at_risk", "achieved", "missed"].map((status) => <option value={status} key={status}>{localizeLabel(status)}</option>)}</select></label></div><label>{tr("Target", "目標值")}<input value={form.targetValue} onChange={(event) => setForm({ ...form, targetValue: event.target.value })} /></label><label>{tr("Actual result", "實際成果")}<input value={form.actualValue} onChange={(event) => setForm({ ...form, actualValue: event.target.value })} placeholder={tr("Example: 26 paid registrations at NT$1,110 CPA", "例如：26 筆付費報名，CPA 為 NT$1,110")} /></label><div className="form-grid three"><label>{tr("Total cost (TWD)", "總成本（TWD）")}<input type="number" min="0" value={form.cost} onChange={(event) => setForm({ ...form, cost: Number(event.target.value) })} /></label><label>{tr("Duration (minutes)", "執行時間（分鐘）")}<input type="number" min="0" value={form.durationMinutes} onChange={(event) => setForm({ ...form, durationMinutes: Number(event.target.value) })} /></label><label>{tr("Human interventions", "人工介入次數")}<input type="number" min="0" value={form.humanInterventions} onChange={(event) => setForm({ ...form, humanInterventions: Number(event.target.value) })} /></label></div><div className="coordination-baseline"><span>{tr("COORDINATION BASELINE", "協作基準")}</span><div className="form-grid four"><label>{tr("Team size", "團隊人數")}<input type="number" min="1" value={form.teamSize} onChange={(event) => setForm({...form, teamSize: Number(event.target.value)})}/></label><label>{tr("Meetings planned", "原訂會議")}<input type="number" min="0" value={form.baselineMeetings} onChange={(event) => setForm({...form, baselineMeetings: Number(event.target.value)})}/></label><label>{tr("Meetings held", "實際會議")}<input type="number" min="0" value={form.actualMeetings} onChange={(event) => setForm({...form, actualMeetings: Number(event.target.value)})}/></label><label>{tr("Minutes each", "每場分鐘")}<input type="number" min="0" value={form.meetingMinutes} onChange={(event) => setForm({...form, meetingMinutes: Number(event.target.value)})}/></label></div><b>{meetingsAvoided} {tr("meetings avoided", "場會議免開")} · {peopleHoursAvoided} {tr("people-hours avoided", "人時免耗")}</b></div><label>{tr("Next-mission recommendation", "下一次 Mission 建議")}<textarea rows={4} value={form.recommendation} onChange={(event) => setForm({ ...form, recommendation: event.target.value })} placeholder={tr("What should Relay change next time?", "Relay 下次應該改變什麼？")} /></label><button className="button button-primary" disabled={busy === "outcome"}><Target size={17} /> {tr("Save verified outcome", "儲存已驗證成果")}</button></form></section><aside className="outcome-side"><section className="panel outcome-score"><span>{tr("MISSION RESULT", "MISSION 成果")}</span><div className={`outcome-ring ${form.status}`}><strong>{form.status === "achieved" ? "100" : form.status === "on_track" ? "72" : form.status === "at_risk" ? "48" : form.status === "missed" ? "18" : "—"}</strong><small>{localizeLabel(form.status)}</small></div><div className="health-row"><span>{tr("Cost", "成本")}</span><b>{formatMoney(form.cost)}</b></div><div className="health-row"><span>{tr("Human interventions", "人工介入")}</span><b>{form.humanInterventions}</b></div><div className="health-row"><span>{tr("People-hours avoided", "免耗人時")}</span><b>{peopleHoursAvoided}</b></div><div className="health-row"><span>{tr("Open blockers", "待處理阻擋項目")}</span><b>{mission.openConflicts}</b></div></section><section className="panel moat-card"><Network /><span>{tr("INTENT-TO-OUTCOME DATA", "意圖到成果資料")}</span><h3>{tr("This is Relay’s compounding asset.", "這是 Relay 持續複利的資產。")}</h3><p>{tr("Every result connects the original intent, decisions, plan, permissions, execution and human corrections.", "每項成果都會連回原始意圖、決策、計畫、權限、執行與人工修正。")}</p></section></aside></div>;
 }
 
-function DemoPage() {
+function LegacyDemoPage() {
   const navigate = useNavigate();
   return <div className="landing demo-live-page"><PublicHeader/><main>
     <section className="demo-live-hero"><div><span className="eyebrow"><span className="pulse-dot"/>{tr("TWO PROOFS · YOU RUN ONE", "兩種證明 · 一個由你觸發")}</span><h1>{tr("First see a completed launch handoff. Then run Relay on your own mess.", "先看一個真的完成交接，再用你的混亂 Brief 親手 Run。")}</h1><p>{tr("The proof card is loaded from a completed mission with hashed artifacts. The compiler below waits for your input and shows the exact contradiction it finds.", "右側證明卡來自一個具備雜湊 Artifact 的已完成 Mission；下方編譯器則等待你的輸入，並顯示它找到的精確矛盾。")}</p><div className="demo-live-steps"><span><b>1</b>{tr("See done", "先看完成")}</span><ArrowRight size={15}/><span><b>2</b>{tr("Paste + run", "貼上 + Run")}</span><ArrowRight size={15}/><span><b>3</b>{tr("Save + invite", "保存 + 邀人")}</span></div></div><CompletedLaunchProof compact/></section>
     <section className="section live-proof-section demo-compiler"><div className="live-proof-copy"><span className="section-index">01 / {tr("YOUR TURN", "換你操作")}</span><h2>{tr("The magic moment only counts when your input causes it.", "只有你的輸入真的觸發結果，才算 Magic Moment。")}</h2><p>{tr("The compiler response below comes from the live API. Saving it creates real persisted events, named team invites and durable Agent runs.", "下方結果來自真實 API；保存後會建立可持久化事件、具名團隊邀請與 Durable Agent Run。")}</p></div><LandingMagicCompiler onOpenFullMission={(brief) => { sessionStorage.setItem("relay_mission_draft", brief); navigate("/missions/new?draft=1"); }}/></section>
+  </main></div>;
+}
+
+function DemoPage() {
+  const navigate = useNavigate();
+  return <div className="landing quiet-landing demo-live-page"><PublicHeader/><main>
+    <section className="quiet-demo-hero"><span>{tr("LIVE PRODUCT PROOF", "真實產品證明")}</span><h1>{tr("See what Relay finishes. Then run it on your team's mess.", "先看 Relay 完成了什麼。再用你的團隊難題親手 Run。")}</h1><p>{tr("The completion receipt comes from persisted product data. The compiler below waits for your input; nothing is pre-run for you.", "完成憑據來自已保存的產品資料；下方編譯器會等你輸入，不會先替你播放假結果。")}</p></section>
+    <section className="quiet-demo-proof"><CompletedLaunchProof compact/></section>
+    <section className="quiet-demo-run"><div><span>01</span><h2>{tr("Paste the versions that do not agree.", "把互相對不上的版本貼進來。")}</h2><p>{tr("Press Run. Relay will show the exact collision, the source, and what must stop before an Agent acts.", "按下 Run。Relay 會指出精確衝突、原始來源，以及 Agent 動手前必須先停下什麼。")}</p></div><LandingMagicCompiler onOpenFullMission={(brief) => { sessionStorage.setItem("relay_mission_draft", brief); navigate("/missions/new?draft=1"); }}/></section>
   </main></div>;
 }
 

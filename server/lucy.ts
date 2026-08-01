@@ -54,7 +54,7 @@ const structuredOutputSchema = {
   },
 } as const;
 
-const systemPrompt = `You are Agent Lucy, the calm mission lead inside Relay.
+const systemPrompt = `You are Lucy, a warm, perceptive mission partner inside Relay. You feel like the teammate who remembers the room, notices what people are worried about, and quietly moves work forward.
 
 You interview one teammate conversationally so Relay can create a safe execution contract. You do not show a form and never ask more than one short question at a time.
 
@@ -64,9 +64,10 @@ Rules:
 3. Extract only what the user actually states into memory. Keep prior memory unless the user corrects it.
 4. Ask for these in order: identity/role, objective, collaborators plus hard boundaries, measurable definition of done.
 5. Use "ready" only when objective, constraints and successMetric are all present. A name may remain blank; Relay can use "Mission owner".
-6. Reply in the requested locale. Keep the reply under 55 words. Sound like a capable colleague, not a questionnaire.
-7. When ready, summarize what Lucy can safely begin and state that external sends, publishing, spend and permission changes still require exact approval.
-8. Return only the requested JSON schema. Do not reveal chain-of-thought.`;
+6. Reply in the requested locale. Keep the reply under 70 words. Begin by briefly reflecting one specific thing you heard, then ask one natural next question. Never say "Got it", "understood", "next step", "last question", "interview" or mention a form.
+7. Explain your own useful action in plain language when relevant: you will remember this person's position, invite the right teammate, brief their counterpart Agent, or prepare work while humans are away.
+8. When ready, summarize what Lucy can safely begin and state that external sends, publishing, spend and permission changes still require exact approval.
+9. Return only the requested JSON schema. Do not reveal chain-of-thought.`;
 
 function resolveApiKey() {
   return process.env.OPENAI_API_KEY ?? process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
@@ -131,22 +132,24 @@ export function fallbackLucyTurn(raw: LucyTurn) {
     memory.name ||= inferName(input.message);
     memory.title = input.message;
     memory.department = inferDepartment(input.message);
-    return { reply: zh ? "了解。接下來告訴我：這個專案最後要完成什麼？如果有期限，也一起說給我。" : "Got it. What must this project accomplish? Include the deadline if there is one.", nextPhase: "objective" as const, memory, modelUsed: false };
+    const role = memory.department === "Other" ? (zh ? "你在團隊裡的位置" : "your place on the team") : memory.department;
+    return { reply: zh ? `好，我會替你守住「${role}」這個角度，也不會讓別人的需求把它蓋掉。現在最想交給我推過終點的是哪件事？有期限也一起告訴我。` : `I’ll keep the ${role} point of view visible, even when other priorities arrive. What do you most want me to carry across the finish line, and by when?`, nextPhase: "objective" as const, memory, modelUsed: false };
   }
   if (input.phase === "objective") {
     memory.objective = input.message;
-    return { reply: zh ? "誰還需要參與、提供權限或做決定？也告訴我哪件事絕對不能出錯。" : "Who else must contribute, grant access or decide? Also tell me what absolutely cannot go wrong.", nextPhase: "context" as const, memory, modelUsed: false };
+    return { reply: zh ? `我會把「${input.message.slice(0, 36)}${input.message.length > 36 ? "…" : ""}」當成共同終點。誰的意見、檔案或授權少了就不能往下走？也告訴我你最怕哪件事出錯。` : `I’m holding “${input.message.slice(0, 54)}${input.message.length > 54 ? "…" : ""}” as the shared finish line. Whose input, file or approval can’t be missing—and what are you most worried could go wrong?`, nextPhase: "context" as const, memory, modelUsed: false };
   }
   if (input.phase === "context") {
     memory.constraints = input.message;
     memory.collaborators = [...new Set([...memory.collaborators, ...inferCollaborators(input.message)])];
-    return { reply: zh ? "最後一件事：看到什麼具體結果時，我們可以說任務真的完成了？" : "One last thing: what concrete result proves this mission is truly done?", nextPhase: "success" as const, memory, modelUsed: false };
+    const people = memory.collaborators.length ? memory.collaborators.join("、") : (zh ? "相關同事" : "the right teammates");
+    return { reply: zh ? `我會找 ${people} 加入，並替每個人配一位 AI counterpart；Agents 先彼此對齊，真正需要判斷時才打擾人。你想看到什麼具體結果，才會放心說「真的完成了」？` : `I’ll bring in ${people} and pair each person with an AI counterpart. The Agents can align first and interrupt humans only for judgment. What concrete result would make you comfortable saying this is truly done?`, nextPhase: "success" as const, memory, modelUsed: false };
   }
   if (input.phase === "success") {
     memory.successMetric = input.message;
-    return { reply: zh ? "我已經能建立第一版 Mission：先整理證據與任務、派出安全的 Agent 工作；寄送、發布、花費與權限變更仍會停下來取得精確核准。" : "I can build Mission v1 now: organize the evidence and tasks, then start safe Agent work. Sending, publishing, spending and permission changes will still pause for exact approval.", nextPhase: "ready" as const, memory, modelUsed: false };
+    return { reply: zh ? "交給我。我會建立 Mission v1，替每位同事準備 AI counterpart，先開 Agent Council、整理會議紀錄並啟動可逆工作。寄送、發布、花費或改權限時，我只會找真正有權的人確認一次。" : "Leave it with me. I’ll create Mission v1, pair every teammate with a counterpart Agent, run the Agent Council, write the minutes and start reversible work. For sends, publishing, spend or permission changes, I’ll ask only the person who truly owns the decision.", nextPhase: "ready" as const, memory, modelUsed: false };
   }
-  return { reply: zh ? "Mission 已經準備好。我會從可逆、低風險的工作開始。" : "The mission is ready. I’ll begin with reversible, low-risk work.", nextPhase: "ready" as const, memory, modelUsed: false };
+  return { reply: zh ? "我在。你可以先去做別的事；我會從可逆、低風險的工作開始，遇到真正需要你判斷的地方再回來找你。" : "I’m here. You can get on with something else; I’ll begin with reversible, low-risk work and come back only when your judgment is genuinely needed.", nextPhase: "ready" as const, memory, modelUsed: false };
 }
 
 export async function continueLucyConversation(raw: unknown) {

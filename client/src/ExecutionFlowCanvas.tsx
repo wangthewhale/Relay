@@ -18,6 +18,7 @@ import {
   Mail,
   MessageSquareWarning,
   MousePointer2,
+  Plus,
   ShieldCheck,
   Target,
   UserRound,
@@ -36,6 +37,7 @@ export type MissionFlowData = {
   conflictId?: string;
   progress?: number;
   accent?: "red" | "violet" | "blue" | "lime" | "amber";
+  addable?: boolean;
 };
 
 export type MissionFlowNode = Node<MissionFlowData, "missionNode">;
@@ -60,15 +62,16 @@ function MissionFlowNodeCard({ data }: NodeProps<MissionFlowNode>) {
     </div>
     {data.detail && <p>{data.detail}</p>}
     {typeof data.progress === "number" && <div className="flow-progress"><span style={{ width: `${data.progress}%` }} /><small>{data.progress}%</small></div>}
+    {data.addable !== false && <span className="flow-node-add" title="Add to this block"><Plus size={13}/></span>}
     {data.variant !== "outcome" && <Handle type="source" position={Position.Right} className="flow-handle" />}
   </div>;
 }
 
-export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect }: { nodes: MissionFlowNode[]; edges: Edge[]; onConflictSelect: (id: string) => void }) {
+export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect, onNodeAction }: { nodes: MissionFlowNode[]; edges: Edge[]; onConflictSelect: (id: string) => void; onNodeAction?: (node: MissionFlowNode) => void }) {
   const nodeTypes = useMemo(() => ({ missionNode: MissionFlowNodeCard }), []);
   const compact = typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
   const defaultViewport = compact ? { x: 8, y: 35, zoom: 0.32 } : { x: 12, y: 100, zoom: 0.88 };
-  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitView={compact} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .42 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); }} proOptions={{ hideAttribution: true }}>
+  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitView={compact} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .42 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); onNodeAction?.(node); }} proOptions={{ hideAttribution: true }}>
     <Background color="#d7d8d2" gap={24} size={1} />
     <Controls position="bottom-left" showInteractive={false} />
     <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor={(node) => node.data.variant === "conflict" ? "#ef5b55" : node.data.variant === "human" ? "#7659e8" : node.data.variant === "agent" ? "#4175d6" : "#baff39"} />

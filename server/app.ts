@@ -369,8 +369,42 @@ export function createApp() {
   app.get("/api/missions/:id/collaboration", async (request, response, next) => {
     try {
       const scope = await resolveRequestScope(request, { sessionOnly: true });
-      const [room, agents, runs] = await Promise.all([getRoomState(request.params.id, scope), ensureMissionAgents(request.params.id, scope), listAgentRuns(request.params.id, scope)]);
+      const room = await getRoomState(request.params.id, scope);
+      const [agents, runs] = await Promise.all([ensureMissionAgents(request.params.id, scope, room.members), listAgentRuns(request.params.id, scope)]);
       response.json({ collaboration: { ...room, agents, runs } });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/missions/:id/agent-council", async (request, response, next) => {
+    try {
+      const scope = await resolveRequestScope(request, { sessionOnly: true, write: true, apiCapability: "mission:comment" });
+      const [mission, room] = await Promise.all([store.getMission(request.params.id, scope), getRoomState(request.params.id, scope, 30)]);
+      const agents = await ensureMissionAgents(request.params.id, scope, room.members);
+      const counterparts = agents.filter((agent) => agent.capabilities.some((capability) => capability.startsWith("represent:")));
+      const blocking = mission.conflicts.filter((conflict) => conflict.status === "open" && conflict.blocking);
+      const pendingApprovals = mission.currentPlan?.approvals.filter((approval) => approval.status === "pending") ?? [];
+      const nextTasks = mission.currentPlan?.tasks.filter((task) => !["completed", "failed"].includes(task.status)).slice(0, 4) ?? [];
+      const minutes = {
+        title: `Agent Council · Plan v${mission.currentPlanVersion}`,
+        objective: mission.objective,
+        representedHumans: room.members.map((member) => ({ name: member.user.name, department: member.user.department, role: member.role })),
+        counterpartAgents: counterparts.map((agent) => agent.name),
+        decisionsNeeded: blocking.map((conflict) => ({ title: conflict.title, owner: conflict.decisionOwner })),
+        nextActions: nextTasks.map((task) => ({ key: task.key, title: task.title, owner: task.ownerName, status: task.status })),
+        approvalsNeeded: pendingApprovals.map((approval) => ({ action: approval.action, approver: approval.approver, expiresAt: approval.expiresAt })),
+        delivery: "Saved to the live Mission event stream. Gmail or Slack delivery remains locked until the provider is verified and the exact send is approved.",
+        createdAt: new Date().toISOString(),
+      };
+      const event = await recordCollaborationEvent({
+        missionId: mission.id,
+        actor: { type: "agent", name: "Relay Agent Council" },
+        eventType: "agent_council.minutes_created",
+        entityType: "meeting_minutes",
+        summary: `${counterparts.length} counterpart Agents aligned ${room.members.length} teammates and prepared the next decision and action record.`,
+        data: minutes,
+        planVersion: mission.currentPlanVersion,
+      });
+      response.status(201).json({ event, minutes });
     } catch (error) { next(error); }
   });
 

@@ -114,6 +114,15 @@ describe("Relay mission lifecycle API", () => {
     const launchOwner = room.body.collaboration.members.find((member: any) => member.user.name === "Launch owner");
     expect(mina).toMatchObject({ role: "decision_maker", user: { department: "Finance", identityVerified: true } });
     expect(room.body.collaboration.authorityGraph).toEqual(expect.arrayContaining([expect.objectContaining({ subjectName: "Mina Finance", canApproveRisk: 3 })]));
+    expect(room.body.collaboration.agents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "Proxy · Launch owner", capabilities: expect.arrayContaining([`represent:${launchOwner.user.id}`, "join agent council"]) }),
+      expect.objectContaining({ name: "Proxy · Mina Finance", capabilities: expect.arrayContaining([`represent:${mina.user.id}`, "request exact approval"]) }),
+    ]));
+
+    const council = await decisionMaker.post(`/api/missions/${mission.id}/agent-council`).send({}).expect(201);
+    expect(council.body.event).toMatchObject({ eventType: "agent_council.minutes_created", actorName: "Relay Agent Council" });
+    expect(council.body.minutes.representedHumans).toEqual(expect.arrayContaining([expect.objectContaining({ name: "Mina Finance", department: "Finance" })]));
+    expect(council.body.minutes.delivery).toContain("provider is verified");
 
     await decisionMaker.put(`/api/missions/${mission.id}/presence`).send({ connectionId: "11111111-1111-4111-8111-111111111111", state: "deciding", cursorContext: "conflicts" }).expect(200);
     await decisionMaker.post(`/api/missions/${mission.id}/comments`).send({ body: "@Launch owner I verified the budget authority.", mentions: [launchOwner.user.id] }).expect(201);

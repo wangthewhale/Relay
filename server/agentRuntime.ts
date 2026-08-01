@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentDefinition, AgentRun } from "../shared/domain";
+import type { AgentDefinition, AgentRun, MissionMember } from "../shared/domain";
 import { pool } from "./db";
 import { recordCollaborationEvent } from "./collaboration";
 import { store } from "./store";
@@ -43,15 +43,28 @@ function mapRun(row: Record<string, any>): AgentRun {
   };
 }
 
-export async function ensureMissionAgents(missionId: string, scope: StoreScope): Promise<AgentDefinition[]> {
+export async function ensureMissionAgents(missionId: string, scope: StoreScope, members: MissionMember[] = []): Promise<AgentDefinition[]> {
   const mission = await store.getMission(missionId, scope);
-  const taskGroups = new Map<string, { capabilities: Set<string>; maxRisk: number }>();
+  const taskGroups = new Map<string, { capabilities: Set<string>; maxRisk: number; purpose?: string }>();
   for (const task of mission.currentPlan?.tasks ?? []) {
     if (task.ownerType !== "agent") continue;
     const current = taskGroups.get(task.ownerName) ?? { capabilities: new Set<string>(), maxRisk: 0 };
     task.requiredCapabilities.forEach((capability) => current.capabilities.add(capability));
     current.maxRisk = Math.max(current.maxRisk, task.riskLevel);
     taskGroups.set(task.ownerName, current);
+  }
+  for (const member of members) {
+    const name = `Proxy · ${member.user.name}`;
+    taskGroups.set(name, {
+      capabilities: new Set([
+        `represent:${member.user.id}`,
+        "summarize human intent",
+        "join agent council",
+        "request exact approval",
+      ]),
+      maxRisk: 0,
+      purpose: `Keep ${member.user.name}'s ${member.user.department ?? "team"} goals, constraints and decisions represented in the mission without granting the Agent approval authority.`,
+    });
   }
   if (!taskGroups.size) {
     taskGroups.set("Mission Analyst", { capabilities: new Set(["compile intent", "detect conflicts"]), maxRisk: 0 });
@@ -61,7 +74,7 @@ export async function ensureMissionAgents(missionId: string, scope: StoreScope):
     for (const [name, definition] of taskGroups) {
       if (existing.some((agent) => agent.name === name)) continue;
       existing.push({
-        id: randomUUID(), name, purpose: `Own ${name.replace(/ Agent$/i, "").toLowerCase()} work under the active execution contract.`,
+        id: randomUUID(), name, purpose: definition.purpose ?? `Own ${name.replace(/ Agent$/i, "").toLowerCase()} work under the active execution contract.`,
         modelProvider: "relay-runtime", modelName: process.env.OPENAI_MODEL || "policy-and-tool-worker", capabilities: [...definition.capabilities], riskCeiling: definition.maxRisk as AgentDefinition["riskCeiling"], status: "idle",
       });
     }
@@ -74,8 +87,8 @@ export async function ensureMissionAgents(missionId: string, scope: StoreScope):
     await pool.query(
       `INSERT INTO agents (id,workspace_id,mission_id,name,purpose,model_provider,model_name,capabilities,risk_ceiling,status)
        VALUES ($1,$2,$3,$4,$5,'relay-runtime',$6,$7,$8,'idle')
-       ON CONFLICT (mission_id,name) DO UPDATE SET capabilities=EXCLUDED.capabilities,risk_ceiling=EXCLUDED.risk_ceiling,updated_at=now()`,
-      [randomUUID(), workspaceId, missionId, name, `Own ${name.replace(/ Agent$/i, "").toLowerCase()} work under the active execution contract.`, process.env.OPENAI_MODEL || "policy-and-tool-worker", JSON.stringify([...definition.capabilities]), definition.maxRisk],
+       ON CONFLICT (mission_id,name) DO UPDATE SET purpose=EXCLUDED.purpose,capabilities=EXCLUDED.capabilities,risk_ceiling=EXCLUDED.risk_ceiling,updated_at=now()`,
+      [randomUUID(), workspaceId, missionId, name, definition.purpose ?? `Own ${name.replace(/ Agent$/i, "").toLowerCase()} work under the active execution contract.`, process.env.OPENAI_MODEL || "policy-and-tool-worker", JSON.stringify([...definition.capabilities]), definition.maxRisk],
     );
   }
   const result = await pool.query("SELECT * FROM agents WHERE mission_id=$1 ORDER BY created_at", [missionId]);

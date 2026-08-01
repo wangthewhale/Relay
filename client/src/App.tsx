@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "./router";
 import type { Edge, MarkerType } from "@xyflow/react";
 import type { MissionFlowNode } from "./ExecutionFlowCanvas";
@@ -290,16 +290,16 @@ function LandingPage() {
       <main>
         <section className="hero">
           <div className="hero-copy">
-            <div className="eyebrow"><span className="pulse-dot" /> {tr("LAUNCH OPS · HUMANS DECIDE, AGENTS FINISH", "LAUNCH OPS · 人類決定，AGENT 做完")}</div>
-            <h1>{locale === "zh-TW" ? <><span className="hero-line">把混亂的 Launch Brief</span><span className="hero-line">交給 Relay。</span><span className="hero-line">AI 收斂全隊、</span><span className="hero-line">取得精確核准，</span><span className="hero-line hero-accent-line">交回完成憑據。</span></> : <><span className="hero-line">Give Relay the messy</span><span className="hero-line">launch brief.</span><span className="hero-line">AI reconciles the team, gets approval,</span><span className="hero-line hero-accent-line">and returns proof of completion.</span></>}</h1>
-            <h2>{locale === "zh-TW" ? <>財務、Growth、CEO、工程與實習生只要說清楚目標和限制。<b>Relay 把分散指令變成 Launch Contract，讓 1–3 個 Agent 做完準備工作，只把真正需要判斷的決策交回人類。</b></> : <>Finance, Growth, the CEO, engineering and interns state goals and constraints once. <b>Relay turns them into a Launch Contract, lets 1–3 agents finish the preparation, and returns only the decisions that need a human.</b></>}</h2>
-            <p>{tr("The first wedge is cross-functional campaign and product-launch readiness—not a new chat app, project manager or generic agent builder.", "第一個必勝切口只有跨部門 Campaign 與產品 Launch 準備；不是另一個聊天室、專案管理工具或通用 Agent Builder。")}</p>
+            <div className="eyebrow"><span className="pulse-dot" /> {tr("NO MORE STATUS MEETINGS · AGENTS ALIGN, HUMANS DECIDE", "不用再開進度會議 · AGENTS 對齊，人類決定")}</div>
+            <h1>{locale === "zh-TW" ? <><span className="hero-line">人類不用再開會。</span><span className="hero-line">讓 AI Agents</span><span className="hero-line">替你開會、</span><span className="hero-line hero-accent-line">把工作做完。</span></> : <><span className="hero-line">Stop having meetings.</span><span className="hero-line">Let your AI agents</span><span className="hero-line">meet, align,</span><span className="hero-line hero-accent-line">and finish the work.</span></>}</h1>
+            <h2>{locale === "zh-TW" ? <>每位同事都有自己的 AI counterpart。<b>Agents 替彼此同步目標、整理會議紀錄，只向真正有權的人取得授權；工具連線後，再把剩下的任務做完。</b></> : <>Every teammate gets an AI counterpart. <b>The Agents align goals, write the minutes, ask the right human for approval, then finish the work through connected tools.</b></>}</h2>
+            <p className="hero-philosophy">{tr("Use Relay. So your team can lay back while the work keeps moving.", "Use Relay, so you can lay back。你離開畫面，工作也會繼續往前。")}</p>
             <div className="hero-actions">
-              <button className="button button-primary button-large" onClick={() => document.getElementById("magic")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{tr("Run Relay on my brief", "立刻 Run 我的 Brief")} <ArrowRight size={18} /></button>
+              <button className="button button-primary button-large" onClick={() => navigate("/missions/new")}>{tr("Meet Lucy and start", "讓 Lucy 開始接手")} <ArrowRight size={18} /></button>
               <button className="button button-ghost button-large" onClick={() => navigate("/demo")}><Play size={17} fill="currentColor" /> {tr("See the real workflow", "看真實操作流程")}</button>
             </div>
             <RelayJourney active={1} />
-            <p className="agent-definition"><Bot size={16} /><span><b>{tr("What is an AI agent here?", "這裡的 AI Agent 是什麼？")}</b>{tr("A software role that performs one clearly named job—not a person and not an autonomous employee.", "它是只負責一種明確工作的軟體角色，不是真人，也不是會自行做主的虛擬員工。")}</span></p>
+            <p className="agent-definition"><Bot size={16} /><span><b>{tr("One human, one counterpart Agent.", "一位人類，一位專屬 AI counterpart。")}</b>{tr("It carries that person’s role and constraints into the Agent Council, but it can never borrow their approval authority.", "它替那個人把角色與限制帶進 Agent Council，但永遠不能冒用那個人的核准權。")}</span></p>
           </div>
           <CompletedLaunchProof compact />
         </section>
@@ -742,8 +742,8 @@ function InviteTeammatesDialog({ mission, open, onClose, onInvited }: { mission:
   const copy = async () => { if (invite) await navigator.clipboard.writeText(invite.url); };
   return <div className="invite-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="invite-dialog" role="dialog" aria-modal="true" aria-labelledby="invite-dialog-title">
-      <div className="invite-dialog-head"><span><UsersRound size={18} /></span><div><small>{tr("STEP 3 OF 3", "第 3 步（共 3 步）")}</small><h2 id="invite-dialog-title">{tr("Invite teammates into this mission", "邀請同事加入這個任務")}</h2></div><button className="icon-button" type="button" onClick={onClose} aria-label={tr("Close invite dialog", "關閉邀請視窗")}><X size={18} /></button></div>
-      <p className="invite-dialog-intro">{tr("Create a named, role-bound invite. Anonymous editor links cannot change a mission.", "建立具名、綁定角色的邀請；匿名連結無法修改 Mission。")}</p>
+      <div className="invite-dialog-head"><span><UsersRound size={18} /></span><div><small>{tr("ONE HUMAN · ONE AI COUNTERPART", "一位人類 · 一位專屬 AI")}</small><h2 id="invite-dialog-title">{tr("Who should Relay represent next?", "下一位要讓 Relay 代表誰？")}</h2></div><button className="icon-button" type="button" onClick={onClose} aria-label={tr("Close invite dialog", "關閉邀請視窗")}><X size={18} /></button></div>
+      <p className="invite-dialog-intro">{tr("Invite a real teammate with a named role. When they join, Relay creates a counterpart Agent that carries their goals into the Agent Council—without inheriting their approval authority.", "邀請一位具名、綁定角色的真實同事。加入後，Relay 會建立他的 AI counterpart，替他把目標帶進 Agent Council，但不會繼承他的核准權。")}</p>
       {!invite ? <form className="invite-member-form" onSubmit={createInvite}>
         <div className="form-grid"><label>{tr("Name", "姓名")}<input required value={form.name} onChange={(event) => setForm({...form, name: event.target.value})} placeholder={tr("Alex Chen", "陳小明")}/></label><label>{tr("Work email", "工作 Email")}<input required type="email" value={form.email} onChange={(event) => setForm({...form, email: event.target.value})} placeholder="alex@company.com"/></label></div>
         <div className="form-grid"><label>{tr("Title", "職稱")}<input value={form.title} onChange={(event) => setForm({...form, title: event.target.value})} placeholder={tr("Staff Engineer", "資深工程師")}/></label><label>{tr("Department", "部門")}<select value={form.department} onChange={(event) => setForm({...form, department: event.target.value})}>{["Executive","Product","Engineering","Design","Finance","People","Growth","Operations","Other"].map((item) => <option value={item} key={item}>{localizeLabel(item)}</option>)}</select></label></div>
@@ -751,8 +751,8 @@ function InviteTeammatesDialog({ mission, open, onClose, onInvited }: { mission:
         {error && <p className="form-error">{error}</p>}
         <button className="button button-primary button-full button-large" disabled={busy}><UsersRound size={17}/>{busy ? tr("Creating secure invite…", "正在建立安全邀請…") : tr("Create role-bound invite", "建立角色邀請")}</button>
       </form> : <div className="invite-created">
-        <BadgeCheck size={28}/><h3>{tr(`${form.name} now has an individual invitation.`, `${form.name} 已有專屬邀請。`)}</h3>
-        <p>{tr("Possession of this single-use token creates their own verified Relay identity. It expires automatically.", "這個一次性 Token 會建立對方自己的 Relay 身分，並會自動到期。")}</p>
+        <BadgeCheck size={28}/><h3>{tr(`${form.name} now has an invite—and a counterpart waiting.`, `${form.name} 已有專屬邀請，也有一位 AI counterpart 在等他。`)}</h3>
+        <p>{tr("The single-use token creates their verified Relay identity. After acceptance, their counterpart Agent appears on the live canvas and can join the next Agent Council.", "一次性 Token 會建立對方的 Relay 身分；接受後，專屬 AI counterpart 會出現在即時畫布並加入下一次 Agent Council。")}</p>
         <label className="invite-link-label"><span>{tr("Individual invite link", "個人邀請連結")}</span><div><Link2 size={15}/><input value={invite.url} readOnly/></div></label>
         <button className="button button-primary button-full button-large" type="button" onClick={() => { void copy(); }}><Copy size={17}/>{tr("Copy invite link", "複製邀請連結")}</button>
         <button className="text-link invite-another" type="button" onClick={() => { setInvite(undefined); setForm({...form, email: "", name: "", title: ""}); }}>{tr("Invite another teammate", "再邀請一位同事")}</button>
@@ -911,7 +911,7 @@ function MissionPage() {
       {mission.status === "planning" && <button className="button button-primary button-small mission-compile" disabled={busy === "plan"} onClick={() => action("plan", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/plan`, { method: "POST", body: "{}" }), tr("A new active contract was created. Previous approvals were invalidated.", "新的有效合約已建立，舊版核准已失效。"))}><GitBranch size={15}/>{tr("Compile", "編譯")} v{mission.currentPlanVersion + 1}</button>}
     </div><nav className="mission-tabs" aria-label={tr("Mission views", "Mission 檢視")}>{missionTabs.map(([key, label, labelZh, Icon]) => <button className={view === key ? "active" : ""} key={key} onClick={() => setParams({ view: key })} title={tr(label, labelZh)} aria-label={tr(label, labelZh)}><Icon size={18}/><span className="mission-tab-label">{tr(label, labelZh)}</span>{key === "conflicts" && mission.openConflicts > 0 && <em>{mission.openConflicts}</em>}{key === "approvals" && mission.pendingApprovals > 0 && <em>{mission.pendingApprovals}</em>}</button>)}</nav></header>
     {(notice || error) && <div className={`toast-banner ${error ? "error" : ""}`}>{error ? <AlertOctagon size={17} /> : <BadgeCheck size={17} />}<span>{error || notice}</span><button className="icon-button" onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
-    <div className={`mission-content mission-content-${view}`}>{view === "room" && <MissionRoom mission={mission} action={action} busy={busy} setView={(next) => setParams({ view: next })}/>} {view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy}/>} {view === "plan" && <PlanView mission={mission} action={action} busy={busy}/>} {view === "access" && <AccessView mission={mission} onRefresh={refreshAll}/>} {view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale}/>} {view === "evidence" && <EvidenceLedger mission={mission}/>} {view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy}/>}</div>
+    <div className={`mission-content mission-content-${view}`}>{view === "room" && <MissionRoom mission={mission} collaboration={collaboration} action={action} busy={busy} setView={(next) => setParams({ view: next })} onInvite={() => setInviteOpen(true)} onRefresh={refreshAll}/>} {view === "conflicts" && <ConflictInbox mission={mission} action={action} busy={busy}/>} {view === "plan" && <PlanView mission={mission} action={action} busy={busy}/>} {view === "access" && <AccessView mission={mission} onRefresh={refreshAll}/>} {view === "approvals" && <ApprovalCenter mission={mission} action={action} busy={busy} isStale={isStale}/>} {view === "evidence" && <EvidenceLedger mission={mission}/>} {view === "outcome" && <OutcomeView mission={mission} action={action} busy={busy}/>}</div>
   </main></AppShell>;
 }
 
@@ -926,13 +926,17 @@ function FlowSourceIcon({ type }: { type?: string }) {
   return <FileText size={17} />;
 }
 
-function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mission: MissionDetail; action: MissionAction; busy: string; setView: (view: string) => void; readOnly?: boolean }) {
+function MissionRoom({ mission, collaboration, action, busy, setView, onInvite = () => undefined, onRefresh = async () => undefined, readOnly = false }: { mission: MissionDetail; collaboration?: CollaborationSnapshot; action: MissionAction; busy: string; setView: (view: string) => void; onInvite?: () => void; onRefresh?: () => Promise<void>; readOnly?: boolean }) {
   const session = useSessionIdentity();
   const openConflicts = mission.conflicts.filter((conflict) => conflict.status === "open");
   const primaryConflict = openConflicts.find((conflict) => conflict.type === "Hard conflict") ?? openConflicts.find((conflict) => conflict.blocking) ?? openConflicts[0];
   const [selectedConflictId, setSelectedConflictId] = useState(primaryConflict?.id ?? "");
   const [correction, setCorrection] = useState("");
   const [correctionAuthor, setCorrectionAuthor] = useState(mission.createdBy);
+  const [selectedActionNode, setSelectedActionNode] = useState<MissionFlowNode>();
+  const [councilBusy, setCouncilBusy] = useState(false);
+  const [councilError, setCouncilError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (session?.actorName) setCorrectionAuthor(session.actorName); }, [session?.actorName]);
   const [inspectorOpen, setInspectorOpen] = useState(() => typeof window === "undefined" || !window.matchMedia("(max-width: 760px)").matches);
   const plan = mission.currentPlan;
@@ -949,16 +953,23 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   const sourceById = new Map(mission.sources.map((source) => [source.id, source]));
   const sourceEvidence = (selectedConflict?.sourceAssertionIds ?? []).map((assertionId) => mission.assertions.find((assertion) => assertion.id === assertionId)).filter((assertion): assertion is MissionDetail["assertions"][number] => Boolean(assertion));
 
+  const members: MissionMember[] = collaboration?.members?.length ? collaboration.members : [{ user: { id: "mission-owner", name: mission.createdBy, email: "", department: "Other", identitySource: "relay_session", identityVerified: false }, role: "owner", responsibility: "Mission outcome", joinedAt: mission.createdAt }];
+  const activePresence = new Set((collaboration?.presence ?? []).map((item) => item.userId));
+  const counterpartFor = (member: MissionMember) => collaboration?.agents.find((agent) => agent.capabilities.includes(`represent:${member.user.id}`));
+  const councilEvent = [...(collaboration?.events ?? [])].reverse().find((event) => event.eventType === "agent_council.minutes_created");
+  const councilMinutes = councilEvent?.data as { representedHumans?: Array<{ name: string }>; decisionsNeeded?: Array<{ title: string; owner: string }>; nextActions?: Array<{ key: string; title: string; owner: string; status: string }>; delivery?: string } | undefined;
+
   const actualAgentTasks = plan?.tasks.filter((task) => task.ownerType === "agent").slice(0, 3) ?? [];
   const fallbackAgents = [
     { name: "Planning Agent", title: tr("Build the execution plan", "建立專案計畫與時程"), status: "pending" },
     { name: "Operations Agent", title: tr("Prepare governed operations", "準備受治理的執行工作"), status: "blocked" },
     { name: "Evidence Agent", title: tr("Collect outcome evidence", "蒐集證據與成果指標"), status: "pending" },
   ];
-  const agents = fallbackAgents.map((fallback, index) => {
+  const workerAgents = fallbackAgents.map((fallback, index) => {
     const task = actualAgentTasks[index];
     const progress = task?.status === "completed" ? 100 : task?.status === "running" ? 62 : task?.status === "ready" ? 18 : 0;
-    return { id: task?.id ?? `fallback-agent-${index}`, name: task ? localizeDomainText(task.ownerName) : fallback.name, title: task ? localizeDomainText(task.title) : fallback.title, status: task?.status ?? fallback.status, progress };
+    const run = collaboration?.runs.find((item) => item.taskId === task?.id);
+    return { id: task?.id ?? `fallback-agent-${index}`, name: task ? localizeDomainText(task.ownerName) : fallback.name, title: task ? localizeDomainText(task.title) : fallback.title, status: run?.status ?? task?.status ?? fallback.status, progress: run?.progress ?? progress };
   });
 
   const flowNodes: MissionFlowNode[] = [
@@ -985,18 +996,29 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
     },
     {
       id: "lucy-lead", type: "missionNode", position: { x: 535, y: 275 },
-      data: { variant: "agent", title: "Agent Lucy", meta: tr("AI MISSION LEAD", "AI MISSION 主理人"), detail: openConflicts.length ? tr("Keeps worker Agents paused and asks the right human one clear question", "先停住 Worker Agents，再向正確的人提出一個清楚問題") : tr("Coordinates the plan, workers, evidence and human sign-offs", "協調計畫、Worker、證據與人類 sign-off"), status: openConflicts.length ? "waiting_on_human" : "running", progress: openConflicts.length ? 36 : 68, accent: "lime" },
+      data: { variant: "agent", title: "Lucy", meta: tr("YOUR AI MISSION PARTNER", "你的 AI MISSION 搭檔"), detail: openConflicts.length ? tr("Keeps every viewpoint visible, pauses risky work and asks the right person one clear question", "記住每個人的立場、停住風險，只向正確的人問一個清楚問題") : tr("Coordinates every human counterpart, worker Agent, approval and sign-off", "協調每位人類的 counterpart、Worker Agent、核准與 sign-off"), status: openConflicts.length ? "waiting_on_human" : "running", progress: openConflicts.length ? 36 : 68, accent: "lime" },
     },
+    ...members.map((member, index) => ({
+      id: `human-${member.user.id}`, type: "missionNode" as const, position: { x: 785, y: 45 + index * 175 },
+      data: { variant: "human" as const, title: member.user.name, meta: `${localizeLabel(member.user.department ?? "Team")} · ${localizeLabel(member.role)}`, detail: member.responsibility || tr("Human judgment and lived context", "人類判斷與真實脈絡"), status: activePresence.has(member.user.id) ? "live" : selectedConflict?.decisionOwner.includes(member.user.name) ? "decision_needed" : "informed", accent: "violet" as const },
+    })),
+    ...members.map((member, index) => {
+      const counterpart = counterpartFor(member);
+      return {
+        id: `counterpart-${member.user.id}`, type: "missionNode" as const, position: { x: 1040, y: 45 + index * 175 },
+        data: { variant: "agent" as const, title: counterpart?.name ?? `Proxy · ${member.user.name}`, meta: tr("PERSONAL AI COUNTERPART", "專屬 AI COUNTERPART"), detail: tr(`Carries ${member.user.name}'s goals and constraints into the Agent Council; never borrows approval authority.`, `替 ${member.user.name} 把目標與限制帶進 Agent Council；永遠不冒用核准權。`), status: councilBusy ? "meeting" : councilEvent ? "informed" : "listening", progress: councilEvent ? 100 : 28, accent: "blue" as const },
+      };
+    }),
     {
-      id: "human-owner", type: "missionNode", position: { x: 760, y: 275 },
-      data: { variant: "human", title: localizeDomainText(selectedConflict?.decisionOwner ?? mission.createdBy), meta: tr("HUMAN DECISION", "人工決策"), detail: openConflicts.length ? tr("Waiting for an accountable decision", "等待具權責的人做出決策") : tr("Contract decision recorded", "合約決策已記錄"), status: openConflicts.length ? "pending" : "completed", accent: "violet" },
+      id: "agent-council", type: "missionNode", position: { x: 1305, y: 275 },
+      data: { variant: "agent", title: tr("Agent Council", "Agent Council 代理人會議"), meta: tr("NO HUMAN MEETING REQUIRED", "人類不用開會"), detail: councilEvent ? tr("Counterparts aligned the team and saved meeting minutes to this live Mission.", "Counterparts 已對齊團隊，並把會議紀錄存進這個即時 Mission。") : tr("Counterpart Agents compare goals, surface conflicts and prepare one shared record.", "每人的 counterpart Agents 彼此比對目標、找出矛盾並產生共同紀錄。"), status: councilBusy ? "running" : councilEvent ? "minutes_ready" : "ready", progress: councilBusy ? 62 : councilEvent ? 100 : 12, accent: "lime" },
     },
-    ...agents.map((agent, index) => ({
-      id: `agent-${agent.id}`, type: "missionNode" as const, position: { x: 985, y: 85 + index * 190 },
+    ...workerAgents.map((agent, index) => ({
+      id: `agent-${agent.id}`, type: "missionNode" as const, position: { x: 1570, y: 85 + index * 190 },
       data: { variant: "agent" as const, title: agent.name, meta: tr("AI EXECUTION", "AI 執行"), detail: agent.title, status: openConflicts.length && agent.status !== "completed" ? "blocked" : agent.status, progress: agent.progress, accent: "blue" as const },
     })),
     {
-      id: "outcome", type: "missionNode", position: { x: 1245, y: 275 },
+      id: "outcome", type: "missionNode", position: { x: 1845, y: 275 },
       data: { variant: "outcome", title: tr("Mission outcome", "Mission 成果"), meta: tr("VERIFIABLE RESULT", "可驗收成果"), detail: localizeDomainText(mission.successMetric), status: mission.outcome?.status ?? "not_started", accent: "lime" },
     },
   ];
@@ -1006,15 +1028,41 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
   const flowEdges: Edge[] = [
     ...visibleAssertions.map((assertion) => ({ id: `edge-${assertion.id}-conflict`, source: `intent-${assertion.id}`, target: "conflict-hub", animated: selectedAssertionIds.has(assertion.id), style: { stroke: selectedAssertionIds.has(assertion.id) ? "#ef5b55" : "#b9bbb7", strokeWidth: selectedAssertionIds.has(assertion.id) ? 2 : 1.3 }, markerEnd: { type: arrowClosed, color: selectedAssertionIds.has(assertion.id) ? "#ef5b55" : "#b9bbb7", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
     { id: "edge-conflict-lucy", source: "conflict-hub", target: "lucy-lead", animated: Boolean(openConflicts.length), style: { stroke: openConflicts.length ? "#ef5b55" : "#82a43d", strokeWidth: 2 }, markerEnd: { type: arrowClosed, color: openConflicts.length ? "#ef5b55" : "#82a43d", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions },
-    { id: "edge-lucy-human", source: "lucy-lead", target: "human-owner", animated: Boolean(openConflicts.length), style: { stroke: openConflicts.length ? "#ef5b55" : "#82a43d", strokeWidth: 2 }, markerEnd: { type: arrowClosed, color: openConflicts.length ? "#ef5b55" : "#82a43d", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions },
-    ...agents.map((agent) => ({ id: `edge-human-${agent.id}`, source: "human-owner", target: `agent-${agent.id}`, animated: !openConflicts.length && agent.status === "running", style: { stroke: openConflicts.length ? "#c7c8c4" : "#4175d6", strokeDasharray: openConflicts.length ? "5 5" : undefined, strokeWidth: 1.5 }, markerEnd: { type: arrowClosed, color: openConflicts.length ? "#c7c8c4" : "#4175d6", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
-    ...agents.map((agent) => ({ id: `edge-${agent.id}-outcome`, source: `agent-${agent.id}`, target: "outcome", style: { stroke: "#c7c8c4", strokeDasharray: "5 5", strokeWidth: 1.2 }, markerEnd: { type: arrowClosed, color: "#c7c8c4", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
+    ...members.map((member) => ({ id: `edge-lucy-human-${member.user.id}`, source: "lucy-lead", target: `human-${member.user.id}`, animated: activePresence.has(member.user.id), style: { stroke: "#8b73dc", strokeWidth: 1.4 }, markerEnd: { type: arrowClosed, color: "#8b73dc", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
+    ...members.map((member) => ({ id: `edge-human-counterpart-${member.user.id}`, source: `human-${member.user.id}`, target: `counterpart-${member.user.id}`, animated: activePresence.has(member.user.id), style: { stroke: "#4175d6", strokeWidth: 1.6 }, markerEnd: { type: arrowClosed, color: "#4175d6", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
+    ...members.map((member) => ({ id: `edge-counterpart-council-${member.user.id}`, source: `counterpart-${member.user.id}`, target: "agent-council", animated: councilBusy, style: { stroke: councilEvent ? "#82a43d" : "#9fa49c", strokeWidth: 1.5 }, markerEnd: { type: arrowClosed, color: councilEvent ? "#82a43d" : "#9fa49c", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
+    ...workerAgents.map((agent) => ({ id: `edge-council-${agent.id}`, source: "agent-council", target: `agent-${agent.id}`, animated: !openConflicts.length && agent.status === "running", style: { stroke: openConflicts.length ? "#c7c8c4" : "#4175d6", strokeDasharray: openConflicts.length ? "5 5" : undefined, strokeWidth: 1.5 }, markerEnd: { type: arrowClosed, color: openConflicts.length ? "#c7c8c4" : "#4175d6", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
+    ...workerAgents.map((agent) => ({ id: `edge-${agent.id}-outcome`, source: `agent-${agent.id}`, target: "outcome", style: { stroke: "#c7c8c4", strokeDasharray: "5 5", strokeWidth: 1.2 }, markerEnd: { type: arrowClosed, color: "#c7c8c4", width: 14, height: 14 }, type: edgeBase.type, pathOptions: edgeBase.pathOptions })),
   ];
 
   const submitCorrection = (event: FormEvent) => {
     event.preventDefault();
     if (readOnly || correction.trim().length < 5) return;
     action("correction", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/corrections`, { method: "POST", body: JSON.stringify({ statement: correction.trim(), assertionType: "Constraint" }) }), tr("Named correction recorded. The shared room, active contract and prior approvals were updated.", "具名修正已記錄；共同控制室、目前合約與舊有核准已更新。" )).then((result) => { if (result) setCorrection(""); });
+  };
+
+  const runAgentCouncil = async () => {
+    if (readOnly || councilBusy) return;
+    setCouncilBusy(true); setCouncilError("");
+    try {
+      await api(`/api/missions/${mission.id}/agent-council`, { method: "POST", body: "{}" });
+      await onRefresh();
+    } catch (error) {
+      setCouncilError((error as Error).message);
+    } finally {
+      setCouncilBusy(false);
+    }
+  };
+
+  const attachContextFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || readOnly) return;
+    const content = (await file.text()).trim();
+    if (!content) { setCouncilError(tr("That file contains no readable text.", "這個檔案沒有可讀文字。")); return; }
+    const statement = `${tr("Attached file", "附加檔案")} · ${file.name}\n${content.slice(0, 4_000)}`;
+    await action("attachment", api<{ mission: MissionDetail }>(`/api/missions/${mission.id}/corrections`, { method: "POST", body: JSON.stringify({ statement, assertionType: "Constraint" }) }), tr("File context was attached and the active contract was stopped for safe replanning.", "檔案脈絡已加入；目前合約已安全停止並等待重新規劃。"));
+    setSelectedActionNode(undefined);
   };
 
   const recommendedResolution = selectedConflict?.options.find((option) => option.recommended);
@@ -1039,7 +1087,7 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
           <h2>{localizeDomainText(selectedConflict.title)}</h2><p>{localizeDomainText(selectedConflict.summary)}</p>
           <div className="mobile-conflict-switch">{openConflicts.map((conflict, index) => <button className={conflict.id === selectedConflict.id ? "active" : ""} key={conflict.id} onClick={() => setSelectedConflictId(conflict.id)}>{String(index + 1).padStart(2, "0")}</button>)}</div>
         </article>
-        <div className="mobile-agent-pause"><span>{tr("AI SOFTWARE ROLES · NOT PEOPLE", "AI 軟體工作角色 · 不是真人")}</span><p className="mobile-agent-explainer">{tr("Each role owns one plan task. None may continue until the human decision below is recorded.", "每個角色只負責計畫中的一項工作；下方的人類決策完成前，它們都不能繼續。")}</p>{agents.map((agent) => <div key={agent.id}><span><Bot size={15} /></span><p><b>{agent.name}</b><small>{agent.title}</small></p><em>{tr("WAITING", "等待")}</em></div>)}</div>
+        <div className="mobile-agent-pause"><span>{tr("AI SOFTWARE ROLES · NOT PEOPLE", "AI 軟體工作角色 · 不是真人")}</span><p className="mobile-agent-explainer">{tr("Each role owns one plan task. None may continue until the human decision below is recorded.", "每個角色只負責計畫中的一項工作；下方的人類決策完成前，它們都不能繼續。")}</p>{workerAgents.map((agent) => <div key={agent.id}><span><Bot size={15} /></span><p><b>{agent.name}</b><small>{agent.title}</small></p><em>{tr("WAITING", "等待")}</em></div>)}</div>
         <div className="mobile-flow-link"><span /><UserRound size={18} /><span /></div>
 
         <div className="mobile-step-label"><span>03</span><p>{tr("Ask the responsible person to choose", "請負責人選一個答案")}</p></div>
@@ -1049,14 +1097,18 @@ function MissionRoom({ mission, action, busy, setView, readOnly = false }: { mis
       </div> : <div className="mobile-clear-contract"><BadgeCheck size={32} /><h2>{tr("No incompatible instruction remains.", "目前沒有互不相容的指令。")}</h2><p>{tr("Open the execution plan to review preflight checks and continue.", "開啟執行計畫，檢查執行前條件並繼續任務。")}</p><button className="button button-primary button-full" onClick={() => setView("plan")}>{tr("Open execution plan", "開啟執行計畫")} <ArrowRight size={17} /></button></div>}
     </section>
     <section className="flow-canvas" aria-label={tr("Mission execution canvas", "Mission 執行 Canvas")}>
-      <div className="flow-stage-labels" aria-hidden="true"><span>{tr("Intent sources", "意圖來源")}<small>{tr("Evidence-backed inputs", "輸入與依據")}</small></span><span>{tr("Conflict", "衝突")}<small>{tr("What blocks execution", "阻擋執行的關鍵")}</small></span><span>Agent Lucy<small>{tr("Mission lead", "Mission 主理人")}</small></span><span>{tr("Human approval", "人工核准")}<small>{tr("Accountable judgment", "具權責的判斷")}</small></span><span>{tr("AI execution", "AI 執行")}<small>{tr("Governed worker tasks", "受治理的 Worker 任務")}</small></span><span>{tr("Outcome", "成果")}<small>{tr("Verifiable result", "可驗收成果")}</small></span></div>
-      <Suspense fallback={<div className="flow-loading"><span className="loader" /><p>{tr("Opening execution canvas…", "正在開啟執行 Canvas…")}</p></div>}><ExecutionFlowCanvas nodes={flowNodes} edges={flowEdges} onConflictSelect={setSelectedConflictId} /></Suspense>
+      <div className="flow-stage-labels" aria-hidden="true"><span>{tr("Evidence", "證據")}<small>{tr("What everyone said", "大家說過的話")}</small></span><span>Lucy<small>{tr("Mission partner", "Mission 搭檔")}</small></span><span>{tr("People + counterparts", "人類＋專屬 AI")}<small>{tr("One pair per teammate", "每位同事一組")}</small></span><span>{tr("Agent Council", "代理人會議")}<small>{tr("No human meeting", "人類不用開會")}</small></span><span>{tr("AI execution", "AI 執行")}<small>{tr("Work through verified tools", "透過已驗證工具工作")}</small></span><span>{tr("Outcome", "成果")}<small>{tr("Everyone signs off", "全員 sign off")}</small></span></div>
+      <div className={`agent-council-dock ${councilEvent ? "complete" : ""}`}><span><Bot size={16}/><i/></span><p><small>{councilBusy ? tr("AGENTS ARE MEETING NOW", "AGENTS 正在開會") : councilEvent ? tr("LATEST AGENT MEETING", "最新 AGENT 會議") : tr("SKIP THE HUMAN MEETING", "省下人類會議")}</small><b>{councilEvent ? tr(`${members.length} viewpoints aligned · minutes saved`, `${members.length} 個立場已對齊 · 紀錄已保存`) : tr("Let every counterpart Agent align first", "先讓每人的 counterpart Agent 彼此對齊")}</b></p><button type="button" disabled={readOnly || councilBusy} onClick={() => { void runAgentCouncil(); }}>{councilBusy ? <span className="loader small"/> : <MessageSquareWarning size={15}/>} {councilEvent ? tr("Meet again", "再對齊一次") : tr("Let Agents meet", "讓 Agents 開會")}</button></div>
+      <Suspense fallback={<div className="flow-loading"><span className="loader" /><p>{tr("Opening execution canvas…", "正在開啟執行 Canvas…")}</p></div>}><ExecutionFlowCanvas nodes={flowNodes} edges={flowEdges} onConflictSelect={setSelectedConflictId} onNodeAction={(node) => { if (!readOnly) setSelectedActionNode(node); }} /></Suspense>
+      <input ref={fileInputRef} className="visually-hidden" type="file" accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json" onChange={(event) => { void attachContextFile(event); }}/>
+      {selectedActionNode && <aside className="flow-add-menu" aria-label={tr("Add to selected mission block", "加入選取的 Mission 區塊")}><header><div><small>{tr("ADD TO THIS BLOCK", "加入這個區塊")}</small><b>{selectedActionNode.data.title}</b></div><button type="button" onClick={() => setSelectedActionNode(undefined)} aria-label={tr("Close add menu", "關閉新增選單")}><X size={16}/></button></header><p>{tr("Everyone in this Mission can add context. Relay records who changed what and stops stale work before replanning.", "Mission 裡的每個人都能補充脈絡；Relay 會記錄誰改了什麼，並在重新規劃前停住過期工作。")}</p><div><button type="button" onClick={() => { setSelectedActionNode(undefined); onInvite(); }}><span><UsersRound size={17}/></span><b>{tr("Invite a teammate", "邀請人類同事")}</b><small>{tr("They automatically receive a counterpart Agent", "加入後自動獲得專屬 AI counterpart")}</small></button><button type="button" onClick={() => { setSelectedActionNode(undefined); setView("access"); }}><span><KeyRound size={17}/></span><b>{tr("Connect a plugin or tool", "連接 Plugin 或工具")}</b><small>{tr("OAuth, scoped access and live verification", "OAuth、範圍權限與真實驗證")}</small></button><button type="button" onClick={() => fileInputRef.current?.click()}><span><FileText size={17}/></span><b>{tr("Attach a context file", "加入檔案")}</b><small>{tr("Text, Markdown, CSV or JSON; triggers safe replan", "文字、Markdown、CSV 或 JSON；加入後安全重規劃")}</small></button><button type="button" onClick={() => { setCorrection(`${tr("New task from", "從這個區塊新增任務")} “${selectedActionNode.data.title}”: `); setSelectedActionNode(undefined); }}><span><RouteIcon size={17}/></span><b>{tr("Add a task", "新增任務")}</b><small>{tr("Tell Lucy what must happen next", "告訴 Lucy 下一步必須完成什麼")}</small></button></div><footer><Bot size={14}/>{tr("Counterpart Agents can prepare and discuss. Only humans keep approval authority.", "Counterpart Agents 可以準備與討論；核准權永遠留在人類手上。")}</footer></aside>}
+      {(councilError || (councilMinutes && councilEvent)) && <aside className={`agent-council-receipt ${councilError ? "error" : ""}`}>{councilError ? <><button type="button" onClick={() => setCouncilError("")} aria-label={tr("Dismiss Agent Council error", "關閉 Agent Council 錯誤")}><X size={14}/></button><p>{councilError}</p></> : <><span><BadgeCheck size={14}/>{tr("AGENT MEETING MINUTES SAVED", "AGENT 會議紀錄已保存")}</span><b>{tr(`${councilMinutes?.representedHumans?.length ?? members.length} humans represented · ${councilMinutes?.decisionsNeeded?.length ?? 0} decisions need people`, `${councilMinutes?.representedHumans?.length ?? members.length} 位人類已被代表 · ${councilMinutes?.decisionsNeeded?.length ?? 0} 項決策需要人類`)}</b><small>{tr("Delivery to Gmail or Slack stays locked until that connector is verified and the exact send is approved.", "寄到 Gmail 或 Slack 前，仍須完成 connector 驗證與精確寄送核准。")}</small></>}</aside>}
       <form className="flow-command" onSubmit={submitCorrection}><label className="flow-command-author"><UserRound size={14} /><input aria-label={tr("Verified correction author", "已驗證的修正者")} value={correctionAuthor} readOnly /></label><Zap size={17} /><input aria-label={tr("Add a human correction", "加入人工修正")} value={correction} disabled={readOnly} onChange={(event) => setCorrection(event.target.value)} placeholder={readOnly ? tr("Read-only example · create a mission to add corrections", "唯讀範例 · 建立自己的 Mission 後即可修正") : tr("Message Lucy or add a team correction…", "告訴 Lucy，或加入團隊修正…")} /><kbd>⌘ ↵</kbd><button type="submit" disabled={readOnly || correction.trim().length < 5 || correctionAuthor.trim().length < 1 || busy === "correction"} aria-label={tr("Submit correction and replan", "送出修正並重新規劃")}>{busy === "correction" ? <span className="loader small" /> : <Send size={17} />}</button></form>
       {!inspectorOpen && <button className="flow-inspector-open" onClick={() => setInspectorOpen(true)} aria-label={tr("Open conflict inspector", "開啟衝突檢視")}><PanelRightOpen size={18} /><span>{mission.blockingConflicts}</span></button>}
     </section>
     {inspectorOpen && <aside className="flow-inspector"><div className="flow-inspector-head"><div><span>{selectedConflict ? tr("SELECTED CONFLICT", "已選取衝突") : tr("CONTRACT STATE", "合約狀態")}</span><h2>{selectedConflict ? tr(`${mission.blockingConflicts} blocking conflicts`, `${mission.blockingConflicts} 項阻擋衝突`) : tr("Execution can proceed", "執行可以繼續")}</h2></div><button className="icon-button" onClick={() => setInspectorOpen(false)} aria-label={tr("Close inspector", "關閉檢視")}><PanelRightClose size={18} /></button></div>
       <div className="compiler-receipt"><span>{tr("COMPILER RECEIPT", "編譯器憑據")}</span><div><b>{mission.sources.length}</b><small>{tr("sources", "個來源")}</small></div><div><b>{mission.assertions.length}</b><small>{tr("assertions", "項主張")}</small></div><div><b>{mission.conflicts.length}</b><small>{tr("conflicts", "項衝突")}</small></div><div><b>{mission.auditEvents.length}</b><small>{tr("audit events", "筆稽核事件")}</small></div><p><FileCheck2 size={13} /> {tr("MVP ruleset · every result links to stored source text", "MVP 規則集 · 每個結果都連回已保存的來源文字")}</p></div>
-      <section className="flow-activity-feed"><div className="flow-activity-title"><span>{tr("AUDIT ACTIVITY", "稽核活動")}</span><small><span /> {tr("persisted lineage", "已保存的 Lineage")}</small></div>{mission.auditEvents.slice(-3).reverse().map((event) => <div className="flow-activity-event" key={event.id}><span className={`activity-actor ${event.actorType}`}>{event.actorType === "human" ? <UserRound size={13} /> : event.actorType === "agent" ? <Bot size={13} /> : <Blocks size={13} />}</span><div><b>{localizeDomainText(event.actorName)}</b><p>{localizeDomainText(event.summary)}</p></div><time>{formatDate(event.createdAt, true)}</time></div>)}{!mission.auditEvents.length && <p className="flow-activity-empty">{tr("The first human or agent event will appear here.", "第一筆人類或 Agent 活動會顯示在這裡。")}</p>}</section>
+      <section className="flow-activity-feed"><div className="flow-activity-title"><span>{tr("LIVE ACTIVITY", "即時活動")}</span><small><span /> {tr("SSE + persisted lineage", "SSE ＋ 已保存 Lineage")}</small></div>{(collaboration?.events?.length ? collaboration.events : mission.auditEvents).slice(-5).reverse().map((event) => <div className="flow-activity-event" key={event.id}><span className={`activity-actor ${event.actorType}`}>{event.actorType === "human" ? <UserRound size={13} /> : event.actorType === "agent" ? <Bot size={13} /> : <Blocks size={13} />}</span><div><b>{localizeDomainText(event.actorName)}</b><p>{localizeDomainText(event.summary)}</p></div><time>{formatDate(event.createdAt, true)}</time></div>)}{!(collaboration?.events?.length || mission.auditEvents.length) && <p className="flow-activity-empty">{tr("The first human or agent event will appear here.", "第一筆人類或 Agent 活動會顯示在這裡。")}</p>}</section>
       {selectedConflict ? <>
         <div className="flow-conflict-switch">{openConflicts.map((conflict, index) => <button className={conflict.id === selectedConflict.id ? "active" : ""} key={conflict.id} onClick={() => setSelectedConflictId(conflict.id)} aria-label={`${tr("Conflict", "衝突")} ${index + 1}`}>{String(index + 1).padStart(2, "0")}</button>)}</div>
         <div className="flow-inspector-summary"><span className={`severity-tag ${selectedConflict.severity}`}>{localizeLabel(selectedConflict.severity)}</span><h3>{localizeDomainText(selectedConflict.title)}</h3><p>{localizeDomainText(selectedConflict.summary)}</p></div>
@@ -1199,7 +1251,7 @@ function JoinMissionPage() {
     try { const response = await api<{ missionId: string }>(`/api/invites/${token}/accept`, { method: "POST", body: "{}" }); navigate(`/missions/${response.missionId}?view=room`); }
     catch (err) { setError((err as Error).message); setBusy(false); }
   };
-  return <main className="join-page"><Logo/><section><span><Fingerprint size={18}/>{tr("INDIVIDUAL MISSION INVITE", "個人 MISSION 邀請")}</span><h1>{tr("Join with your own identity—not as “Shared collaborator.”", "用你自己的身分加入，不再叫做「Shared collaborator」。")}</h1><p>{tr("Accepting creates your named role inside one Mission. It does not grant access to other workspaces or missions.", "接受後只會在這一個 Mission 建立你的具名角色，不會開放其他 Workspace 或 Mission。")}</p>{error && <p className="form-error">{error}</p>}<button className="button button-primary button-large button-full" disabled={busy} onClick={() => { void accept(); }}>{busy ? <><span className="loader small"/>{tr("Verifying invite…", "正在驗證邀請…")}</> : <><UsersRound size={17}/>{tr("Accept and enter live room", "接受並進入即時 Room")}</>}</button><small><ShieldCheck size={13}/>{tr("Single-use · expires automatically · fully auditable", "一次性 · 自動到期 · 完整可稽核")}</small></section></main>;
+  return <main className="join-page"><Logo/><section><span><Fingerprint size={18}/>{tr("ONE HUMAN · ONE AI COUNTERPART", "一位人類 · 一位專屬 AI")}</span><h1>{tr("Join as yourself. Relay gives your point of view its own Agent.", "用你自己的身分加入；Relay 會給你的立場一位專屬 Agent。")}</h1><p>{tr("Accepting creates your named role inside this Mission and a counterpart Agent that can represent your goals in Agent Council meetings. Your approval authority always stays with you.", "接受後，這個 Mission 會建立你的具名角色與 AI counterpart；它能在 Agent Council 替你表達目標，但核准權永遠留在你手上。")}</p>{error && <p className="form-error">{error}</p>}<button className="button button-primary button-large button-full" disabled={busy} onClick={() => { void accept(); }}>{busy ? <><span className="loader small"/>{tr("Creating your counterpart…", "正在建立你的 AI counterpart…")}</> : <><UsersRound size={17}/>{tr("Join with my AI counterpart", "和我的 AI counterpart 一起加入")}</>}</button><small><ShieldCheck size={13}/>{tr("Single-use · mission-scoped · Agent cannot self-approve", "一次性 · 僅限此 Mission · Agent 不可自行核准")}</small></section></main>;
 }
 
 function PublicReportPage() {

@@ -164,7 +164,50 @@ body { background: #fff; color: #111; -webkit-font-smoothing: antialiased; }
 .quiet-demo-run { width: min(1180px, calc(100% - 48px)); margin: 0 auto; padding: 110px 0 140px; display: grid; grid-template-columns: minmax(0, .72fr) minmax(540px, 1.28fr); gap: 80px; border-top: 1px solid #e5e5e5; }
 .quiet-demo-run h2 { font-size: clamp(38px, 4.5vw, 58px); line-height: 1.2; }
 .quiet-demo-run > div > p { margin: 24px 0 0; color: #6e6e73; font-size: 16px; line-height: 1.7; }
-.quiet-demo-run .magic-compiler { border: 1px solid #dedede; border-radius: 24px; background: #111; box-shadow: none; }
+.quiet-demo-run .magic-compiler { overflow: hidden; border: 1px solid #dedede; border-radius: 24px; background: #fff; color: #111; box-shadow: none; }
+.quiet-demo-run .magic-topbar { min-height: 58px; border-color: #e5e5e5; color: #6e6e73; }
+.quiet-demo-run .magic-runtime { color: #111; }
+.quiet-demo-run .magic-runtime > span { background: #111; box-shadow: none; animation: none; }
+.quiet-demo-run .magic-input { padding: 22px; }
+.quiet-demo-run .magic-input-head span,
+.quiet-demo-run .magic-source-list > small,
+.quiet-demo-run .magic-receipt > span,
+.quiet-demo-run .magic-evidence > span,
+.quiet-demo-run .magic-truth { color: #777; }
+.quiet-demo-run .magic-input-head button { min-height: 38px; border: 1px solid #dedede; border-radius: 999px; background: #fff; color: #111; }
+.quiet-demo-run .magic-source-list > div { border-color: #e5e5e5; border-radius: 12px; background: #fafafa; }
+.quiet-demo-run .magic-source-list > div > span,
+.quiet-demo-run .magic-source-list p,
+.quiet-demo-run .magic-receipt b,
+.quiet-demo-run .magic-stop h3,
+.quiet-demo-run .magic-evidence b { color: #111; }
+.quiet-demo-run .magic-source-list svg,
+.quiet-demo-run .magic-evidence > div > svg,
+.quiet-demo-run .magic-control > div svg,
+.quiet-demo-run .magic-control > p > svg,
+.quiet-demo-run .magic-truth svg { color: #555; }
+.quiet-demo-run .magic-editor textarea { min-height: 210px; border-color: #d8d8d8; border-radius: 16px; background: #fafafa; color: #111; font: 500 13px/1.7 "DM Mono", monospace; }
+.quiet-demo-run .magic-editor textarea:focus { border-color: #777; box-shadow: 0 0 0 3px rgba(0, 0, 0, .05); }
+.quiet-demo-run .magic-editor .button,
+.quiet-demo-run .magic-control .button { border-radius: 999px; background: #111; color: #fff; }
+.quiet-demo-run .magic-compile-rail { color: #777; }
+.quiet-demo-run .magic-compile-rail > span { background: #dedede; }
+.quiet-demo-run .magic-loading p { color: #6e6e73; }
+.quiet-demo-run .magic-result { margin: 0 18px 18px; border-color: #dedede; border-radius: 18px; background: #fff; }
+.quiet-demo-run .magic-receipt { border-color: #e5e5e5; }
+.quiet-demo-run .magic-receipt small,
+.quiet-demo-run .magic-stop p,
+.quiet-demo-run .magic-evidence small { color: #6e6e73; }
+.quiet-demo-run .magic-stop { border-color: #e5e5e5; background: #fafafa; }
+.quiet-demo-run .magic-stop-icon { border-radius: 50%; background: #111; color: #fff; }
+.quiet-demo-run .magic-stop > div > span { color: #555; }
+.quiet-demo-run .severity-pill { border: 1px solid #bdbdbd; border-radius: 999px; background: #fff; color: #111; }
+.quiet-demo-run .magic-evidence { border-color: #e5e5e5; }
+.quiet-demo-run .magic-evidence > div { border-color: #ededed; }
+.quiet-demo-run .magic-control > div > span { border-color: #dedede; border-radius: 999px; color: #555; }
+.quiet-demo-run .magic-control > p { border-radius: 14px; background: #f3f3f3; color: #333; }
+.quiet-demo-run .magic-control > p b { color: #111; }
+.quiet-demo-run .magic-truth { border-color: #e5e5e5; }
 
 /* The same restrained system across the product. */
 .app-shell { background: #fff; }

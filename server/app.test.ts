@@ -43,6 +43,19 @@ describe("Relay mission lifecycle API", () => {
     expect(response.body.evidence).toHaveLength(2);
   });
 
+  it("accepts a concise Traditional Chinese mission objective from Lucy", async () => {
+    const response = await owner
+      .post("/api/missions")
+      .send({ ...demoMissionInput, title: "兩週產品上線", objective: "兩週內推出新產品", createdBy: "Spoofed creator" })
+      .expect(201);
+
+    expect(response.body.mission).toMatchObject({
+      title: "兩週產品上線",
+      objective: "兩週內推出新產品",
+      createdBy: "Launch owner",
+    });
+  });
+
   it("serves a completed launch-readiness run with immutable proof and transparent coordination math", async () => {
     const response = await request(app).get("/api/demo/completed").expect(200);
     const completed = response.body.mission as MissionDetail;

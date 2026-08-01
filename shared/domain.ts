@@ -55,7 +55,9 @@ export const sourceInputSchema = z.object({
 
 export const createMissionSchema = z.object({
   title: z.string().min(3).max(160),
-  objective: z.string().min(10).max(5_000),
+  // Keep this multilingual: a complete Traditional Chinese goal can be much
+  // shorter in code points than the same English sentence.
+  objective: z.string().min(5).max(5_000),
   successMetric: z.string().min(3).max(500),
   executionMode: z.enum(["launch_readiness", "live_launch"]).default("launch_readiness"),
   createdBy: z.string().min(1).max(120).default("Mission owner"),

@@ -1,55 +1,64 @@
-# Relay Agent Lucy Mission Canvas — Design QA
+# Relay AI Counterpart Workspace — Design QA
 
 Date: 2026-08-01
 
-## Source truth
+## Visual truth
 
-- User-reported problem state: `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/56FE1B08-2067-4D67-A036-39F9A4571467/1-照片-1.jpg`
-- Normalized 390 × 844 comparison: `audit/lucy-canvas-2026-08-01/00-reference-form-normalized.jpg`
-- Implemented mobile states:
-  - `audit/lucy-canvas-2026-08-01/01-mobile-start-en.png`
-  - `audit/lucy-canvas-2026-08-01/02-mobile-ready-en.png`
-  - `audit/lucy-canvas-2026-08-01/03-mobile-room-en.png`
-  - `audit/lucy-canvas-2026-08-01/04-mobile-ready-zh.png`
-  - `audit/lucy-canvas-2026-08-01/05-mobile-room-zh.png`
-- Implemented desktop states:
-  - `audit/lucy-canvas-2026-08-01/06-desktop-ready-en.png`
-  - `audit/lucy-canvas-2026-08-01/07-desktop-room-en.png`
+- Source reference: `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/56FE1B08-2067-4D67-A036-39F9A4571467/1-照片-1.jpg`
+- Source dimensions: 590 × 1280 px.
+- Implementation state: production Traditional Chinese, first-time Lucy canvas and live Mission Room.
+- Implementation viewport: 390 × 844 CSS px, DPR 1.
+- Implementation screenshots:
+  - `audit/agent-counterpart-2026-08-01/02-lucy-start-mobile.png`
+  - `audit/agent-counterpart-2026-08-01/05-mission-room-mobile-visible.png`
+  - `audit/agent-counterpart-2026-08-01/06-node-add-menu-mobile.png`
+  - `audit/agent-counterpart-2026-08-01/07-invite-counterpart-mobile.png`
+  - `audit/agent-counterpart-2026-08-01/08-agent-council-minutes-mobile.png`
+- Full-view comparison: `audit/agent-counterpart-2026-08-01/10-reference-vs-lucy-start.png` (780 × 844 px).
+- Focused iteration comparison: `audit/agent-counterpart-2026-08-01/11-room-before-vs-after.png` (780 × 844 px).
 
-## Viewports and states verified
+## Comparison findings
 
-- Mobile: 390 × 844, English and Traditional Chinese.
-- Desktop: 1440 × 1000, English.
-- States: blank Start canvas, Lucy interview complete, real Mission created, compiled Mission Room, Agent work queued.
-- Reference and implementation comparison used a normalized 390 × 844 viewport.
+- The old screen opened with a multi-field identity form, department selector, explanatory copy, and a sticky submit bar competing for attention.
+- The production replacement opens as a calm white canvas with one black Lucy card and one high-contrast action. The first decision is now unmistakable: start a conversation.
+- Progressive disclosure is preserved. Role, objective, constraints, teammates, tools, and authorization appear only when the conversation or selected canvas block needs them.
+- The post-fix Mission Room now visibly renders the human → dedicated counterpart → Agent Council handoff. The before/after comparison confirms that loaded React Flow nodes are no longer hidden on mobile.
 
-## Findings and corrections
+## Required surface review
 
-- P1 — Form overload: removed the identity, department, email and source forms from the primary intake path. Agent Lucy now asks one contextual question at a time and offers low-effort response suggestions.
-- P1 — Missing product model: the canvas now grows from Start into the human owner, shared goal, team and authority, three governed Agent tasks and final sign-off.
-- P1 — Fake magic moment risk: the final CTA calls the real Mission creation and compiler APIs, then queues eligible low-risk Agent work. External actions remain access- and approval-gated.
-- P1 — Mobile Mission Room hid the big picture: replaced the long linear mobile-only story with the same zoomable React Flow canvas used on desktop.
-- P2 — Agent identity unclear: Agent Lucy is a persistent Mission lead node between conflict resolution, human authorization and worker Agents.
-- P2 — Hard-coded human identity: removed the Jennifer image and render the verified session member with the standard person icon.
-- P2 — Mobile English clipping: verified the landing hero and Lucy flow at 390 px with no document overflow.
-- P3 — Density and navigation: controls, copy, chat height, bottom command dock and inspector behavior were adapted for 390 px without hiding the core flow.
+- Typography: existing Relay grotesk and mono hierarchy retained; mobile labels remain legible at the verified viewport.
+- Spacing: one primary card on the start canvas; bottom composer and navigation remain reachable without overlapping the current task.
+- Tokens: existing ink, warm white, lime, blue, violet, and red semantic tokens retained; no new visual language was introduced.
+- Imagery and icons: existing Lucide icon system retained; no placeholder illustrations, emoji, or decorative fake assets were added.
+- Copy: Lucy speaks as a named teammate, reflects the user's situation, asks one contextual question at a time, and explains why a person or permission is needed.
+- Responsive behavior: no horizontal document overflow at 390 CSS px; the canvas itself remains intentionally pannable and zoomable.
 
-## Interaction and truthfulness checks
+## Interaction evidence
 
-- Lucy uses the structured AI endpoint when configured and clearly labels the deterministic fallback when the model is unavailable.
-- The flow does not claim that an external action succeeded unless the Tool Gateway returns evidence.
-- Human authority, exact approval and permission boundaries remain visible.
-- Mobile E2E created real Missions in both English and Traditional Chinese and reached the live Mission Room.
-- Mobile flow rendered 10+ nodes including Agent Lucy and three worker Agents.
-- `document.scrollWidth === document.clientWidth` at 390 px and 1440 px.
-- Browser console errors: none.
+- Home CTA opens the Lucy canvas.
+- Lucy accepts a concise Chinese goal and creates a Mission after gathering role, goal, constraint, teammate, and outcome context.
+- Mission Room loads the persisted Mission through the production database and live SSE event stream.
+- Clicking a canvas block opens the universal add panel with teammate, plugin/tool, file, and task actions.
+- Teammate action opens a named role invitation flow and explicitly states that joining creates a dedicated AI counterpart without transferring approval authority.
+- Plugin/tool action opens the Mission-scoped Access Blueprint.
+- New-task action prefills the Lucy correction composer with the selected block context.
+- Agent Council action persists meeting minutes, updates counterpart and Council node states to 100%, and displays the connector plus exact-approval boundary for Gmail or Slack delivery.
+- Browser console review after the final production flow: 0 warnings and 0 errors.
 
-## Engineering verification
+## Comparison history
+
+1. P0 — concise Chinese objectives were rejected by the generic ten-character minimum. The shared mission schema and client constraint now accept meaningful multilingual objectives from five characters. A production Mission was created successfully after the fix.
+2. P1 — the mobile graph loaded real nodes but React Flow left them with `visibility: hidden`; the canvas therefore looked empty. The compact viewport now focuses the human/counterpart handoff and mobile nodes are explicitly visible. Production visual evidence confirms the fix.
+3. P2 — the original intake exposed identity and organization fields before value. Replaced by the one-action Lucy canvas and conversational progressive disclosure.
+
+## Verification
 
 - `npm run check`: passed.
-- `npm test -- --run`: 30 tests passed across 6 files.
+- `npm test -- --run`: 32/32 tests passed across 6 files.
 - `npm run build`: passed.
+- Production health: PostgreSQL connected, durable mode true.
+- Production CSS contains the mobile node visibility fix.
+- Production Agent Council receipt persisted and appeared in the live event ledger.
+- Remaining P0/P1/P2 issues in the requested journey: none.
 
-## Final result
-
-passed
+final result: passed

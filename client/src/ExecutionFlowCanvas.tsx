@@ -3,8 +3,10 @@ import {
   Controls,
   Handle,
   MiniMap,
+  Panel,
   Position,
   ReactFlow,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -38,6 +40,8 @@ export type MissionFlowData = {
   progress?: number;
   accent?: "red" | "violet" | "blue" | "lime" | "amber";
   addable?: boolean;
+  actionHref?: string;
+  actionLabel?: string;
 };
 
 export type MissionFlowNode = Node<MissionFlowData, "missionNode">;
@@ -63,9 +67,16 @@ function MissionFlowNodeCard({ data }: NodeProps<MissionFlowNode>) {
     </div>
     {data.detail && <p>{data.detail}</p>}
     {typeof data.progress === "number" && <div className="flow-progress"><span style={{ width: `${data.progress}%` }} /><small>{data.progress}%</small></div>}
+    {data.actionHref && <button className="flow-node-primary-action" type="button" onClick={(event) => { event.stopPropagation(); window.location.assign(data.actionHref!); }}>{data.actionLabel ?? "Open"}</button>}
     {data.addable !== false && <span className="flow-node-add" title="Add to this block"><Plus size={13}/></span>}
     {data.variant !== "outcome" && <Handle type="source" position={Position.Right} className="flow-handle" />}
   </div>;
+}
+
+function CanvasOverviewControl({ compact }: { compact: boolean }) {
+  const { fitView } = useReactFlow();
+  if (!compact) return null;
+  return <Panel position="top-left" className="canvas-overview-control"><button type="button" onClick={() => { void fitView({ padding: .12, minZoom: .28, maxZoom: .5, duration: 320 }); }}><Target size={16}/><span>Fit</span></button></Panel>;
 }
 
 export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect, onNodeAction, presentation = false }: { nodes: MissionFlowNode[]; edges: Edge[]; onConflictSelect: (id: string) => void; onNodeAction?: (node: MissionFlowNode) => void; presentation?: boolean }) {
@@ -76,10 +87,11 @@ export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect, on
   // available when someone wants the whole mission map.
   const defaultViewport = presentation
     ? compact ? { x: -95, y: 120, zoom: 0.52 } : { x: 24, y: 104, zoom: 0.64 }
-    : compact ? { x: -700, y: 158, zoom: 0.8 } : { x: 12, y: 100, zoom: 0.88 };
+    : compact ? { x: 18, y: 105, zoom: 0.84 } : { x: 12, y: 100, zoom: 0.88 };
   return <ReactFlow className={presentation ? "presentation-flow" : undefined} nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .72 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} panOnScroll={false} zoomOnPinch zoomOnScroll={!compact} preventScrolling={!compact} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); onNodeAction?.(node); }} proOptions={{ hideAttribution: true }}>
-    <Background color="#d7d8d2" gap={24} size={1} />
-    <Controls position="bottom-left" showInteractive={false} />
-    {!presentation && <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor={(node) => node.data.variant === "conflict" ? "#ef5b55" : node.data.variant === "human" ? "#7659e8" : node.data.variant === "agent" ? "#4175d6" : "#baff39"} />}
+    <Background color="#dedede" gap={28} size={1} />
+    <CanvasOverviewControl compact={compact}/>
+    <Controls position="bottom-left" showInteractive={false} showZoom={!compact} showFitView={!compact}/>
+    {!presentation && !compact && <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor={(node) => node.data.variant === "conflict" ? "#c2211a" : node.data.variant === "agent" ? "#1d65b5" : "#8f8f8f"} />}
   </ReactFlow>;
 }

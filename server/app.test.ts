@@ -115,6 +115,15 @@ describe("Relay mission lifecycle API", () => {
     const decisionInvite = await owner.post(`/api/missions/${mission.id}/invites`).send({
       name: "Mina Finance", email: "mina.finance@example.com", title: "Finance lead", department: "Finance", missionRole: "decision_maker",
     }).expect(201);
+    expect(decisionInvite.body.invite.delivery).toMatchObject({ status: "not_configured", provider: "none" });
+    const preview = await request(app).get(`/api/invites/${decisionInvite.body.invite.token}`).expect(200);
+    expect(preview.body.invite).toMatchObject({
+      inviterName: "Launch owner",
+      invitee: { name: "Mina Finance", email: "mina.finance@example.com", department: "Finance", missionRole: "decision_maker" },
+      mission: { id: mission.id, title: mission.title, openConflicts: mission.openConflicts },
+    });
+    expect(preview.body.invite.recap.voices.length).toBeGreaterThan(0);
+    expect(preview.body.invite.recap.whatYouNeedToDo.zhTW).toContain("待決定");
     const decisionMaker = request.agent(app);
     await decisionMaker.post(`/api/invites/${decisionInvite.body.invite.token}/accept`).send({}).expect(200);
 

@@ -6,6 +6,7 @@ import type {
   MissionComment,
   MissionMember,
   Presence,
+  MissionInvitePreview,
   RelayUser,
   TaskHandoff,
 } from "../shared/domain";
@@ -55,6 +56,7 @@ type MemoryInvite = {
   department?: string;
   workspaceRole: "admin" | "member" | "viewer";
   missionRole: MissionMember["role"];
+  invitedByName: string;
   expiresAt: string;
   acceptedAt?: string;
 };
@@ -414,7 +416,7 @@ export async function createMissionInvite(
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
   if (!pool) {
-    memoryInvites.set(tokenHash, { tokenHash, workspaceId: scope.workspaceId, missionId, email: input.email, name: input.name, title: input.title, department: input.department, workspaceRole: input.workspaceRole, missionRole: input.missionRole, expiresAt });
+    memoryInvites.set(tokenHash, { tokenHash, workspaceId: scope.workspaceId, missionId, email: input.email, name: input.name, title: input.title, department: input.department, workspaceRole: input.workspaceRole, missionRole: input.missionRole, invitedByName: scope.actorName, expiresAt });
   } else {
     await pool.query(
       `INSERT INTO workspace_invites (id,workspace_id,mission_id,email,name,title,department,workspace_role,mission_role,token_hash,invited_by,expires_at)
@@ -424,6 +426,69 @@ export async function createMissionInvite(
   }
   await recordCollaborationEvent({ missionId, actor: { type: "human", id: scope.userId, name: scope.actorName }, eventType: "member.invited", entityType: "invite", summary: `${input.name} was invited as ${input.department || "team"} ${input.missionRole}.`, data: { name: input.name, department: input.department, missionRole: input.missionRole } });
   return { token: rawToken, expiresAt, invitee: { name: input.name, email: input.email, title: input.title, department: input.department, missionRole: input.missionRole } };
+}
+
+export async function previewMissionInvite(rawToken: string): Promise<MissionInvitePreview> {
+  const tokenHash = hashToken(rawToken);
+  const invite = !pool
+    ? memoryInvites.get(tokenHash)
+    : (await pool.query(
+        `SELECT wi.*, COALESCE(u.name, 'A teammate') AS invited_by_name
+         FROM workspace_invites wi
+         LEFT JOIN users u ON u.id=wi.invited_by
+         WHERE wi.token_hash=$1 AND wi.accepted_at IS NULL AND wi.revoked_at IS NULL AND wi.expires_at>now()`,
+        [tokenHash],
+      )).rows[0];
+  if (!invite || invite.acceptedAt || invite.accepted_at) throw Object.assign(new Error("Invite is invalid or expired."), { status: 410 });
+  const missionId = invite.missionId ?? invite.mission_id;
+  const mission = await store.getMission(missionId, { kind: "share", missionId, actorName: "Invited teammate", canWrite: false });
+  const missionRole = (invite.missionRole ?? invite.mission_role) as MissionMember["role"];
+  const openConflicts = mission.conflicts.filter((conflict) => conflict.status === "open");
+  const waitingAgentTasks = mission.currentPlan?.tasks.filter((task) => task.ownerType === "agent" && task.status !== "completed" && task.status !== "failed").length ?? 0;
+  const action = missionRole === "owner" || missionRole === "decision_maker"
+    ? {
+        en: openConflicts.length ? `Review ${openConflicts.length} open ${openConflicts.length === 1 ? "decision" : "decisions"} and choose the instruction the team should follow.` : "Review any exact external action that needs your authority.",
+        zhTW: openConflicts.length ? `確認 ${openConflicts.length} 項待決定問題，選出團隊真正要採用的指令。` : "檢查需要你權限的精確外部操作。",
+      }
+    : missionRole === "observer"
+      ? { en: "Read the recap and follow progress. Relay will ask only if your context is needed.", zhTW: "先看完整摘要並追蹤進度；只有需要你的脈絡時 Relay 才會找你。" }
+      : { en: "Check that Relay understood your area, then add any missing constraint or evidence.", zhTW: "確認 Relay 是否理解你的範圍，再補上缺少的限制或證據。" };
+  const voices = mission.sources.slice(0, 4).map((source) => ({
+    author: source.author,
+    sourceType: source.type,
+    statement: mission.assertions.find((assertion) => assertion.sourceId === source.id)?.statement ?? source.content.slice(0, 320),
+  }));
+  return {
+    expiresAt: toIso(invite.expiresAt ?? invite.expires_at)!,
+    inviterName: invite.invitedByName ?? invite.invited_by_name ?? "A teammate",
+    invitee: {
+      name: invite.name,
+      email: invite.email,
+      title: invite.title ?? undefined,
+      department: invite.department ?? undefined,
+      missionRole,
+    },
+    mission: {
+      id: mission.id,
+      title: mission.title,
+      objective: mission.objective,
+      successMetric: mission.successMetric,
+      status: mission.status,
+      currentPlanVersion: mission.currentPlanVersion,
+      openConflicts: mission.openConflicts,
+      pendingApprovals: mission.pendingApprovals,
+      waitingAgentTasks,
+    },
+    recap: {
+      whatHappened: {
+        en: `Relay reconciled ${mission.sources.length} sources, found ${openConflicts.length} open decisions and paused ${waitingAgentTasks} Agent tasks safely.`,
+        zhTW: `Relay 已整理 ${mission.sources.length} 個來源、找出 ${openConflicts.length} 項待決定問題，並安全暫停 ${waitingAgentTasks} 個 Agent 任務。`,
+      },
+      whatYouNeedToDo: action,
+      voices,
+      decisions: openConflicts.slice(0, 3).map((conflict) => ({ title: conflict.title, summary: conflict.summary, decisionOwner: conflict.decisionOwner })),
+    },
+  };
 }
 
 export async function acceptMissionInvite(rawToken: string) {

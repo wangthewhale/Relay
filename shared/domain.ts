@@ -104,6 +104,7 @@ export const inviteMemberSchema = z.object({
   department: z.enum(departments).default("Other"),
   workspaceRole: z.enum(["admin", "member", "viewer"]).default("member"),
   missionRole: z.enum(missionRoles).default("contributor"),
+  locale: z.enum(["en", "zh-TW"]).default("zh-TW"),
 });
 
 export const presenceSchema = z.object({
@@ -569,6 +570,42 @@ export interface MissionImpact {
   humanDecisions: number;
   meetingsAvoided: number;
   peopleHoursAvoided: number;
+}
+
+export interface InviteDelivery {
+  status: "sent" | "not_configured" | "failed";
+  provider: "brevo" | "none";
+  messageId?: string;
+  detail?: string;
+}
+
+export interface MissionInvitePreview {
+  expiresAt: string;
+  inviterName: string;
+  invitee: {
+    name: string;
+    email: string;
+    title?: string;
+    department?: string;
+    missionRole: MissionMember["role"];
+  };
+  mission: {
+    id: string;
+    title: string;
+    objective: string;
+    successMetric: string;
+    status: MissionSummary["status"];
+    currentPlanVersion: number;
+    openConflicts: number;
+    pendingApprovals: number;
+    waitingAgentTasks: number;
+  };
+  recap: {
+    whatHappened: { en: string; zhTW: string };
+    whatYouNeedToDo: { en: string; zhTW: string };
+    voices: Array<{ author: string; sourceType: string; statement: string }>;
+    decisions: Array<{ title: string; summary: string; decisionOwner: string }>;
+  };
 }
 
 export interface MissionDetail extends MissionSummary {

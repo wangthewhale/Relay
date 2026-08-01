@@ -40,6 +40,7 @@ import {
   getRoomState,
   heartbeatPresence,
   initializeMissionRoom,
+  previewMissionInvite,
   recordCollaborationEvent,
   recordLearningSignal,
   subscribeToMission,
@@ -50,6 +51,7 @@ import { executeToolCall } from "./toolGateway";
 import { contentHash } from "./execution";
 import { missionEvalCases } from "./evals/missionCases";
 import { continueLucyConversation, lucyTurnSchema } from "./lucy";
+import { sendMissionInviteEmail } from "./invitations";
 
 function requestBaseUrl(request: Request) {
   const host = request.header("X-Forwarded-Host")?.split(",")[0]?.trim() || request.get("host");
@@ -477,7 +479,46 @@ export function createApp() {
   app.post("/api/missions/:id/invites", async (request, response, next) => {
     try {
       const scope = await resolveRequestScope(request, { sessionOnly: true, write: true });
-      response.status(201).json({ invite: await createMissionInvite(request.params.id, scope, inviteMemberSchema.parse(request.body)) });
+      const input = inviteMemberSchema.parse(request.body);
+      const invite = await createMissionInvite(request.params.id, scope, input);
+      const preview = await previewMissionInvite(invite.token);
+      const inviteUrl = `${requestBaseUrl(request)}/join/${encodeURIComponent(invite.token)}`;
+      const delivery = await sendMissionInviteEmail({ preview, inviteUrl, locale: input.locale });
+      await recordCollaborationEvent({
+        missionId: request.params.id,
+        actor: { type: delivery.status === "sent" ? "provider" : "system", name: delivery.status === "sent" ? "Brevo" : "Relay Invite Delivery" },
+        eventType: delivery.status === "sent" ? "invite.email_sent" : "invite.email_not_sent",
+        entityType: "invite",
+        summary: delivery.status === "sent" ? `Mission invitation email sent to ${input.email}.` : `Mission invitation email was not sent to ${input.email}.`,
+        data: { email: input.email, status: delivery.status, provider: delivery.provider, messageId: delivery.messageId, detail: delivery.detail },
+      });
+      response.status(201).json({ invite: { ...invite, delivery } });
+    } catch (error) { next(error); }
+  });
+
+  app.get("/api/invites/:token", async (request, response, next) => {
+    try {
+      response.json({ invite: await previewMissionInvite(request.params.token) });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/invites/:token/send", async (request, response, next) => {
+    try {
+      const scope = await resolveRequestScope(request, { sessionOnly: true, write: true });
+      const preview = await previewMissionInvite(request.params.token);
+      await assertDecisionAuthority(preview.mission.id, scope, 2);
+      const locale = request.body?.locale === "en" ? "en" : "zh-TW";
+      const inviteUrl = `${requestBaseUrl(request)}/join/${encodeURIComponent(request.params.token)}`;
+      const delivery = await sendMissionInviteEmail({ preview, inviteUrl, locale });
+      await recordCollaborationEvent({
+        missionId: preview.mission.id,
+        actor: { type: delivery.status === "sent" ? "provider" : "system", name: delivery.status === "sent" ? "Brevo" : "Relay Invite Delivery" },
+        eventType: delivery.status === "sent" ? "invite.email_sent" : "invite.email_not_sent",
+        entityType: "invite",
+        summary: delivery.status === "sent" ? `Mission invitation email sent to ${preview.invitee.email}.` : `Mission invitation email was not sent to ${preview.invitee.email}.`,
+        data: { email: preview.invitee.email, status: delivery.status, provider: delivery.provider, messageId: delivery.messageId, detail: delivery.detail },
+      });
+      response.json({ delivery });
     } catch (error) { next(error); }
   });
 

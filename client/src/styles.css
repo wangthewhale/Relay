@@ -246,11 +246,14 @@ html[lang="zh-TW"] .hero-copy > p, html[lang="zh-TW"] .section-heading > p, html
 .app-header { position: sticky; top: 0; z-index: 30; height: 66px; padding: 0 28px; display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--line); background: rgba(239,238,232,.94); backdrop-filter: blur(14px); }
 .app-menu { display: none; }.app-search { width: min(430px, 45vw); min-height: 37px; padding: 0 12px; display: flex; align-items: center; gap: 9px; border: 1px solid #d3d2cb; background: #f8f7f2; color: #8b8c88; font-size: 11px; }.app-search kbd { margin-left: auto; padding: 2px 6px; border: 1px solid #d5d4ce; background: #eeede7; font-size: 8px; }
 .header-actions { margin-left: auto; display: flex; align-items: center; gap: 15px; }.environment { display: flex; align-items: center; gap: 7px; font: 500 9px "DM Mono"; color: #565853; }.environment > span { width: 7px; height: 7px; border-radius: 50%; background: #2aa981; }
+.my-relay-link { min-height: 38px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d7d7d2; border-radius: 999px; background: #fff; color: #333; font-size: 11px; font-weight: 750; }
 .page { width: min(1480px, 100%); margin: 0 auto; padding: 42px 42px 70px; }
 .page-title { display: flex; justify-content: space-between; align-items: flex-end; gap: 30px; margin-bottom: 32px; }.page-title h1 { margin: 7px 0 8px; font-size: clamp(30px, 4vw, 45px); letter-spacing: -.05em; }.page-title p { margin: 0; color: var(--muted); font-size: 13px; }.page-kicker { font-size: 9px; letter-spacing: .13em; color: var(--teal); }
 .stats-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); border: 1px solid var(--line); margin-bottom: 24px; }
 .stat-card { min-height: 133px; padding: 18px; border-right: 1px solid var(--line); background: rgba(255,255,255,.53); }.stat-card:last-child { border-right: 0; }.stat-top { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }.stat-card strong { display: block; margin: 10px 0 3px; font-size: 31px; line-height: 1; }.stat-card small { color: #8a8b86; font-size: 9px; }.stat-card.danger svg { color: var(--red); }.stat-card.amber svg { color: var(--amber); }.stat-card.violet svg { color: var(--violet); }.stat-card.teal svg { color: var(--teal); }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 2.25fr) minmax(270px, .75fr); gap: 24px; }
+.my-relay-account { margin: -8px 0 22px; padding: 20px 22px; display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 16px; border: 1px solid var(--line); border-radius: 20px; background: #fff; }
+.my-relay-account.ready { border-color: #cfd6c8; }.my-relay-avatar { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; background: #111; color: #fff; font-size: 14px; font-weight: 800; }.my-relay-account > div { min-width: 0; display: grid; gap: 3px; }.my-relay-account small { color: #777; font: 700 9px "DM Mono"; letter-spacing: .09em; }.my-relay-account h2 { margin: 0; font-size: 20px; }.my-relay-account p { min-width: 0; margin: 2px 0 0; display: flex; align-items: center; gap: 7px; color: #666; font-size: 12px; }.my-relay-account p span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.my-relay-state { min-height: 38px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; background: #edf5e8; color: #315d27; font-size: 11px; font-weight: 750; }.my-relay-account.incomplete .my-relay-state { background: #fff1ef; color: #943b34; }
 .dashboard-grid > *, .missions-panel { min-width: 0; }
 .panel { border: 1px solid var(--line); background: rgba(255,255,255,.58); }
 .panel-heading { min-height: 68px; padding: 15px 19px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }.panel-heading > div { display: grid; gap: 5px; }.panel-heading > div > span { font-size: 8px; letter-spacing: .12em; color: var(--muted); }.panel-heading h2 { margin: 0; font-size: 16px; }.count-chip { padding: 4px 8px; background: var(--ink); color: #fff; font: 500 9px "DM Mono"; }
@@ -259,6 +262,7 @@ html[lang="zh-TW"] .hero-copy > p, html[lang="zh-TW"] .section-heading > p, html
 .human-gates { display: flex; align-items: center; gap: 5px; }.human-gates svg { width: 13px; }.progress-wrap { display: flex; align-items: center; gap: 7px; }.progress-track { width: 63px; height: 4px; background: #dddcd5; }.progress-track span { display: block; height: 100%; background: var(--teal); }.progress-wrap small { font: 500 8px "DM Mono"; color: #777; }
 .attention-item { min-height: 95px; padding: 15px 17px; display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: center; border-bottom: 1px solid var(--line); }.attention-item:hover { background: #fff; }.attention-icon { width: 34px; height: 34px; display: grid; place-items: center; background: var(--red-soft); color: var(--red); }.attention-item div { min-width: 0; }.attention-item b { font-size: 10px; }.attention-item p { margin: 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }.attention-item small { color: #8b8c87; font-size: 8px; }
 .empty-state { min-height: 180px; padding: 28px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: var(--muted); }.empty-state b, .empty-state h3 { margin: 13px 0 6px; color: var(--ink); }.empty-state p { margin: 0; font-size: 12px; }.empty-state.large { min-height: 420px; }
+.mission-list-empty { min-height: 300px; padding: 36px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }.mission-list-empty > b { margin-top: 14px; font-size: 18px; }.mission-list-empty > p { max-width: 450px; margin: 8px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
 
 /* Forms */
 .intake-page { max-width: 1280px; }.intake-title { align-items: flex-start; }.back-link { display: block; margin-bottom: 28px; font-size: 11px; color: var(--muted); }
@@ -633,6 +637,11 @@ input:focus, textarea:focus, select:focus { border-color: var(--ink); box-shadow
 }
 
 @media (max-width: 760px) {
+  .my-relay-link span { display: none; }.my-relay-link { width: 44px; padding: 0; justify-content: center; }
+  .my-relay-account { padding: 17px; grid-template-columns: auto minmax(0,1fr); align-items: start; gap: 13px; }
+  .my-relay-account > .my-relay-state { grid-column: 1 / -1; justify-self: stretch; justify-content: center; min-height: 44px; font-size: 14px; }
+  .my-relay-account > .button { grid-column: 1 / -1; width: 100%; }
+  .my-relay-account h2 { font-size: 20px; }.my-relay-account p { font-size: 15px; line-height: 1.45; }
   .mission-header, .mission-topbar { height: 70px; }
   .mission-topbar { padding: 0 10px; gap: 9px; }.mission-brand > span { width: 34px; height: 34px; }.mission-title-compact { padding-left: 9px; }.mission-title-compact h1 { max-width: 31vw; font-size: 12px; }
   .mission-plan-control, .mission-compile, .mission-topbar > .language-switcher, .mission-refresh { display: none; }
@@ -970,7 +979,9 @@ input:focus, textarea:focus, select:focus { border-color: var(--ink); box-shadow
   .lucy-held-context { display: none; }
   .lucy-messages { max-height: 280px; padding: 13px 12px 5px; gap: 11px; }
   .lucy-messages > div > span { width: 36px; height: 36px; }.lucy-messages p { padding: 11px 13px; font-size: 16px; line-height: 1.52; }
-  .lucy-suggestions { padding: 9px 12px 11px; }.lucy-suggestions button { min-height: 46px; max-width: 300px; padding: 0 14px; font-size: 15px; }
+  .lucy-suggestions { padding: 10px 12px 12px; display: grid; grid-template-columns: 1fr; align-items: stretch; gap: 8px; overflow: visible; }
+  .lucy-suggestions > span { display: block; color: #747474; font-size: 11px; letter-spacing: .07em; }
+  .lucy-suggestions button { width: 100%; min-height: 48px; max-width: none; padding: 10px 14px; justify-content: space-between; border-radius: 14px; font-size: 15px; line-height: 1.35; text-align: left; white-space: normal; }
   .lucy-composer { min-height: 62px; margin: 0 12px 12px; padding: 6px 6px 6px 13px; border-radius: 15px; }.lucy-composer input { min-height: 48px; font-size: 16px; }.lucy-composer button { width: 48px; height: 48px; border-radius: 12px; }
   .lucy-ready { padding: 10px 12px 12px; }.lucy-ready > button:not(.lucy-add-context) { min-height: 52px; font-size: 16px; }
   .lucy-chat > footer { display: none; }

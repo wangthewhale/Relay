@@ -39,10 +39,11 @@ import { api } from "./api";
 import { tr, useLocale } from "./i18n";
 import "@xyflow/react/dist/style.css";
 
-type LucyPhase = "identity" | "objective" | "context" | "success" | "ready";
+type LucyPhase = "identity" | "account" | "objective" | "context" | "success" | "ready";
 
 type LucyMemory = {
   name: string;
+  email: string;
   title: string;
   department: Department;
   objective: string;
@@ -56,6 +57,7 @@ type LucyReply = {
   nextPhase: LucyPhase;
   memory: LucyMemory;
   modelUsed: boolean;
+  suggestions: string[];
 };
 
 type LucyMessage = { id: string; role: "lucy" | "human"; body: string };
@@ -78,6 +80,7 @@ export type LucyMissionDraft = {
 
 const emptyMemory: LucyMemory = {
   name: "",
+  email: "",
   title: "",
   department: "Other",
   objective: "",
@@ -101,17 +104,18 @@ function LucyNodeCard({ data }: NodeProps<LucyNode>) {
     <div className="lucy-node-head"><span>{nodeIcon(data.variant)}</span><div><small>{data.eyebrow}</small><b>{data.title}</b></div>{data.status && <em>{data.status}</em>}</div>
     <p>{data.detail}</p>
     {data.variant === "start" && <button type="button" className="nodrag nowheel" onClick={data.onStart}>{tr("Start with Lucy", "和 Lucy 開始")}<ArrowRight size={16} /></button>}
-    {!(["outcome", "start"] as LucyNodeData["variant"][]).includes(data.variant) && <Handle type="source" position={Position.Right} className="lucy-handle" />}
+    {data.variant !== "outcome" && <Handle type="source" position={Position.Right} className="lucy-handle" />}
   </article>;
 }
 
 function phaseNumber(phase: LucyPhase) {
-  return { identity: 1, objective: 2, context: 3, success: 4, ready: 4 }[phase];
+  return { identity: 1, account: 2, objective: 3, context: 4, success: 5, ready: 5 }[phase];
 }
 
 function phaseLabel(phase: LucyPhase) {
   return {
     identity: tr("MEETING YOU", "正在認識你"),
+    account: tr("CREATING YOUR RELAY", "正在建立你的 RELAY"),
     objective: tr("HOLDING THE GOAL", "正在記住目標"),
     context: tr("FORMING THE TEAM", "正在組隊"),
     success: tr("DEFINING DONE", "正在確認終點"),
@@ -154,6 +158,9 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
   }]);
   const inputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const [suggestions, setSuggestions] = useState<string[]>(() => locale === "zh-TW"
+    ? ["我是執行長，負責最後決策", "我負責 Growth 與社群", "我是工程師，負責技術交付"]
+    : ["I’m the CEO and final decision maker", "I own Growth and social", "I’m the engineer shipping it"]);
 
   useEffect(() => { if (started) window.setTimeout(() => inputRef.current?.focus(), 120); }, [started, phase]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest" }); }, [messages, thinking]);
@@ -167,16 +174,9 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
   const start = () => { setStarted(true); setChatOpen(true); setSelectedNode("lucy"); };
   const reset = () => {
     setStarted(false); setPhase("identity"); setMemory(emptyMemory); setInput(""); setThinking(false); setModelUsed(undefined); setLocalError(""); setSelectedNode("start");
+    setSuggestions(locale === "zh-TW" ? ["我是執行長，負責最後決策", "我負責 Growth 與社群", "我是工程師，負責技術交付"] : ["I’m the CEO and final decision maker", "I own Growth and social", "I’m the engineer shipping it"]);
     setMessages([{ id: `hello-${Date.now()}`, role: "lucy", body: tr("Hi, I’m Lucy—your counterpart for this mission. I’ll remember your point of view, bring in the right people, and let the Agents do the meeting. What should I call you, and what do you own here?", "嗨，我是 Lucy，這個 Mission 裡專門替你守住目標的 AI 搭檔。我會記住你的立場、找對的人加入，也會讓 Agents 代替大家開會。你希望我怎麼稱呼你？你在這裡負責什麼？") }]);
   };
-
-  const suggestions = useMemo(() => {
-    if (phase === "identity") return locale === "zh-TW" ? ["我是執行長，負責最後決策", "我負責 Growth 與社群", "我是工程師，負責技術交付", "我是財務，負責預算核准"] : ["I’m the CEO and final decision maker", "I own Growth and social", "I’m the engineer shipping it", "I own finance approval"];
-    if (phase === "objective") return locale === "zh-TW" ? ["兩週內推出新產品", "月底前完成行銷活動", "把新客戶安全上線"] : ["Launch the product in two weeks", "Ship the campaign by month-end", "Onboard the new client safely"];
-    if (phase === "context") return locale === "zh-TW" ? ["需要財務核准預算，不能超支", "需要工程與設計，發布前 CEO 要核准", "不能寄給現有客戶，社群要先看文案"] : ["Finance must approve; never exceed budget", "Engineering and Design contribute; CEO approves launch", "Exclude current customers; Social reviews the copy"];
-    if (phase === "success") return locale === "zh-TW" ? ["準時發布且所有負責人 sign off", "完成 100 筆註冊，CPA 低於目標", "通過驗收並交付可查證的成果"] : ["Launch on time with every owner signed off", "Reach 100 signups under target CPA", "Pass acceptance with verifiable proof"];
-    return [];
-  }, [locale, phase]);
 
   const send = async (value: string) => {
     const message = value.trim();
@@ -184,14 +184,19 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
     setInput(""); setLocalError(""); setThinking(true);
     setMessages((current) => [...current, { id: `human-${Date.now()}`, role: "human", body: message }]);
     try {
+      if (phase === "account") {
+        const email = message.match(/[^\s@]+@[^\s@]+\.[^\s@]+/)?.[0]?.toLowerCase();
+        if (!email) {
+          setMessages((current) => [...current, { id: `lucy-email-${Date.now()}`, role: "lucy", body: tr("That doesn’t look like a complete email yet. Type the email you want to use for your Relay account—I won’t guess it for you.", "這看起來還不是完整的 Email。請輸入你要用於 Relay 帳號的 Email；我不會替你猜。") }]);
+          setSuggestions([]);
+          return;
+        }
+        await api("/api/session/profile", { method: "PUT", body: JSON.stringify({ name: memory.name.trim() || tr("Mission owner", "Mission 負責人"), email, title: memory.title, department: memory.department }) });
+      }
       const response = await api<LucyReply>("/api/lucy/turn", { method: "POST", body: JSON.stringify({ locale, phase, message, memory }) });
-      const goalWasAlreadyCaptured = phase === "identity" && memory.objective.trim().length >= 3 && response.nextPhase === "objective";
-      const nextPhase = goalWasAlreadyCaptured ? "context" : response.nextPhase;
-      const reply = goalWasAlreadyCaptured
-        ? tr("I know your role and I’m still holding the goal you gave me. Who must be involved, what approval or file cannot be missing, and what must never go wrong?", "你的角色我記住了，剛才的目標也還在。這件事一定要找誰加入、不能少哪個授權或檔案，以及有什麼絕對不能出錯？")
-        : response.reply;
-      setMemory(response.memory); setPhase(nextPhase); setModelUsed(response.modelUsed);
-      setMessages((current) => [...current, { id: `lucy-${Date.now()}`, role: "lucy", body: reply }]);
+      const nextPhase = response.nextPhase;
+      setMemory(response.memory); setPhase(nextPhase); setModelUsed(response.modelUsed); setSuggestions(response.suggestions);
+      setMessages((current) => [...current, { id: `lucy-${Date.now()}`, role: "lucy", body: response.reply }]);
       setSelectedNode(nextPhase === "objective" ? "identity" : nextPhase === "context" ? "goal" : nextPhase === "success" ? "team" : nextPhase === "ready" ? "outcome" : "lucy");
     } catch (requestError) {
       setLocalError((requestError as Error).message);
@@ -205,7 +210,7 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
     const ownerName = memory.name.trim() || tr("Mission owner", "Mission 負責人");
     const collaborators = memory.collaborators.length ? `\n${tr("People or roles to involve", "需要加入的人或角色")}：${memory.collaborators.join("、")}` : "";
     void onLaunch({
-      owner: { name: ownerName, email: "", title: short(memory.title, tr("Mission owner", "Mission 負責人"), 120), department: memory.department },
+      owner: { name: ownerName, email: memory.email, title: short(memory.title, tr("Mission owner", "Mission 負責人"), 120), department: memory.department },
       input: {
         title: short(memory.objective, tr("Lucy-guided mission", "Lucy 引導任務"), 120),
         objective: memory.objective,
@@ -254,6 +259,8 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
   const progress = phaseNumber(phase);
   const heldContext = phase === "identity"
     ? tr("I’m listening for who you are—not forcing you into fields.", "我先理解你是誰，不把你塞進欄位裡。")
+    : phase === "account"
+      ? tr("I’m creating the identity that will hold every mission you join.", "我正在建立能收好你所有 Mission 的個人身分。")
     : phase === "objective"
       ? short(memory.title, tr("Your role is safe with me.", "你的角色我記住了。"), 88)
       : phase === "context"
@@ -264,6 +271,7 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
   const latestLucyMessage = messages.filter((message) => message.role === "lucy").at(-1)?.body ?? heldContext;
   const mobileSteps = [
     { label: tr("You", "你的角色"), value: memory.title || tr("Lucy is listening", "Lucy 正在認識你"), done: Boolean(memory.title) },
+    { label: tr("Account", "個人帳號"), value: memory.email || tr("Your missions will live here", "之後從這裡找回所有 Mission"), done: Boolean(memory.email) },
     { label: tr("Goal", "共同目標"), value: memory.objective || tr("Next in the conversation", "接下來聊這件事"), done: Boolean(memory.objective) },
     { label: tr("Team", "需要的同事"), value: memory.collaborators.length ? memory.collaborators.join(" · ") : tr("Lucy will identify who to invite", "Lucy 會找出該邀請誰"), done: Boolean(memory.constraints) },
     { label: tr("Done", "完成條件"), value: memory.successMetric || tr("Define what success looks like", "一起確認什麼才算完成"), done: Boolean(memory.successMetric) },
@@ -273,7 +281,7 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
     <div className="lucy-canvas-toolbar"><div><span><span /> {tr("LIVE MISSION CANVAS", "即時 MISSION CANVAS")}</span><small>{tr("Every block is part of one versioned mission", "每個區塊都屬於同一份版本化 Mission")}</small></div><div><span><Maximize2 size={14}/>{tr("Pinch or scroll to see the big picture", "縮放即可看全局與細節")}</span>{started && <button type="button" onClick={reset}><RotateCcw size={14}/>{tr("Start over", "重新開始")}</button>}</div></div>
     <div className="lucy-canvas-stage">
       <div className={`lucy-mobile-board ${started ? "started" : ""}`}>
-        {!started ? <div className="lucy-mobile-welcome"><span className="lucy-avatar"><HeartHandshake size={22}/><i /></span><small>{tr("YOUR AI MISSION PARTNER", "你的 AI MISSION 搭檔")}</small><h1>{tr("Tell Lucy what needs to get done.", "先跟 Lucy 說，你想完成什麼。")}</h1><p>{tr("No forms. Lucy asks one thing at a time, remembers your answers, and builds the mission with you.", "不用填表。Lucy 一次只問一件事、記住你的答案，再替你把 Mission 長出來。")}</p><button type="button" onClick={start}>{tr("Start talking with Lucy", "開始跟 Lucy 對話")}<ArrowRight size={18}/></button></div> : <div className="lucy-mobile-progress"><header><div><span className="lucy-avatar"><HeartHandshake size={20}/><i /></span><p><small>{tr("MISSION TAKING SHAPE", "MISSION 正在長出來")}</small><b>{phaseLabel(phase)}</b></p></div><strong>{progress}/4</strong></header><ol>{mobileSteps.map((step, index) => <li className={step.done ? "done" : index + 1 === progress ? "current" : ""} key={step.label}><span>{step.done ? <Check size={16}/> : index + 1}</span><p><small>{step.label}</small><b>{short(step.value, step.label, 80)}</b></p></li>)}</ol></div>}
+        {!started ? <div className="lucy-mobile-welcome"><span className="lucy-avatar"><HeartHandshake size={22}/><i /></span><small>{tr("YOUR AI MISSION PARTNER", "你的 AI MISSION 搭檔")}</small><h1>{tr("Tell Lucy what needs to get done.", "先跟 Lucy 說，你想完成什麼。")}</h1><p>{tr("No forms. Lucy asks one thing at a time, remembers your answers, and builds the mission with you.", "不用填表。Lucy 一次只問一件事、記住你的答案，再替你把 Mission 長出來。")}</p><button type="button" onClick={start}>{tr("Start talking with Lucy", "開始跟 Lucy 對話")}<ArrowRight size={18}/></button></div> : <div className="lucy-mobile-progress"><header><div><span className="lucy-avatar"><HeartHandshake size={20}/><i /></span><p><small>{tr("MISSION TAKING SHAPE", "MISSION 正在長出來")}</small><b>{phaseLabel(phase)}</b></p></div><strong>{progress}/5</strong></header><ol>{mobileSteps.map((step, index) => <li className={step.done ? "done" : index + 1 === progress ? "current" : ""} key={step.label}><span>{step.done ? <Check size={16}/> : index + 1}</span><p><small>{step.label}</small><b>{short(step.value, step.label, 80)}</b></p></li>)}</ol></div>}
       </div>
       <ReactFlow key={`${started}-${nodes.length}`} nodes={nodes} edges={edges} nodeTypes={{ lucyNode: LucyNodeCard }} fitView fitViewOptions={{ padding: .2, minZoom: .2, maxZoom: 1.02 }} minZoom={.18} maxZoom={1.8} nodesDraggable={false} nodesConnectable={false} panOnScroll zoomOnPinch zoomOnScroll onNodeClick={(_, node) => setSelectedNode(node.id)} proOptions={{ hideAttribution: true }}>
         <Background color="#dfe1dc" gap={25} size={1} />
@@ -286,10 +294,10 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
 
       {started && chatOpen && <section id="lucy-conversation" className="lucy-chat" aria-label={tr("Conversation with Agent Lucy", "與 Agent Lucy 對話")}>
         <header><span className="lucy-avatar"><HeartHandshake size={19}/><i /></span><div><b>Lucy · {tr("your AI counterpart", "你的 AI 搭檔")}</b><small>{thinking || busy ? tr("Thinking with you—not just replying", "正在跟你一起想，不只是回覆") : modelUsed === true ? tr("Remembers your context · guarded by policy", "記得你的脈絡 · 受政策保護") : modelUsed === false ? tr("Always honest about what has and has not run", "誠實說明哪些已執行、哪些尚未執行") : tr("Stays with this mission until the outcome", "會陪這個 Mission 走到成果")}</small></div><span className="lucy-progress">{phaseLabel(phase)}</span><button type="button" className="lucy-chat-collapse" onClick={() => setChatOpen(false)} aria-label={tr("Collapse Lucy conversation", "收起 Lucy 對話")} aria-expanded="true" aria-controls="lucy-conversation"><ChevronDown size={19}/></button></header>
-        <div className="lucy-chat-progress"><span style={{ width: `${progress * 25}%` }}/></div>
+        <div className="lucy-chat-progress"><span style={{ width: `${progress * 20}%` }}/></div>
         <div className="lucy-held-context"><MessageCircle size={15}/><p><small>{tr("WHAT LUCY IS HOLDING", "LUCY 現在替你記住")}</small><b>{heldContext}</b></p></div>
         <div className="lucy-messages" aria-live="polite">{messages.slice(-5).map((message) => <div className={message.role} key={message.id}><span>{message.role === "lucy" ? <Bot size={13}/> : <UserRound size={13}/>}</span><p>{message.body}</p></div>)}{thinking && <div className="lucy thinking"><span><Bot size={13}/></span><p><i/><i/><i/></p></div>}{busy && <div className="lucy executing"><span><Zap size={13}/></span><p><b>{stage || tr("Lucy is creating the mission…", "Lucy 正在建立 Mission…")}</b><small>{tr("Safe Agent work starts automatically; governed actions wait for the right human.", "安全的 Agent 工作會自動開始；受治理操作會等待正確的人核准。")}</small></p></div>}<div ref={endRef}/></div>
-        {!busy && phase !== "ready" && <><div className="lucy-suggestions"><span>{tr("IF HELPFUL", "不知道怎麼說，可以從這裡開始")}</span>{suggestions.map((suggestion) => <button type="button" key={suggestion} disabled={thinking} onClick={() => { void send(suggestion); }}>{suggestion}<ArrowRight size={12}/></button>)}</div><form className="lucy-composer" onSubmit={submit}><input ref={inputRef} value={input} disabled={thinking} onChange={(event) => setInput(event.target.value)} aria-label={tr("Reply to Agent Lucy", "回覆 Agent Lucy")} placeholder={tr("Say it the way you would to a trusted teammate", "像跟信任的同事說話一樣，直接說就好")}/><button type="submit" disabled={thinking || input.trim().length < 1} aria-label={tr("Send to Lucy", "傳送給 Lucy")}>{thinking ? <span className="loader small"/> : <Send size={17}/>}</button></form></>}
+        {!busy && phase !== "ready" && <><div className={`lucy-suggestions turn-${phase}`} key={`${phase}-${messages.length}`}><span>{phase === "account" ? tr("YOUR ACCOUNT", "你的帳號") : tr("QUICK REPLIES FOR THIS QUESTION", "這一題的快速回答")}</span>{phase === "account" ? <button type="button" disabled={thinking} onClick={() => inputRef.current?.focus()}>{tr("Type my email", "輸入我的 Email")}<ArrowRight size={12}/></button> : suggestions.map((suggestion) => <button type="button" key={suggestion} disabled={thinking} onClick={() => { void send(suggestion); }}>{suggestion}<ArrowRight size={12}/></button>)}</div><form className="lucy-composer" onSubmit={submit}><input ref={inputRef} type={phase === "account" ? "email" : "text"} inputMode={phase === "account" ? "email" : "text"} autoComplete={phase === "account" ? "email" : "off"} value={input} disabled={thinking} onChange={(event) => setInput(event.target.value)} aria-label={phase === "account" ? tr("Email for your Relay account", "Relay 帳號 Email") : tr("Reply to Agent Lucy", "回覆 Agent Lucy")} placeholder={phase === "account" ? tr("you@company.com", "you@company.com") : tr("Say it the way you would to a trusted teammate", "像跟信任的同事說話一樣，直接說就好")}/><button type="submit" disabled={thinking || input.trim().length < 1} aria-label={tr("Send to Lucy", "傳送給 Lucy")}>{thinking ? <span className="loader small"/> : <Send size={17}/>}</button></form></>}
         {!busy && phase === "ready" && <div className="lucy-ready"><div><ShieldCheck size={17}/><p><b>{tr("Lucy has enough to start safely", "Lucy 已經知道如何安全開始")}</b><small>{tr("2 evidence blocks · 3 Agent roles · exact approvals preserved", "2 個證據區塊 · 3 個 Agent 角色 · 保留精確核准")}</small></p></div><button type="button" disabled={!canLaunch} onClick={launch}><PlayIcon/>{tr("Let Lucy start the mission", "讓 Lucy 開始執行")}<ArrowRight size={16}/></button><button type="button" className="lucy-add-context" onClick={() => { setPhase("context"); setMessages((current) => [...current, { id: `lucy-more-${Date.now()}`, role: "lucy", body: tr("What else should I protect, or who else should I involve?", "還有什麼不能出錯？或還需要邀請誰？") }]); }}>{tr("Add one more constraint", "再補一項限制")}</button></div>}
         {(localError || error) && <p className="lucy-error">{localError || error}</p>}
         <footer><FileCheck2 size={13}/>{tr("Lucy carries your context into the mission. External actions still require scoped access and the right human’s approval.", "Lucy 會把你的脈絡帶進 Mission；外部操作仍需要範圍權限與正確人類的核准。")}</footer>

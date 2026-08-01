@@ -29,6 +29,16 @@ describe("Relay mission lifecycle API", () => {
     expect(mission.createdBy).toBe("Launch owner");
   });
 
+  it("lets Lucy turn a guest session into an email-backed Relay profile", async () => {
+    const teammate = request.agent(app);
+    await teammate.post("/api/session/guest").send({ name: "Mission owner" }).expect(201);
+    await teammate.put("/api/session/profile").send({ name: "Maya Chen", email: "maya.chen@example.com", title: "Engineering lead", department: "Engineering" }).expect(200);
+    const profile = await teammate.get("/api/session").expect(200);
+    const dashboard = await teammate.get("/api/dashboard").expect(200);
+    expect(profile.body.session).toMatchObject({ actorName: "Maya Chen", email: "maya.chen@example.com", title: "Engineering lead", department: "Engineering" });
+    expect(dashboard.body.missions).toEqual([]);
+  });
+
   it("runs the landing compiler without creating a workspace session or saving text", async () => {
     const response = await request(app)
       .post("/api/preview-compile")

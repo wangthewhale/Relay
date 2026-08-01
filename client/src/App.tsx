@@ -61,8 +61,7 @@ function useSessionIdentity() {
 }
 
 const navigation = [
-  { label: "Overview", labelZh: "總覽", href: "/app", icon: LayoutDashboard },
-  { label: "Missions", labelZh: "任務", href: "/app", icon: Radar },
+  { label: "My Relay", labelZh: "我的 Relay", href: "/app", icon: UserRound },
   { label: "Conflict inbox", labelZh: "衝突收件匣", href: "/app?focus=conflicts", icon: MessageSquareWarning },
   { label: "Approvals", labelZh: "核准中心", href: "/app?focus=approvals", icon: ShieldCheck },
 ];
@@ -648,12 +647,12 @@ function AppShell({ children }: { children: ReactNode }) {
       {!isMissionWorkspace && <aside className={sidebar ? "sidebar open" : "sidebar"}>
         <div className="sidebar-head"><Logo compact /><button className="icon-button sidebar-close" onClick={() => setSidebar(false)}><X size={18} /></button></div>
         <div className="workspace-switch"><span className="workspace-avatar">PW</span><div><b>{tr("Private workspace", "私人工作區")}</b><small>{tr("Your mission-scoped control plane", "只限你 Mission 的控制平面")}</small></div><ChevronDown size={16} /></div>
-        <nav>{navigation.map(({ label, labelZh, href, icon: Icon }) => <NavLink to={href} key={label} className={({ isActive }) => isActive && label === "Overview" ? "active" : ""} onClick={() => setSidebar(false)}><Icon size={18} />{tr(label, labelZh)}</NavLink>)}</nav>
+        <nav>{navigation.map(({ label, labelZh, href, icon: Icon }) => <NavLink to={href} key={label} className={({ isActive }) => isActive && label === "My Relay" ? "active" : ""} onClick={() => setSidebar(false)}><Icon size={18} />{tr(label, labelZh)}</NavLink>)}</nav>
         <div className="sidebar-spacer" />
         <div className="control-status"><span className="status-orb"><ShieldCheck size={15} /></span><div><b>{tr("Policy checks active", "合約檢查已啟用")}</b><small>{tr("Provider status is verified per mission", "服務連線會逐一在 Mission 驗證")}</small></div></div>
-        <div className="user-card"><span className="user-avatar">{initials(actorName)}</span><div><b>{actorName}</b><small>{actorRole}</small></div><button className="icon-button" aria-label={tr("Open user menu", "開啟使用者選單")}><ChevronDown size={15} /></button></div>
+        <Link to="/app" className="user-card"><span className="user-avatar">{initials(actorName)}</span><div><b>{actorName}</b><small>{actorRole}</small></div><ArrowRight size={15} /></Link>
       </aside>}
-      <div className="app-main">{!isMissionWorkspace && <header className="app-header"><button className="icon-button app-menu" onClick={() => setSidebar(true)} aria-label={tr("Open navigation", "開啟導覽選單")}><Menu size={20} /></button><div className="app-search"><Search size={17} /><span>{tr("Search missions, evidence, decisions…", "搜尋 Mission、證據與決策…")}</span><kbd>⌘ K</kbd></div><div className="header-actions"><LanguageSwitcher compact /><span className="environment"><span /> {tr("MVP CONTRACT CHECKS", "MVP 合約檢查")}</span><Link to="/missions/new" className="button button-primary button-small"><Plus size={16} /> {tr("New mission", "新增 Mission")}</Link></div></header>}{children}</div>
+      <div className="app-main">{!isMissionWorkspace && <header className="app-header"><button className="icon-button app-menu" onClick={() => setSidebar(true)} aria-label={tr("Open navigation", "開啟導覽選單")}><Menu size={20} /></button><div className="app-search"><Search size={17} /><span>{tr("Search missions, evidence, decisions…", "搜尋 Mission、證據與決策…")}</span><kbd>⌘ K</kbd></div><div className="header-actions"><LanguageSwitcher compact /><Link to="/app" className="my-relay-link"><UserRound size={16}/><span>{tr("My Relay", "我的 Relay")}</span></Link><Link to="/missions/new" className="button button-primary button-small"><Plus size={16} /> {tr("New mission", "新增 Mission")}</Link></div></header>}{children}</div>
       {!isMissionWorkspace && sidebar && <button className="sidebar-scrim" onClick={() => setSidebar(false)} aria-label={tr("Close navigation", "關閉導覽選單")} />}
     </div>
   );
@@ -677,15 +676,23 @@ function DashboardPage() {
   if (!data) return <AppShell><main className="page"><LoadingBlock /></main></AppShell>;
   const focus = params.get("focus");
   const missions = focus === "conflicts" ? data.missions.filter((mission) => mission.openConflicts) : focus === "approvals" ? data.missions.filter((mission) => mission.pendingApprovals) : data.missions;
+  const accountEmail = session?.email && !session.email.endsWith("@relay.local") ? session.email : "";
   return (
     <AppShell><main className="page dashboard-page">
-      <div className="page-title"><div><span className="page-kicker">{tr("WORKSPACE CONTROL CENTER", "WORKSPACE 控制中心")}</span><h1>{tr(`Welcome, ${session?.actorName || "Mission owner"}.`, `歡迎，${session?.actorName || "Mission 負責人"}。`)}</h1><p>{tr("Here’s what needs human judgment before your agents can move.", "以下事項需要人工判斷，完成後 Agent 才能繼續執行。")}</p></div><Link to="/missions/new" className="button button-dark"><Plus size={17} /> {tr("Create mission", "建立 Mission")}</Link></div>
+      <div className="page-title"><div><span className="page-kicker">{tr("MY RELAY", "我的 RELAY")}</span><h1>{tr(`Welcome back, ${session?.actorName || "Mission owner"}.`, `${session?.actorName || "Mission 負責人"}，歡迎回來。`)}</h1><p>{tr("Every mission you own or join comes back here.", "你建立或受邀參與的每個 Mission，都會回到這個個人頁。")}</p></div><Link to="/missions/new" className="button button-dark"><Plus size={17} /> {tr("Start with Lucy", "和 Lucy 開始")}</Link></div>
+      <section className={`my-relay-account ${accountEmail ? "ready" : "incomplete"}`}>
+        <span className="my-relay-avatar">{initials(session?.actorName || "Mission owner")}</span>
+        <div><small>{tr("YOUR RELAY ACCOUNT", "你的 RELAY 帳號")}</small><h2>{session?.actorName || tr("Mission owner", "Mission 負責人")}</h2><p>{accountEmail ? <><Mail size={15}/><span>{accountEmail}</span></> : <><AlertOctagon size={15}/><span>{tr("Tell Lucy your email to finish this account.", "告訴 Lucy 你的 Email，即可完成帳號。")}</span></>}</p></div>
+        <span className="my-relay-state">{accountEmail ? <><BadgeCheck size={17}/>{tr("Account ready", "帳號已建立")}</> : <><CircleStop size={17}/>{tr("Email needed", "尚缺 Email")}</>}</span>
+        <Link to="/missions/new" className="button button-ghost">{accountEmail ? tr("Start another mission", "開始另一個 Mission") : tr("Finish with Lucy", "請 Lucy 幫我完成")}<ArrowRight size={16}/></Link>
+      </section>
       <section className="dashboard-proof-band"><div><span>{tr("FIRST-WEDGE PROOF", "首個切口完成證明")}</span><h2>{tr("Relay now ships an approved launch handoff—not only a blocker.", "Relay 現在不只找阻擋，還能交付核准完成的 Launch 交接包。")}</h2><p>{tr("Open the interactive demo to inspect a completed run with Agent artifacts, an exact approval and a quantified coordination baseline.", "打開互動 Demo，查看包含 Agent 產出、精確核准與量化協作基準的已完成執行。")}</p></div><Link to="/demo" className="button button-primary">{tr("Inspect completed proof", "查看完成證明")}<ArrowRight size={16}/></Link></section>
       <section className="stats-grid"><StatCard label={tr("Active missions", "進行中的 Mission")} value={data.metrics.active} icon={Radar} helper={tr("under valid contracts", "受有效合約治理")} /><StatCard label={tr("Blocked", "已阻擋")} value={data.metrics.blocked} icon={CircleStop} helper={tr("execution safely stopped", "已安全停止執行")} accent="danger" /><StatCard label={tr("Awaiting decisions", "等待決策")} value={data.metrics.awaitingDecisions} icon={Scale} helper={tr("conflicts need owners", "衝突需要負責人")} accent="amber" /><StatCard label={tr("Awaiting approvals", "等待核准")} value={data.metrics.awaitingApprovals} icon={ShieldCheck} helper={tr("exact payload review", "等待精確內容審查")} accent="violet" /><StatCard label={tr("Successful", "成功")} value={data.metrics.successfulThisWeek} icon={Target} helper={tr("outcomes verified", "成果已驗證")} accent="teal" /></section>
       <section className="dashboard-grid">
-        <div className="panel missions-panel"><div className="panel-heading"><div><span>{tr("MISSIONS", "任務")}</span><h2>{focus ? (focus === "conflicts" ? tr("Conflicts", "衝突") : tr("Approvals", "核准")) : tr("Execution portfolio", "執行組合")}</h2></div><span className="count-chip">{missions.length}</span></div>
+        <div className="panel missions-panel"><div className="panel-heading"><div><span>{tr("MY MISSIONS", "我的 MISSIONS")}</span><h2>{focus ? (focus === "conflicts" ? tr("Decisions waiting for me", "等我決定") : tr("Approvals waiting for me", "等我核准")) : tr("Missions I’m part of", "我參與的專案")}</h2></div><span className="count-chip">{missions.length}</span></div>
           <div className="mission-table"><div className="mission-row mission-table-head"><span>{tr("Mission", "任務")}</span><span>{tr("State", "狀態")}</span><span>{tr("Contract", "合約")}</span><span>{tr("Human gates", "人工關卡")}</span><span>{tr("Progress", "進度")}</span><span /></div>
             {missions.map((mission) => <Link className="mission-row" to={`/missions/${mission.id}`} key={mission.id}><div className="mission-name"><span className={`mission-icon ${mission.blockingConflicts ? "blocked" : ""}`}>{mission.blockingConflicts ? <CircleStop size={18} /> : <Radar size={18} />}</span><div><b>{localizeDomainText(mission.title)}</b><small>{tr("Updated", "更新於")} {formatDate(mission.updatedAt, true)}</small></div></div><span><StatusPill value={mission.blockingConflicts ? "blocked" : mission.status} /></span><span className="mono">{tr("Plan", "計畫")} v{mission.currentPlanVersion || "—"}</span><span className="human-gates">{mission.openConflicts ? <><Scale size={15} />{mission.openConflicts} {tr("decisions", "項決策")}</> : mission.pendingApprovals ? <><ShieldCheck size={15} />{mission.pendingApprovals} {tr("approval", "項核准")}</> : <><Check size={15} />{tr("Clear", "無待辦")}</>}</span><span><Progress value={mission.completedTasks} total={mission.totalTasks} /></span><ArrowRight size={17} /></Link>)}
+            {!missions.length && <div className="mission-list-empty"><Bot size={24}/><b>{tr("No mission here yet", "這裡還沒有 Mission")}</b><p>{tr("Tell Lucy one outcome. She will build the mission and bring in the right people.", "先告訴 Lucy 一個想完成的成果；她會建立 Mission，再找需要的人加入。")}</p><Link to="/missions/new" className="button button-dark">{tr("Start with Lucy", "和 Lucy 開始")}<ArrowRight size={16}/></Link></div>}
           </div>
         </div>
         <aside className="panel attention-panel"><div className="panel-heading"><div><span>{tr("ATTENTION QUEUE", "待處理佇列")}</span><h2>{tr("What changed", "最新變更")}</h2></div></div>{data.missions.flatMap((mission) => [mission.blockingConflicts ? { mission, type: tr("Blocking conflict", "阻擋性衝突"), count: mission.blockingConflicts, icon: AlertOctagon } : null, mission.pendingApprovals ? { mission, type: tr("Exact approval", "精確核准"), count: mission.pendingApprovals, icon: ShieldCheck } : null]).filter(Boolean).slice(0, 5).map((item) => { const value = item!; const Icon = value.icon; return <Link to={`/missions/${value.mission.id}`} key={`${value.mission.id}-${value.type}`} className="attention-item"><span className="attention-icon"><Icon size={17} /></span><div><b>{value.type}</b><p>{localizeDomainText(value.mission.title)}</p><small>{value.count} {tr(value.count > 1 ? "items waiting" : "item waiting", "項待處理")}</small></div><ArrowRight size={16} /></Link>; })}{!data.metrics.blocked && !data.metrics.awaitingApprovals && <div className="empty-state"><BadgeCheck size={25} /><b>{tr("No urgent human gates", "沒有緊急人工關卡")}</b><p>{tr("Relay will surface decisions here.", "Relay 會在這裡顯示需要處理的決策。")}</p></div>}</aside>
@@ -1728,7 +1735,7 @@ export default function App() {
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname, locale]);
   if (location.pathname === "/") return <LandingPage />;
   if (location.pathname === "/demo") return <DemoPage />;
-  if (location.pathname === "/app") return <DashboardPage />;
+  if (location.pathname === "/app" || location.pathname === "/me") return <DashboardPage />;
   if (location.pathname === "/missions/new") return <MissionIntakePage />;
   if (/^\/join\/[^/]+$/.test(location.pathname)) return <JoinMissionPage />;
   if (/^\/reports\/[^/]+$/.test(location.pathname)) return <PublicReportPage />;

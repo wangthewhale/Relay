@@ -61,4 +61,18 @@ Date: 2026-08-01
 - Production Agent Council receipt persisted and appeared in the live event ledger.
 - Remaining P0/P1/P2 issues in the requested journey: none.
 
+## Mobile typography and Plugin Library — 2026-08-01
+
+- Source reference: `/tmp/codex-remote-attachments/019f84c7-b32f-7ce0-b513-296d383e42ec/469ABC33-D2DB-444D-9DE8-EBF1CEFBF312/2-照片-2.jpg`.
+- Implementation reference: `audit/mobile-type-plugins-2026-08-01/04-plugin-cards-mobile-local.png`.
+- Same-artifact comparison: `audit/mobile-type-plugins-2026-08-01/07-mobile-before-after.png`.
+- Permission-sheet evidence: `audit/mobile-type-plugins-2026-08-01/05-permission-sheet-mobile-local.png`.
+- Visual inspection: body and conversational copy use a 16px mobile baseline; supporting text is at least 14px; metadata is at least 12px; controls use 44–50px touch targets.
+- Responsive inspection at 390 × 844 CSS px: `documentElement.scrollWidth` is 375px, so the page has no horizontal document overflow.
+- Plugin journey: always-visible catalog → exact capability review → provider-owned OAuth → live identity and resource verification → mission-bound Agent access → two-step revoke.
+- Safety behavior: an unconfigured provider displays setup requirements instead of a fake Connect state; an installed account does not grant blanket Agent access.
+- OAuth implementation now requests only selected provider capabilities and rejects unsupported capability names server-side.
+- Connector test coverage increased from 32 to 34 passing tests, including minimum Google scope selection and unsupported-capability rejection.
+- Remaining P0/P1/P2 issues in the mobile typography and Plugin Library journey: none.
+
 final result: passed

@@ -524,7 +524,16 @@ export function createApp() {
     try {
       const scope = await resolveRequestScope(request, { sessionOnly: true, write: true });
       assertWorkspaceAdmin(scope);
-      response.json(await beginOAuth({ provider: request.params.provider, missionId: typeof request.body?.missionId === "string" ? request.body.missionId : undefined, redirectAfter: typeof request.body?.redirectAfter === "string" ? request.body.redirectAfter : undefined, baseUrl: requestBaseUrl(request), scope }));
+      response.json(await beginOAuth({
+        provider: request.params.provider,
+        missionId: typeof request.body?.missionId === "string" ? request.body.missionId : undefined,
+        requestedCapabilities: Array.isArray(request.body?.requestedCapabilities)
+          ? request.body.requestedCapabilities.filter((item: unknown): item is string => typeof item === "string")
+          : undefined,
+        redirectAfter: typeof request.body?.redirectAfter === "string" ? request.body.redirectAfter : undefined,
+        baseUrl: requestBaseUrl(request),
+        scope,
+      }));
     } catch (error) { next(error); }
   });
 

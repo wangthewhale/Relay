@@ -73,7 +73,7 @@ export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect, on
   // A full-graph fit makes every card unreadably tiny on a phone. Start on the
   // human → counterpart → Agent Council handoff; the Fit View control remains
   // available when someone wants the whole mission map.
-  const defaultViewport = compact ? { x: -410, y: 120, zoom: 0.55 } : { x: 12, y: 100, zoom: 0.88 };
+  const defaultViewport = compact ? { x: -592, y: 92, zoom: 0.72 } : { x: 12, y: 100, zoom: 0.88 };
   return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .72 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); onNodeAction?.(node); }} proOptions={{ hideAttribution: true }}>
     <Background color="#d7d8d2" gap={24} size={1} />
     <Controls position="bottom-left" showInteractive={false} />

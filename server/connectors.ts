@@ -15,6 +15,8 @@ type ProviderDefinition = {
   authorizeUrl: string;
   tokenUrl: string;
   scopes: string[];
+  baseScopes: string[];
+  capabilityScopes: Record<string, string[]>;
   capabilities: string[];
   supportsPkce?: boolean;
 };
@@ -26,35 +28,48 @@ type CredentialPayload = {
   expiresAt?: string;
 };
 type MemoryConnection = ConnectorConnection & { workspaceId: string; credentials: CredentialPayload };
-type MemoryState = { workspaceId: string; userId: string; missionId?: string; provider: ProviderKey; redirectAfter: string; redirectUri: string; verifier?: string; expiresAt: string };
+type MemoryState = { workspaceId: string; userId: string; missionId?: string; provider: ProviderKey; redirectAfter: string; redirectUri: string; verifier?: string; requestedCapabilities: string[]; requestedScopes: string[]; expiresAt: string };
 
 const PROVIDERS: Record<ProviderKey, ProviderDefinition> = {
   google: {
     key: "google", label: "Google Workspace", clientIdEnv: "GOOGLE_OAUTH_CLIENT_ID", clientSecretEnv: "GOOGLE_OAUTH_CLIENT_SECRET",
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth", tokenUrl: "https://oauth2.googleapis.com/token", supportsPkce: true,
     scopes: ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.compose", "https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events"],
+    baseScopes: ["openid", "email", "profile"],
+    capabilityScopes: {
+      "Drive: read selected files": ["https://www.googleapis.com/auth/drive.readonly"],
+      "Gmail: read selected threads": ["https://www.googleapis.com/auth/gmail.readonly"],
+      "Gmail: create draft": ["https://www.googleapis.com/auth/gmail.compose"],
+      "Calendar: read events": ["https://www.googleapis.com/auth/calendar.readonly"],
+      "Calendar: create review event": ["https://www.googleapis.com/auth/calendar.events"],
+    },
     capabilities: ["Drive: read selected files", "Gmail: read selected threads", "Gmail: create draft", "Calendar: read events", "Calendar: create review event"],
   },
   slack: {
     key: "slack", label: "Slack", clientIdEnv: "SLACK_OAUTH_CLIENT_ID", clientSecretEnv: "SLACK_OAUTH_CLIENT_SECRET",
     authorizeUrl: "https://slack.com/oauth/v2/authorize", tokenUrl: "https://slack.com/api/oauth.v2.access",
     scopes: ["channels:read", "channels:history", "groups:read", "groups:history", "chat:write"],
+    baseScopes: [],
+    capabilityScopes: {
+      "Slack: read selected channels": ["channels:read", "channels:history", "groups:read", "groups:history"],
+      "Slack: post internal update": ["chat:write"],
+    },
     capabilities: ["Slack: read selected channels", "Slack: post internal update"],
   },
   notion: {
     key: "notion", label: "Notion", clientIdEnv: "NOTION_OAUTH_CLIENT_ID", clientSecretEnv: "NOTION_OAUTH_CLIENT_SECRET",
     authorizeUrl: "https://api.notion.com/v1/oauth/authorize", tokenUrl: "https://api.notion.com/v1/oauth/token",
-    scopes: [], capabilities: ["Notion: read user-selected pages", "Notion: update mission page"],
+    scopes: [], baseScopes: [], capabilityScopes: { "Notion: read user-selected pages": [], "Notion: update mission page": [] }, capabilities: ["Notion: read user-selected pages", "Notion: update mission page"],
   },
   github: {
     key: "github", label: "GitHub", clientIdEnv: "GITHUB_OAUTH_CLIENT_ID", clientSecretEnv: "GITHUB_OAUTH_CLIENT_SECRET",
     authorizeUrl: "https://github.com/login/oauth/authorize", tokenUrl: "https://github.com/login/oauth/access_token",
-    scopes: ["read:user", "user:email", "repo"], capabilities: ["GitHub: read mission repositories", "GitHub: create issue", "GitHub: comment on pull request"],
+    scopes: ["read:user", "user:email", "repo"], baseScopes: ["read:user", "user:email"], capabilityScopes: { "GitHub: read mission repositories": ["repo"], "GitHub: create issue": ["repo"], "GitHub: comment on pull request": ["repo"] }, capabilities: ["GitHub: read mission repositories", "GitHub: create issue", "GitHub: comment on pull request"],
   },
   figma: {
     key: "figma", label: "Figma", clientIdEnv: "FIGMA_OAUTH_CLIENT_ID", clientSecretEnv: "FIGMA_OAUTH_CLIENT_SECRET",
     authorizeUrl: "https://www.figma.com/oauth", tokenUrl: "https://api.figma.com/v1/oauth/token", supportsPkce: true,
-    scopes: ["current_user:read", "file_content:read", "file_comments:read", "file_comments:write"], capabilities: ["Figma: read mission files", "Figma: read comments", "Figma: post review comment"],
+    scopes: ["current_user:read", "file_content:read", "file_comments:read", "file_comments:write"], baseScopes: ["current_user:read"], capabilityScopes: { "Figma: read mission files": ["file_content:read"], "Figma: read comments": ["file_comments:read"], "Figma: post review comment": ["file_comments:write"] }, capabilities: ["Figma: read mission files", "Figma: read comments", "Figma: post review comment"],
   },
 };
 
@@ -107,6 +122,20 @@ function safeRedirect(path: string | undefined) {
 
 function challenge(verifier: string) {
   return createHash("sha256").update(verifier).digest("base64url");
+}
+
+function requestedAccess(definition: ProviderDefinition, requested: string[] | undefined) {
+  const capabilities = requested?.length ? [...new Set(requested)] : definition.capabilities;
+  const unsupported = capabilities.filter((capability) => !definition.capabilities.includes(capability));
+  if (unsupported.length) throw Object.assign(new Error(`Unsupported ${definition.label} capabilities: ${unsupported.join(", ")}.`), { status: 400 });
+  const scopes = [...new Set([...definition.baseScopes, ...capabilities.flatMap((capability) => definition.capabilityScopes[capability] ?? [])])];
+  return { capabilities, scopes };
+}
+
+function canonicalCapability(providerName: string, capability: string) {
+  if (capability.includes(":")) return capability;
+  const prefix = providerName === "Google Drive" ? "Drive" : providerName === "Google Calendar" ? "Calendar" : providerName;
+  return `${prefix}: ${capability}`;
 }
 
 function resourceAliases(value: string | undefined, providerKey: ProviderKey) {
@@ -179,6 +208,7 @@ export async function listConnectorDescriptors(scope: Extract<StoreScope, { kind
 export async function beginOAuth(input: {
   provider: string;
   missionId?: string;
+  requestedCapabilities?: string[];
   redirectAfter?: string;
   baseUrl: string;
   scope: Extract<StoreScope, { kind: "session" }>;
@@ -191,22 +221,23 @@ export async function beginOAuth(input: {
   const stateHash = hashToken(rawState);
   const redirectUri = `${input.baseUrl}/api/oauth/${definition.key}/callback`;
   const verifier = definition.supportsPkce ? secureToken() : undefined;
+  const requested = requestedAccess(definition, input.requestedCapabilities);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1_000).toISOString();
-  const state: MemoryState = { workspaceId: input.scope.workspaceId, userId: input.scope.userId, missionId: input.missionId, provider: definition.key, redirectAfter: safeRedirect(input.redirectAfter), redirectUri, verifier, expiresAt };
+  const state: MemoryState = { workspaceId: input.scope.workspaceId, userId: input.scope.userId, missionId: input.missionId, provider: definition.key, redirectAfter: safeRedirect(input.redirectAfter), redirectUri, verifier, requestedCapabilities: requested.capabilities, requestedScopes: requested.scopes, expiresAt };
   if (!pool) memoryStates.set(stateHash, state);
   else {
     await pool.query(
       `INSERT INTO oauth_states (id,workspace_id,user_id,mission_id,provider,state_hash,code_verifier_encrypted,redirect_after,expires_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [randomUUID(), state.workspaceId, state.userId, state.missionId ?? null, state.provider, stateHash, encrypt({ verifier, redirectUri }), state.redirectAfter, expiresAt],
+      [randomUUID(), state.workspaceId, state.userId, state.missionId ?? null, state.provider, stateHash, encrypt({ verifier, redirectUri, requestedCapabilities: requested.capabilities, requestedScopes: requested.scopes }), state.redirectAfter, expiresAt],
     );
   }
   const params = new URLSearchParams({ client_id: config.clientId!, redirect_uri: redirectUri, state: rawState, response_type: "code" });
-  if (definition.scopes.length) params.set("scope", definition.key === "slack" ? definition.scopes.join(",") : definition.scopes.join(" "));
+  if (requested.scopes.length) params.set("scope", definition.key === "slack" ? requested.scopes.join(",") : requested.scopes.join(" "));
   if (definition.key === "google") { params.set("access_type", "offline"); params.set("prompt", "consent"); params.set("include_granted_scopes", "true"); }
   if (definition.key === "notion") params.set("owner", "user");
   if (verifier) { params.set("code_challenge", challenge(verifier)); params.set("code_challenge_method", "S256"); }
-  return { authorizeUrl: `${definition.authorizeUrl}?${params}`, provider: definition.key, expiresAt };
+  return { authorizeUrl: `${definition.authorizeUrl}?${params}`, provider: definition.key, requestedCapabilities: requested.capabilities, expiresAt };
 }
 
 async function consumeState(rawState: string, expectedProvider: ProviderKey) {
@@ -224,8 +255,10 @@ async function consumeState(rawState: string, expectedProvider: ProviderKey) {
     if (!result.rowCount) throw Object.assign(new Error("OAuth state is invalid or expired."), { status: 410 });
     await client.query("UPDATE oauth_states SET consumed_at=now() WHERE id=$1", [result.rows[0].id]);
     await client.query("COMMIT");
-    const payload = result.rows[0].code_verifier_encrypted ? decrypt<{ verifier?: string; redirectUri: string }>(result.rows[0].code_verifier_encrypted) : { redirectUri: "" };
-    return { workspaceId: result.rows[0].workspace_id, userId: result.rows[0].user_id, missionId: result.rows[0].mission_id ?? undefined, provider: result.rows[0].provider as ProviderKey, redirectAfter: result.rows[0].redirect_after, redirectUri: payload.redirectUri, verifier: payload.verifier, expiresAt: result.rows[0].expires_at.toISOString() } satisfies MemoryState;
+    const payload = result.rows[0].code_verifier_encrypted ? decrypt<{ verifier?: string; redirectUri: string; requestedCapabilities?: string[]; requestedScopes?: string[] }>(result.rows[0].code_verifier_encrypted) : { redirectUri: "" };
+    const definition = provider(result.rows[0].provider);
+    const requested = requestedAccess(definition, payload.requestedCapabilities);
+    return { workspaceId: result.rows[0].workspace_id, userId: result.rows[0].user_id, missionId: result.rows[0].mission_id ?? undefined, provider: result.rows[0].provider as ProviderKey, redirectAfter: result.rows[0].redirect_after, redirectUri: payload.redirectUri, verifier: payload.verifier, requestedCapabilities: requested.capabilities, requestedScopes: payload.requestedScopes ?? requested.scopes, expiresAt: result.rows[0].expires_at.toISOString() } satisfies MemoryState;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -285,7 +318,7 @@ export async function completeOAuth(input: { provider: string; state: string; co
     const accessToken = tokenPayload.access_token;
     if (!accessToken) throw Object.assign(new Error(`${definition.label} did not return an access token.`), { status: 502 });
     const identity = await providerIdentity(definition.key, accessToken, tokenPayload);
-    const scopes = String(tokenPayload.scope || tokenPayload.authed_user?.scope || definition.scopes.join(" ")).split(/[ ,]+/).filter(Boolean);
+    const scopes = String(tokenPayload.scope || tokenPayload.authed_user?.scope || state.requestedScopes.join(" ")).split(/[ ,]+/).filter(Boolean);
     const credentials: CredentialPayload = { accessToken, refreshToken: tokenPayload.refresh_token, tokenType: tokenPayload.token_type, scope: scopes, expiresAt: tokenPayload.expires_in ? new Date(Date.now() + Number(tokenPayload.expires_in) * 1_000).toISOString() : undefined };
     let connection: ConnectorConnection;
     if (!pool) {
@@ -355,14 +388,20 @@ export async function verifyConnector(connectionId: string, missionId: string | 
   if (identity.accountId !== connection.accountId) throw Object.assign(new Error("Provider identity changed; reconnect the intended workspace account."), { status: 409 });
   const verifiedAt = now();
   const verified: ConnectorConnection = { ...connection, status: "verified", verifiedAt, lastError: undefined };
-  if (!pool) memoryConnections.set(connectionId, { ...memoryConnections.get(connectionId)!, ...verified });
-  else await pool.query("UPDATE connector_connections SET status='verified',verified_at=now(),last_error=NULL,updated_at=now() WHERE id=$1", [connectionId]);
   if (missionId) {
     const mission = await store.getMission(missionId, scope);
     const plan = mission.currentPlan;
     if (!plan) throw Object.assign(new Error("Compile the mission before granting provider capabilities."), { status: 409 });
     const aliases = definition.key === "google" ? ["Gmail", "Google Drive", "Google Calendar"] : [definition.label];
     const requirements = plan.accessBlueprint.filter((item) => aliases.includes(item.provider));
+    const requiredCapabilities = [...new Set(requirements.flatMap((requirement) => requirement.capabilities.map((capability) => canonicalCapability(requirement.provider, capability))))];
+    const missingCapabilities = requiredCapabilities.filter((capability) => {
+      const neededScopes = definition.capabilityScopes[capability];
+      return !neededScopes || neededScopes.some((requiredScope) => !credentials.scope.includes(requiredScope));
+    });
+    if (missingCapabilities.length) throw Object.assign(new Error(`Reconnect ${definition.label} and approve the capabilities this Plan requires: ${missingCapabilities.join(", ")}.`), { status: 409, details: { missingCapabilities } });
+    if (!pool) memoryConnections.set(connectionId, { ...memoryConnections.get(connectionId)!, ...verified });
+    else await pool.query("UPDATE connector_connections SET status='verified',verified_at=now(),last_error=NULL,updated_at=now() WHERE id=$1", [connectionId]);
     const sourceResources = mission.sources
       .filter((source) => aliases.includes(source.type) || (definition.key === "google" && ((source.type === "Email" && aliases.includes("Gmail")) || (source.type === "Calendar" && aliases.includes("Google Calendar")))))
       .flatMap((source) => [...resourceAliases(source.evidenceUrl, definition.key), ...resourceAliases(source.title, definition.key)]);
@@ -379,7 +418,8 @@ export async function verifyConnector(connectionId: string, missionId: string | 
       }
     }
     await recordCollaborationEvent({ missionId, actor: { type: "provider", name: definition.label }, eventType: "connector.verified", entityType: "connector_connection", entityId: connectionId, summary: `${definition.label} passed a live identity and capability check.`, data: { accountLabel: identity.accountLabel, planVersion: plan.version, capabilityCount: requirements.reduce((sum, item) => sum + item.capabilities.length, 0) } });
-  }
+  } else if (!pool) memoryConnections.set(connectionId, { ...memoryConnections.get(connectionId)!, ...verified });
+  else await pool.query("UPDATE connector_connections SET status='verified',verified_at=now(),last_error=NULL,updated_at=now() WHERE id=$1", [connectionId]);
   return verified;
 }
 

@@ -15,6 +15,8 @@ import {
   BadgeCheck,
   Bot,
   Check,
+  ChevronDown,
+  ChevronUp,
   CircleDot,
   FileCheck2,
   HeartHandshake,
@@ -133,6 +135,10 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
   const [modelUsed, setModelUsed] = useState<boolean>();
   const [localError, setLocalError] = useState("");
   const [selectedNode, setSelectedNode] = useState("start");
+  const [chatOpen, setChatOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("relay-lucy-chat") !== "collapsed";
+  });
   const [messages, setMessages] = useState<LucyMessage[]>(() => [{
     id: "hello",
     role: "lucy",
@@ -143,8 +149,11 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
 
   useEffect(() => { if (started) window.setTimeout(() => inputRef.current?.focus(), 120); }, [started, phase]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest" }); }, [messages, thinking]);
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("relay-lucy-chat", chatOpen ? "open" : "collapsed");
+  }, [chatOpen]);
 
-  const start = () => { setStarted(true); setSelectedNode("lucy"); };
+  const start = () => { setStarted(true); setChatOpen(true); setSelectedNode("lucy"); };
   const reset = () => {
     setStarted(false); setPhase("identity"); setMemory(emptyMemory); setInput(""); setThinking(false); setModelUsed(undefined); setLocalError(""); setSelectedNode("start");
     setMessages([{ id: `hello-${Date.now()}`, role: "lucy", body: tr("Hi, I’m Lucy—your counterpart for this mission. I’ll remember your point of view, bring in the right people, and let the Agents do the meeting. What should I call you, and what do you own here?", "嗨，我是 Lucy，這個 Mission 裡專門替你守住目標的 AI 搭檔。我會記住你的立場、找對的人加入，也會讓 Agents 代替大家開會。你希望我怎麼稱呼你？你在這裡負責什麼？") }]);
@@ -236,10 +245,20 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
         : phase === "success"
           ? tr(`${memory.collaborators.length || 1} viewpoints will be represented by counterpart Agents.`, `${memory.collaborators.length || 1} 個角色會由各自的 AI counterpart 代表。`)
           : tr("I can coordinate the Agents and bring humans only the decisions that need them.", "我可以開始協調 Agents，只把真的需要判斷的決策帶回來。" );
+  const latestLucyMessage = messages.filter((message) => message.role === "lucy").at(-1)?.body ?? heldContext;
+  const mobileSteps = [
+    { label: tr("You", "你的角色"), value: memory.title || tr("Lucy is listening", "Lucy 正在認識你"), done: Boolean(memory.title) },
+    { label: tr("Goal", "共同目標"), value: memory.objective || tr("Next in the conversation", "接下來聊這件事"), done: Boolean(memory.objective) },
+    { label: tr("Team", "需要的同事"), value: memory.collaborators.length ? memory.collaborators.join(" · ") : tr("Lucy will identify who to invite", "Lucy 會找出該邀請誰"), done: Boolean(memory.constraints) },
+    { label: tr("Done", "完成條件"), value: memory.successMetric || tr("Define what success looks like", "一起確認什麼才算完成"), done: Boolean(memory.successMetric) },
+  ];
 
   return <section className="lucy-canvas-shell" aria-label={tr("Lucy mission canvas", "Lucy Mission Canvas")}>
     <div className="lucy-canvas-toolbar"><div><span><span /> {tr("LIVE MISSION CANVAS", "即時 MISSION CANVAS")}</span><small>{tr("Every block is part of one versioned mission", "每個區塊都屬於同一份版本化 Mission")}</small></div><div><span><Maximize2 size={14}/>{tr("Pinch or scroll to see the big picture", "縮放即可看全局與細節")}</span>{started && <button type="button" onClick={reset}><RotateCcw size={14}/>{tr("Start over", "重新開始")}</button>}</div></div>
     <div className="lucy-canvas-stage">
+      <div className={`lucy-mobile-board ${started ? "started" : ""}`}>
+        {!started ? <div className="lucy-mobile-welcome"><span className="lucy-avatar"><HeartHandshake size={22}/><i /></span><small>{tr("YOUR AI MISSION PARTNER", "你的 AI MISSION 搭檔")}</small><h1>{tr("Tell Lucy what needs to get done.", "先跟 Lucy 說，你想完成什麼。")}</h1><p>{tr("No forms. Lucy asks one thing at a time, remembers your answers, and builds the mission with you.", "不用填表。Lucy 一次只問一件事、記住你的答案，再替你把 Mission 長出來。")}</p><button type="button" onClick={start}>{tr("Start talking with Lucy", "開始跟 Lucy 對話")}<ArrowRight size={18}/></button></div> : <div className="lucy-mobile-progress"><header><div><span className="lucy-avatar"><HeartHandshake size={20}/><i /></span><p><small>{tr("MISSION TAKING SHAPE", "MISSION 正在長出來")}</small><b>{phaseLabel(phase)}</b></p></div><strong>{progress}/4</strong></header><ol>{mobileSteps.map((step, index) => <li className={step.done ? "done" : index + 1 === progress ? "current" : ""} key={step.label}><span>{step.done ? <Check size={16}/> : index + 1}</span><p><small>{step.label}</small><b>{short(step.value, step.label, 80)}</b></p></li>)}</ol></div>}
+      </div>
       <ReactFlow key={`${started}-${nodes.length}`} nodes={nodes} edges={edges} nodeTypes={{ lucyNode: LucyNodeCard }} fitView fitViewOptions={{ padding: .2, minZoom: .2, maxZoom: 1.02 }} minZoom={.18} maxZoom={1.8} nodesDraggable={false} nodesConnectable={false} panOnScroll zoomOnPinch zoomOnScroll onNodeClick={(_, node) => setSelectedNode(node.id)} proOptions={{ hideAttribution: true }}>
         <Background color="#dfe1dc" gap={25} size={1} />
         <Controls position="bottom-left" showInteractive={false}/>
@@ -249,8 +268,8 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
       {!started && <div className="lucy-empty-hint"><Sparkles size={18}/><span>{tr("Start with one sentence. The canvas grows only when it needs to.", "先說一句話就好；只有需要時，畫布才會長出新區塊。")}</span></div>}
       {started && selected && <aside className="lucy-node-inspector"><small>{selected.eyebrow}</small><b>{selected.title}</b><p>{selected.detail}</p></aside>}
 
-      {started && <section className="lucy-chat" aria-label={tr("Conversation with Agent Lucy", "與 Agent Lucy 對話")}>
-        <header><span className="lucy-avatar"><HeartHandshake size={19}/><i /></span><div><b>Lucy · {tr("your AI counterpart", "你的 AI 搭檔")}</b><small>{thinking || busy ? tr("Thinking with you—not just replying", "正在跟你一起想，不只是回覆") : modelUsed === true ? tr("Remembers your context · guarded by policy", "記得你的脈絡 · 受政策保護") : modelUsed === false ? tr("Always honest about what has and has not run", "誠實說明哪些已執行、哪些尚未執行") : tr("Stays with this mission until the outcome", "會陪這個 Mission 走到成果")}</small></div><span className="lucy-progress">{phaseLabel(phase)}</span></header>
+      {started && chatOpen && <section id="lucy-conversation" className="lucy-chat" aria-label={tr("Conversation with Agent Lucy", "與 Agent Lucy 對話")}>
+        <header><span className="lucy-avatar"><HeartHandshake size={19}/><i /></span><div><b>Lucy · {tr("your AI counterpart", "你的 AI 搭檔")}</b><small>{thinking || busy ? tr("Thinking with you—not just replying", "正在跟你一起想，不只是回覆") : modelUsed === true ? tr("Remembers your context · guarded by policy", "記得你的脈絡 · 受政策保護") : modelUsed === false ? tr("Always honest about what has and has not run", "誠實說明哪些已執行、哪些尚未執行") : tr("Stays with this mission until the outcome", "會陪這個 Mission 走到成果")}</small></div><span className="lucy-progress">{phaseLabel(phase)}</span><button type="button" className="lucy-chat-collapse" onClick={() => setChatOpen(false)} aria-label={tr("Collapse Lucy conversation", "收起 Lucy 對話")} aria-expanded="true" aria-controls="lucy-conversation"><ChevronDown size={19}/></button></header>
         <div className="lucy-chat-progress"><span style={{ width: `${progress * 25}%` }}/></div>
         <div className="lucy-held-context"><MessageCircle size={15}/><p><small>{tr("WHAT LUCY IS HOLDING", "LUCY 現在替你記住")}</small><b>{heldContext}</b></p></div>
         <div className="lucy-messages" aria-live="polite">{messages.slice(-5).map((message) => <div className={message.role} key={message.id}><span>{message.role === "lucy" ? <Bot size={13}/> : <UserRound size={13}/>}</span><p>{message.body}</p></div>)}{thinking && <div className="lucy thinking"><span><Bot size={13}/></span><p><i/><i/><i/></p></div>}{busy && <div className="lucy executing"><span><Zap size={13}/></span><p><b>{stage || tr("Lucy is creating the mission…", "Lucy 正在建立 Mission…")}</b><small>{tr("Safe Agent work starts automatically; governed actions wait for the right human.", "安全的 Agent 工作會自動開始；受治理操作會等待正確的人核准。")}</small></p></div>}<div ref={endRef}/></div>
@@ -259,6 +278,7 @@ export default function LucyMissionCanvas({ onLaunch, busy, stage, error }: { on
         {(localError || error) && <p className="lucy-error">{localError || error}</p>}
         <footer><FileCheck2 size={13}/>{tr("Lucy carries your context into the mission. External actions still require scoped access and the right human’s approval.", "Lucy 會把你的脈絡帶進 Mission；外部操作仍需要範圍權限與正確人類的核准。")}</footer>
       </section>}
+      {started && !chatOpen && <button type="button" className="lucy-chat-pill" onClick={() => setChatOpen(true)} aria-label={tr("Open Lucy conversation", "展開 Lucy 對話")} aria-expanded="false" aria-controls="lucy-conversation"><span className="lucy-avatar"><HeartHandshake size={18}/><i /></span><p><b>Lucy</b><small>{thinking || busy ? stage || tr("Working on your mission…", "正在處理你的 Mission…") : short(latestLucyMessage, heldContext, 64)}</small></p><span className="lucy-pill-status">{phaseLabel(phase)}</span><ChevronUp size={20}/></button>}
     </div>
   </section>;
 }

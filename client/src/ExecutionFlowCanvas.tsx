@@ -53,7 +53,8 @@ function FlowSourceIcon({ type }: { type?: string }) {
 
 function MissionFlowNodeCard({ data }: NodeProps<MissionFlowNode>) {
   if (data.variant === "cursor") return <div className={`flow-cursor ${data.accent ?? "violet"}`}><MousePointer2 size={19} fill="currentColor" /><span>{data.title}</span></div>;
-  return <div className={`flow-node flow-node-${data.variant} ${data.accent ?? ""}`}>
+  const statusClass = data.status ? `status-${data.status.replaceAll("_", "-")}` : "";
+  return <div className={`flow-node flow-node-${data.variant} ${data.accent ?? ""} ${statusClass}`}>
     {data.variant !== "intent" && <Handle type="target" position={Position.Left} className="flow-handle" />}
     <div className="flow-node-top">
       <span className="flow-node-icon">{data.variant === "intent" ? <FlowSourceIcon type={data.sourceType} /> : data.variant === "conflict" ? <AlertOctagon size={18} /> : data.variant === "human" ? <UserRound size={18} /> : data.variant === "agent" ? <Bot size={18} /> : <Target size={19} />}</span>
@@ -73,8 +74,8 @@ export default function ExecutionFlowCanvas({ nodes, edges, onConflictSelect, on
   // A full-graph fit makes every card unreadably tiny on a phone. Start on the
   // human → counterpart → Agent Council handoff; the Fit View control remains
   // available when someone wants the whole mission map.
-  const defaultViewport = compact ? { x: -592, y: 92, zoom: 0.72 } : { x: 12, y: 100, zoom: 0.88 };
-  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .72 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); onNodeAction?.(node); }} proOptions={{ hideAttribution: true }}>
+  const defaultViewport = compact ? { x: -700, y: 158, zoom: 0.8 } : { x: 12, y: 100, zoom: 0.88 };
+  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} defaultViewport={defaultViewport} fitViewOptions={{ padding: .16, minZoom: .2, maxZoom: .72 }} minZoom={0.2} maxZoom={1.45} nodesConnectable={false} panOnScroll={false} zoomOnPinch zoomOnScroll={!compact} preventScrolling={!compact} onNodeClick={(_, node) => { if (node.data.conflictId) onConflictSelect(String(node.data.conflictId)); onNodeAction?.(node); }} proOptions={{ hideAttribution: true }}>
     <Background color="#d7d8d2" gap={24} size={1} />
     <Controls position="bottom-left" showInteractive={false} />
     <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} nodeColor={(node) => node.data.variant === "conflict" ? "#ef5b55" : node.data.variant === "human" ? "#7659e8" : node.data.variant === "agent" ? "#4175d6" : "#baff39"} />

@@ -388,6 +388,133 @@ body { background: #fff; color: #111; -webkit-font-smoothing: antialiased; }
   .stats-grid { grid-template-columns: 1fr; }
 }
 
+/* Live mission canvas ------------------------------------------------------
+   On a phone the canvas is the product, not an optional secondary view. The
+   live graph stays visible above the linear detail cards so a teammate can
+   understand the whole mission before reading individual decisions. */
+@keyframes relay-live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .45; transform: scale(.78); }
+}
+
+@keyframes relay-agent-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 102, 204, 0); }
+  50% { box-shadow: 0 0 0 8px rgba(0, 102, 204, .1); }
+}
+
+.flow-progress > span { transition: width .35s ease; }
+.flow-node-agent.status-running,
+.flow-node-agent.status-meeting,
+.flow-node-agent.status-listening { border-color: #0066cc; }
+.flow-node-agent.status-running .flow-node-icon,
+.flow-node-agent.status-meeting .flow-node-icon,
+.flow-node-agent.status-listening .flow-node-icon { animation: relay-agent-breathe 1.8s ease-in-out infinite; }
+
+@media (max-width: 760px) {
+  /* Header: keep the mission identity legible, including the initials tile. */
+  .mission-brand > span { background: #111 !important; color: #fff !important; }
+  .mission-title-compact h1 { max-width: 43vw; color: #111; font-size: 17px; line-height: 1.3; }
+  .mission-share { background: #111; color: #fff; }
+
+  /* The scroll hierarchy is: live canvas first, human-readable detail second. */
+  .mission-content-room { min-height: calc(100dvh - 64px); height: auto; overflow-x: hidden; overflow-y: auto; background: #fff; }
+  .flow-canvas-layout,
+  .flow-canvas-layout.inspector-collapsed { min-height: 100%; height: auto; overflow: visible; display: flex; flex-direction: column; background: #fff; }
+  .flow-canvas { position: relative; order: 1; display: block; width: 100%; min-height: 440px; height: min(56svh, 520px); overflow: hidden; border: 0; border-bottom: 1px solid #dedede; background: #fff; }
+  .flow-canvas .react-flow { position: absolute; inset: 66px 0 0; background: #fff; }
+  .flow-canvas .react-flow__node { visibility: visible !important; }
+  .flow-canvas .react-flow__minimap { display: none; }
+  .flow-canvas .react-flow__controls { left: 12px; bottom: 12px; transform: none; }
+  .flow-canvas .react-flow__controls-button { width: 42px; height: 42px; }
+  .flow-stage-labels,
+  .flow-canvas > .flow-command,
+  .flow-canvas > .agent-council-receipt,
+  .flow-canvas > .flow-inspector-open,
+  .flow-canvas > .agent-council-dock { display: none; }
+
+  .mobile-mission-journey { order: 2; display: block; min-height: auto; padding-bottom: 98px; background: #fff; }
+  .mobile-room-hero { padding: 30px 20px 24px; }
+  .mobile-room-hero h1 { font-size: 32px; line-height: 1.15; }
+  .mobile-room-hero > p { color: #555; font-size: 17px; line-height: 1.6; }
+
+  /* A compact live receipt makes motion understandable instead of decorative. */
+  .mobile-canvas-bar { position: absolute; z-index: 12; inset: 0 0 auto; min-height: 66px; height: 66px; padding: 8px 10px 8px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid #e5e5e5; background: rgba(255, 255, 255, .96); color: #111; backdrop-filter: blur(16px); }
+  .mobile-canvas-live { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
+  .canvas-live-dot { width: 10px; height: 10px; border-radius: 50%; background: #111; animation: relay-live-pulse 1.7s ease-in-out infinite; }
+  .canvas-live-dot.reconnecting { background: #b42318; }
+  .mobile-canvas-live p { min-width: 0; margin: 0; display: grid; gap: 1px; }
+  .mobile-canvas-live small { color: #555; font: 700 11px/1.25 "DM Mono", monospace; letter-spacing: .06em; }
+  .mobile-canvas-live b { overflow: hidden; color: #111; font-size: 14px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-canvas-live em { overflow: hidden; color: #666; font: normal 12px/1.3 Inter, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-canvas-bar button { flex: 0 0 auto; min-width: 76px; min-height: 46px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 999px; background: #111; color: #fff; font-size: 13px; font-weight: 800; }
+
+  /* Full-screen is still available, but the canvas no longer disappears by
+     default. The same graph simply grows to the available viewport. */
+  .mobile-canvas-visible .mobile-mission-journey { display: none; }
+  .mission-page .mobile-canvas-visible .flow-canvas { position: fixed; z-index: 34; inset: 64px 0 calc(76px + env(safe-area-inset-bottom)); width: auto; min-height: 0; height: auto; margin: 0; border: 0; }
+  .mission-page .mobile-canvas-visible .flow-canvas .react-flow { inset: 66px 0 0; }
+  .mission-page .mobile-canvas-visible .flow-canvas .react-flow__controls { bottom: 14px; }
+
+  /* High-contrast decision card. These explicit descendant colors prevent
+     global quiet-theme rules from painting black text on the black surface. */
+  .mobile-next-action:not(.clear) { background: #111; color: #fff; }
+  .mobile-next-action:not(.clear) h2,
+  .mobile-next-action:not(.clear) .mobile-decision-owner b { color: #fff !important; }
+  .mobile-next-action:not(.clear) > p { color: #d2d2d2 !important; }
+  .mobile-next-action:not(.clear) .mobile-next-action-head > span { color: #fff; }
+  .mobile-next-action:not(.clear) .mobile-decision-owner { border-color: #3a3a3a; background: #202020; color: #fff; }
+  .mobile-next-action:not(.clear) .mobile-decision-owner small,
+  .mobile-next-action:not(.clear) > small { color: #b8b8b8; }
+  .mobile-next-action:not(.clear) .decision-avatar { border-color: #fff; background: #fff; color: #111; }
+
+  /* Plan and conflict screens previously retained the desktop's 7–11px
+     metadata scale. Phone text now follows the ChatGPT-like 12/14/16 baseline. */
+  .mission-content:not(.mission-content-room) { padding: 28px 18px 112px; }
+  .version-picker { gap: 10px; color: #333; font-size: 14px; }
+  .version-picker select { min-height: 50px; font-size: 16px; }
+  .contract-invariants { padding: 18px; gap: 14px; border-radius: 18px; }
+  .contract-invariants > div { color: #fff; font-size: 12px; line-height: 1.4; }
+  .contract-invariants p { color: #e1e1e1; font-size: 14px; line-height: 1.55; }
+  .panel-heading > div > span { color: #555; font-size: 12px; }
+  .panel-heading h2 { font-size: 25px; line-height: 1.2; }
+  .diff-item { min-height: 98px; padding: 18px; }
+  .diff-item b { color: #111; font-size: 16px; }
+  .diff-item p { color: #555; font-size: 14px; line-height: 1.55; }
+  .task-graph-head { font-size: 12px; }
+  .task-summary { min-height: 88px; padding: 14px; }
+  .task-key b { font-size: 13px; }
+  .task-key small { font-size: 12px; }
+  .task-title b { color: #111; font-size: 16px; line-height: 1.4; }
+  .task-title small { color: #666; font-size: 14px; line-height: 1.45; }
+  .status-pill,
+  .risk-badge { font-size: 12px; }
+  .task-detail span { color: #555; font-size: 12px; }
+  .task-detail p { color: #222; font-size: 15px; line-height: 1.55; }
+
+  .conflict-summary > span { min-height: 52px; padding: 11px 4px; color: #555; font-size: 13px; white-space: normal; text-align: center; }
+  .conflict-number { padding: 16px 18px; color: #111; font-size: 14px; }
+  .conflict-card-main { padding: 20px 18px; }
+  .conflict-tags span,
+  .blocking-tag { font-size: 12px; line-height: 1.3; }
+  .conflict-head h3 { color: #111; font-size: 25px; line-height: 1.25; }
+  .conflict-head p { color: #555; font-size: 16px; line-height: 1.6; }
+  .decision-owner span { color: #555; font-size: 12px; }
+  .decision-owner b { color: #111; font-size: 16px; }
+  .decision-owner small { color: #666; font-size: 13px; }
+  .conflict-source-proof { padding: 14px; }
+  .conflict-source-proof > span { color: #555; font-size: 12px; }
+  .conflict-source-proof q { color: #222; font-size: 15px; line-height: 1.55; }
+  .conflict-source-proof small { color: #666; font-size: 12px; line-height: 1.45; }
+  .consequence span { color: #7a201d; font-size: 12px; }
+  .consequence p { color: #4a2422; font-size: 15px; line-height: 1.55; }
+  .option-top b { color: #111; font-size: 16px; }
+  .option-top span { font-size: 12px; }
+  .resolution-option > p { color: #555; font-size: 15px; line-height: 1.55; }
+  .option-impact span { color: #555; font-size: 13px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .quiet-spin-icon { animation: none; }
+  .canvas-live-dot,
+  .flow-node-agent .flow-node-icon { animation: none; }
 }
